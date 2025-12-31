@@ -55,14 +55,9 @@ interface TransactionFiltersProps {
 
 export function TransactionFiltersImproved({ filters, onFiltersChange }: TransactionFiltersProps) {
     const { accounts } = useAccounts()
-    const { categories } = useCategories()
+    const { categories: allCategories } = useCategories()
     const [isOpen, setIsOpen] = useState(false)
     const [tempFilters, setTempFilters] = useState(filters)
-
-    const allCategories = [
-        ...(categories?.expense || []),
-        ...(categories?.income || [])
-    ]
 
     // Get unique currencies from accounts
     const currencies = Array.from(new Set(accounts?.map((a: any) => a.currencyCode) || []))

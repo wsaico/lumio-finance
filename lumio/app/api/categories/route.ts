@@ -1,7 +1,7 @@
-
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '@/lib/constants/default-categories'
+import { CategoryService } from '@/lib/services/category-service'
 
 export async function GET() {
     try {
@@ -12,30 +12,46 @@ export async function GET() {
             return new NextResponse('Unauthorized', { status: 401 })
         }
 
+        // Check if user has ANY personal categories (to decide Template vs Property)
+        const { count: userCategoriesCount } = await supabase
+            .from('expense_categories')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+
+        const hasPersonalCategories = (userCategoriesCount || 0) > 0
+
         const [expenseResult, incomeResult] = await Promise.all([
             supabase
                 .from('expense_categories')
                 .select('*, subcategories:subcategories(*)')
-                .or(`user_id.eq.${user.id},user_id.is.null`)
+                .filter('user_id', hasPersonalCategories ? 'eq' : 'is', hasPersonalCategories ? user.id : null)
                 .eq('is_active', true)
                 .order('sort_order', { ascending: true }),
             supabase
                 .from('income_categories')
                 .select('*, subcategories:subcategories(*)')
-                .or(`user_id.eq.${user.id},user_id.is.null`)
+                .filter('user_id', hasPersonalCategories ? 'eq' : 'is', hasPersonalCategories ? user.id : null)
                 .eq('is_active', true)
                 .order('sort_order', { ascending: true }),
         ])
 
-        const expenseCategories = expenseResult.data || []
-        const incomeCategories = incomeResult.data || []
-
-        // STRATEGY: DB ONLY (Physical Migration Complete)
-        // We no longer merge defaults because they have been migrated to the DB.
+        const expenseCategories = (expenseResult.data || []).map((c: any) => ({
+            ...c,
+            type: 'EXPENSE' as const,
+            isSystem: !c.user_id,
+            is_system: !c.user_id
+        }))
+        const incomeCategories = (incomeResult.data || []).map((c: any) => ({
+            ...c,
+            type: 'INCOME' as const,
+            isSystem: !c.user_id,
+            is_system: !c.user_id
+        }))
 
         return NextResponse.json({
-            expense: expenseCategories.map((c: any) => ({ ...c, type: 'EXPENSE' as const })),
-            income: incomeCategories.map((c: any) => ({ ...c, type: 'INCOME' as const })),
+            expense: expenseCategories,
+            income: incomeCategories,
+            all: [...expenseCategories, ...incomeCategories]
         })
     } catch (error) {
         console.error('[CATEGORIES_GET]', error)
@@ -123,24 +139,38 @@ export async function PUT(req: Request) {
         if (!id) return new NextResponse('ID required', { status: 400 })
 
         // Check if system category
-        if ([...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].some(c => c.id === id)) {
-            return new NextResponse('Cannot update system category', { status: 403 })
+        const sysCat = [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].find(c => c.id === id)
+        let targetId = id
+
+        if (sysCat) {
+            console.log(`[CATEGORIES_PUT] System category detected. Seeding...`)
+            await CategoryService.seedUserCategories(supabase, user.id)
+
+            const repo = sysCat.id.startsWith('e') ? 'expense_categories' : 'income_categories'
+            const { data: newCat } = await supabase
+                .from(repo)
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('name', sysCat.name)
+                .single()
+            if (newCat) targetId = newCat.id
         }
 
         let updatedCategory
 
         // Try to update in Expense first
-        const { data: expenseData } = await supabase
-            .from('expense_categories')
-            .select('id')
-            .eq('id', id)
-            .single()
+        let isExpense = targetId.startsWith('e')
+        if (!isExpense) {
+            const { data: expCheck } = await supabase.from('expense_categories').select('id').eq('id', targetId).single()
+            if (expCheck) isExpense = true
+        }
 
-        if (expenseData) {
+        if (isExpense) {
             const { data, error } = await supabase
                 .from('expense_categories')
                 .update({ name, color, icon })
-                .eq('id', id)
+                .eq('id', targetId)
+                .eq('user_id', user.id)
                 .select()
                 .single()
 
@@ -157,11 +187,12 @@ export async function PUT(req: Request) {
                 .eq('id', id)
                 .single()
 
-            if (incomeData) {
+            if (!isExpense) {
                 const { data, error } = await supabase
                     .from('income_categories')
                     .update({ name, color, icon })
-                    .eq('id', id)
+                    .eq('id', targetId)
+                    .eq('user_id', user.id)
                     .select()
                     .single()
 
@@ -195,22 +226,36 @@ export async function DELETE(req: Request) {
         if (!id) return new NextResponse('ID required', { status: 400 })
 
         // Check if system category
-        if ([...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].some(c => c.id === id)) {
-            return new NextResponse('Cannot delete system category', { status: 403 })
+        const sysCat = [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].find(c => c.id === id)
+        let targetId = id
+
+        if (sysCat) {
+            console.log(`[CATEGORIES_DELETE] System category detected. Seeding before delete...`)
+            await CategoryService.seedUserCategories(supabase, user.id)
+
+            const repo = sysCat.id.startsWith('e') ? 'expense_categories' : 'income_categories'
+            const { data: newCat } = await supabase
+                .from(repo)
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('name', sysCat.name)
+                .single()
+            if (newCat) targetId = newCat.id
         }
 
         // Try Delete in Expense
-        const { data: expenseData } = await supabase
-            .from('expense_categories')
-            .select('id')
-            .eq('id', id)
-            .single()
+        let isExpense = targetId.startsWith('e')
+        if (!isExpense) {
+            const { data: expCheck } = await supabase.from('expense_categories').select('id').eq('id', targetId).single()
+            if (expCheck) isExpense = true
+        }
 
-        if (expenseData) {
+        if (isExpense) {
             const { error } = await supabase
                 .from('expense_categories')
                 .delete()
-                .eq('id', id)
+                .eq('id', targetId)
+                .eq('user_id', user.id)
 
             if (error) {
                 console.error('[CATEGORIES_DELETE]', error)
@@ -223,11 +268,12 @@ export async function DELETE(req: Request) {
                 .eq('id', id)
                 .single()
 
-            if (incomeData) {
+            if (!isExpense) {
                 const { error } = await supabase
                     .from('income_categories')
                     .delete()
-                    .eq('id', id)
+                    .eq('id', targetId)
+                    .eq('user_id', user.id)
 
                 if (error) {
                     console.error('[CATEGORIES_DELETE]', error)
@@ -242,6 +288,70 @@ export async function DELETE(req: Request) {
 
     } catch (error) {
         console.error('[CATEGORIES_DELETE]', error)
+        return new NextResponse('Internal Error', { status: 500 })
+    }
+}
+
+export async function PATCH(req: Request) {
+    try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return new NextResponse('Unauthorized', { status: 401 })
+
+        const { searchParams } = new URL(req.url)
+        const id = searchParams.get('id')
+        if (!id) return new NextResponse('ID required', { status: 400 })
+
+        const body = await req.json()
+        let targetId = id
+
+        // Check if system category
+        const sysCat = [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].find(c => c.id === id)
+
+        if (sysCat) {
+            console.log(`[CATEGORIES_PATCH] System category detected (${sysCat.name}). Triggering seeding...`)
+            await CategoryService.seedUserCategories(supabase, user.id)
+
+            // Find the new ID of the cloned category
+            const repo = sysCat.id.startsWith('e') ? 'expense_categories' : 'income_categories'
+            const { data: newCat } = await supabase
+                .from(repo)
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('name', sysCat.name)
+                .single()
+
+            if (newCat) targetId = newCat.id
+        }
+
+        // Apply partial updates
+        const repo = targetId.startsWith('e') ? 'expense_categories' : 'income_categories'
+
+        // Dynamic update object (to support budget_rule and others)
+        const updateData: any = {}
+        if (body.name) updateData.name = body.name
+        if (body.color) updateData.color = body.color
+        if (body.icon) updateData.icon = body.icon
+        if (body.budget_rule) updateData.budget_rule = body.budget_rule
+        if (body.budgetRule) updateData.budget_rule = body.budgetRule // Support camelCase from UI
+
+        const { data, error } = await supabase
+            .from(repo)
+            .update(updateData)
+            .eq('id', targetId)
+            .eq('user_id', user.id) // Security
+            .select()
+            .single()
+
+        if (error) {
+            console.error('[CATEGORIES_PATCH] Error updating:', error)
+            return new NextResponse('Database Error', { status: 500 })
+        }
+
+        return NextResponse.json(data)
+
+    } catch (error) {
+        console.error('[CATEGORIES_PATCH]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }
 }

@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function CategoriesSettingsPage() {
-    const { categories, isLoading, deleteCategory } = useCategories()
+    const { expense, income, isLoading, deleteCategory } = useCategories()
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [editingCategory, setEditingCategory] = useState<any>(null)
     const [categoryToDelete, setCategoryToDelete] = useState<any>(null)
@@ -82,17 +82,19 @@ export default function CategoriesSettingsPage() {
 
                         {/* Actions */}
                         <div className="flex items-center gap-1">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    setEditingCategory(cat)
-                                }}
-                            >
-                                <Edit className="h-4 w-4" />
-                            </Button>
+                            {!cat.isSystem && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setEditingCategory(cat)
+                                    }}
+                                >
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                            )}
 
                             {!cat.isSystem && (
                                 <Button
@@ -154,11 +156,11 @@ export default function CategoriesSettingsPage() {
                 </TabsList>
 
                 <TabsContent value="EXPENSE" className="space-y-4">
-                    <CategoryList list={categories?.expense || []} />
+                    <CategoryList list={expense || []} />
                 </TabsContent>
 
                 <TabsContent value="INCOME" className="space-y-4">
-                    <CategoryList list={categories?.income || []} />
+                    <CategoryList list={income || []} />
                 </TabsContent>
             </Tabs>
 

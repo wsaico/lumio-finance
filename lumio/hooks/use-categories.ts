@@ -7,12 +7,16 @@ export function useCategories() {
         queryFn: async () => {
             const res = await fetch('/api/categories')
             if (!res.ok) throw new Error('Error fetching categories')
-            const data = await res.json()
-            return [...(data.expense || []), ...(data.income || [])]
+            return await res.json()
         },
     })
 
     const queryClient = useQueryClient()
+
+    // Derived data for compatibility
+    const allCategories = categories?.all || []
+    const expenseCategories = categories?.expense || []
+    const incomeCategories = categories?.income || []
 
     const createCategory = useMutation({
         mutationFn: async (newCategory: any) => {
@@ -58,7 +62,9 @@ export function useCategories() {
     })
 
     return {
-        categories,
+        categories: allCategories, // Mantener compatibilidad con lista plana
+        expense: expenseCategories,
+        income: incomeCategories,
         isLoading,
         error,
         createCategory,

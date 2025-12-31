@@ -33,12 +33,7 @@ interface TransactionFiltersProps {
 
 export function TransactionFilters({ filters, onFiltersChange }: TransactionFiltersProps) {
     const { accounts } = useAccounts()
-    const { categories } = useCategories()
-
-    const allCategories = [
-        ...(categories?.expense || []),
-        ...(categories?.income || [])
-    ]
+    const { categories: allCategories } = useCategories()
 
     const activeFiltersCount = [
         filters.accountId,

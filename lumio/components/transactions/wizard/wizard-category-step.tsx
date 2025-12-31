@@ -16,10 +16,10 @@ interface WizardCategoryStepProps {
 
 export function WizardCategoryStep({ type: initialType, onComplete, onBack }: WizardCategoryStepProps) {
     const [currentType, setCurrentType] = useState<any>(initialType === 'TRANSFER' ? 'EXPENSE' : initialType)
-    const { categories } = useCategories()
+    const { expense, income } = useCategories()
 
     // Filter categories based on type
-    const list = currentType === 'EXPENSE' ? categories?.expense : categories?.income
+    const list = currentType === 'EXPENSE' ? expense : income
 
     return (
         <motion.div

@@ -50,11 +50,12 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
             const res = await fetch('/api/categories?type=EXPENSE')
             if (res.ok) {
                 const data = await res.json()
-                // Map to simple structure
-                setCategories(data.map((c: any) => ({
+                // Map from the 'expense' property of the structured response
+                const expenseCategories = data.expense || []
+                setCategories(expenseCategories.map((c: any) => ({
                     id: c.id,
                     name: c.name,
-                    budgetRule: c.budgetRule || 'WANT'
+                    budgetRule: c.budget_rule || c.budgetRule || 'WANT'
                 })))
             }
         } catch (error) {
@@ -92,7 +93,7 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
             // We'll update them one by one or batch if API supported it.
             // For now, let's assume we iterate. In production, use a batch endpoint.
             const updates = categories.map(cat =>
-                fetch(`/api/categories/${cat.id}`, {
+                fetch(`/api/categories?id=${cat.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ budgetRule: cat.budgetRule })
