@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 
 // Free API for exchange rates (no API key required)
@@ -28,8 +27,9 @@ export async function POST(req: NextRequest) {
     const date = new Date(data.date || Date.now());
 
     // Get all currencies from database
-    const currencies = await prisma.currency.findMany();
-    const currencyCodes = currencies.map((c) => c.code);
+    const { data: currencies, error: currenciesError } = await supabase.from('currencies').select('code');
+    if (currenciesError) throw currenciesError;
+    const currencyCodes = currencies.map((c: any) => c.code);
 
     // Prepare exchange rate records
     const exchangeRateRecords = [];
@@ -38,32 +38,27 @@ export async function POST(req: NextRequest) {
       // Only save rates for currencies we have in our database
       if (currencyCodes.includes(toCurrency)) {
         exchangeRateRecords.push({
-          fromCurrency: baseCurrency.toUpperCase(),
-          toCurrency,
+          from_currency: baseCurrency.toUpperCase(),
+          to_currency: toCurrency,
           rate,
-          date,
+          date: date.toISOString(),
         });
       }
     }
 
-    // Batch upsert exchange rates
-    const upsertPromises = exchangeRateRecords.map((record) =>
-      prisma.exchangeRate.upsert({
-        where: {
-          fromCurrency_toCurrency_date: {
-            fromCurrency: record.fromCurrency,
-            toCurrency: record.toCurrency,
-            date: record.date,
-          },
-        },
-        update: {
-          rate: record.rate,
-        },
-        create: record,
-      })
-    );
+    // Batch upsert exchange rates using Supabase
+    if (exchangeRateRecords.length > 0) {
+      const { error: upsertError } = await supabase
+        .from('exchange_rates')
+        .upsert(exchangeRateRecords, {
+          onConflict: 'from_currency,to_currency,date'
+        });
 
-    await Promise.all(upsertPromises);
+      if (upsertError) {
+        console.error('Failed to upsert exchange rates:', upsertError);
+        throw upsertError;
+      }
+    }
 
     return NextResponse.json(
       {

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import type { DashboardConfig } from '@/types/dashboard';
 
@@ -12,16 +11,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const profile = await prisma.profile.findUnique({
-      where: { id: user.id },
-      select: { dashboardConfig: true },
-    });
+    const { data: profile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('dashboard_config')
+      .eq('id', user.id)
+      .single();
 
-    if (!profile?.dashboardConfig) {
+    if (fetchError || !profile?.dashboard_config) {
       return NextResponse.json({ config: null }, { status: 200 });
     }
 
-    return NextResponse.json({ config: profile.dashboardConfig }, { status: 200 });
+    return NextResponse.json({ config: profile.dashboard_config }, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch dashboard config:', error);
     return NextResponse.json(
@@ -46,10 +46,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid dashboard configuration' }, { status: 400 });
     }
 
-    await prisma.profile.update({
-      where: { id: user.id },
-      data: { dashboardConfig: config as any },
-    });
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ dashboard_config: config })
+      .eq('id', user.id);
+
+    if (updateError) {
+      console.error('Failed to update dashboard config:', updateError);
+      return NextResponse.json({ error: 'Failed to update configuration' }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
