@@ -1,0 +1,281 @@
+"use client"
+
+import { useState } from "react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Plus, RefreshCw, ArrowUpRight, ArrowDownLeft } from "lucide-react"
+import { LoanCardReceivable } from "@/components/loans/loan-card-receivable"
+import { LoanCardPayable } from "@/components/loans/loan-card-payable"
+import { LoansSummary } from "@/components/loans/loans-summary"
+import { PaymentModal, PaymentFormData } from "@/components/loans/payment-modal"
+import { CreateLoanModal } from "@/components/loans/create-loan-modal"
+import { LoanDetailsModal } from "@/components/loans/loan-details-modal"
+import { useAccountsReceivable, useRegisterPayment } from "@/hooks/use-accounts-receivable"
+import { useAccountsPayable, usePayDebt } from "@/hooks/use-accounts-payable"
+import { useSettingsStore } from "@/hooks/use-settings-store"
+import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import type { AccountReceivable, AccountPayable } from "@/types/loans"
+
+type LoanType = 'RECEIVABLE' | 'PAYABLE'
+
+export default function LoansPage() {
+    const { currencyCode } = useSettingsStore()
+    const [activeTab, setActiveTab] = useState<'receivable' | 'payable'>('receivable')
+    const [createLoanModalOpen, setCreateLoanModalOpen] = useState(false)
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+    const [detailModalOpen, setDetailModalOpen] = useState(false)
+    const [selectedLoan, setSelectedLoan] = useState<{
+        id: string
+        contactName: string
+        outstandingBalance: number
+        currencyCode: string
+        type: LoanType
+    } | null>(null)
+
+    const [selectedFullLoan, setSelectedFullLoan] = useState<(AccountReceivable | AccountPayable) & { type: LoanType } | null>(null)
+
+    // Fetch data
+    const {
+        data: receivables = [],
+        isLoading: receivablesLoading,
+        refetch: refetchReceivables
+    } = useAccountsReceivable()
+
+    const {
+        data: payables = [],
+        isLoading: payablesLoading,
+        refetch: refetchPayables
+    } = useAccountsPayable()
+
+    // Mutations
+    const registerReceivablePayment = useRegisterPayment()
+    const payDebt = usePayDebt()
+
+    // Handle payment registration
+    const handleRegisterPayment = (id: string) => {
+        const loan = activeTab === 'receivable'
+            ? receivables.find((r: AccountReceivable) => r.id === id)
+            : payables.find((p: AccountPayable) => p.id === id)
+
+        if (!loan) return
+
+        setSelectedLoan({
+            id: loan.id,
+            contactName: loan.contactName,
+            outstandingBalance: loan.outstandingBalance,
+            currencyCode: loan.currencyCode,
+            type: activeTab === 'receivable' ? 'RECEIVABLE' : 'PAYABLE'
+        })
+        setPaymentModalOpen(true)
+    }
+
+    const handleViewDetails = (id: string) => {
+        const loan = activeTab === 'receivable'
+            ? receivables.find((r: AccountReceivable) => r.id === id)
+            : payables.find((p: AccountPayable) => p.id === id)
+
+        if (!loan) return
+
+        setSelectedFullLoan({
+            ...loan,
+            type: activeTab === 'receivable' ? 'RECEIVABLE' : 'PAYABLE' as LoanType
+        } as (AccountReceivable | AccountPayable) & { type: LoanType })
+        setDetailModalOpen(true)
+    }
+
+    const handlePaymentSubmit = async (data: PaymentFormData) => {
+        if (!selectedLoan) return
+
+        try {
+            if (selectedLoan.type === 'RECEIVABLE') {
+                await registerReceivablePayment.mutateAsync({
+                    id: selectedLoan.id,
+                    ...data
+                })
+            } else {
+                await payDebt.mutateAsync({
+                    id: selectedLoan.id,
+                    ...data
+                })
+            }
+
+            setPaymentModalOpen(false)
+            setSelectedLoan(null)
+        } catch (error) {
+            console.error('Error registering payment:', error)
+        }
+    }
+
+    const handleRefresh = () => {
+        refetchReceivables()
+        refetchPayables()
+    }
+
+    // Calculate summary
+    const summary = {
+        totalReceivable: receivables.reduce((sum: number, r: AccountReceivable) =>
+            sum + r.outstandingBalance, 0),
+        totalPayable: payables.reduce((sum: number, p: AccountPayable) =>
+            sum + p.outstandingBalance, 0),
+        overdueReceivable: receivables
+            .filter((r: AccountReceivable) => r.status === 'OVERDUE')
+            .reduce((sum: number, r: AccountReceivable) => sum + r.outstandingBalance, 0),
+        overduePayable: payables
+            .filter((p: AccountPayable) => p.status === 'OVERDUE')
+            .reduce((sum: number, p: AccountPayable) => sum + p.outstandingBalance, 0),
+        currencyCode,
+    }
+
+    const isLoading = receivablesLoading || payablesLoading
+
+    return (
+        <div className="container mx-auto py-6 space-y-6 animate-in fade-in duration-500">
+            {/* Header */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+                            Préstamos y Deudas
+                        </h1>
+                        <p className="text-muted-foreground mt-1.5">
+                            Gestiona tus cuentas por cobrar y por pagar de forma profesional
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={handleRefresh}
+                            disabled={isLoading}
+                            className={cn(isLoading && "animate-spin")}
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            onClick={() => setCreateLoanModalOpen(true)}
+                            className="gap-2 shadow-md hover:shadow-lg transition-all"
+                        >
+                            <Plus className="h-4 w-4" /> Nuevo Préstamo
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Summary Cards */}
+                <LoansSummary summary={summary} />
+            </div>
+
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'receivable' | 'payable')}>
+                <TabsList className="grid w-full max-w-md grid-cols-2">
+                    <TabsTrigger value="receivable" className="gap-2">
+                        <ArrowUpRight className="h-4 w-4" />
+                        Por Cobrar ({receivables.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="payable" className="gap-2">
+                        <ArrowDownLeft className="h-4 w-4" />
+                        Por Pagar ({payables.length})
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Accounts Receivable Tab */}
+                <TabsContent value="receivable" className="space-y-4 mt-6">
+                    {receivablesLoading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="h-80 rounded-xl bg-muted/20 animate-pulse" />
+                            ))}
+                        </div>
+                    ) : receivables.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed rounded-xl bg-gradient-to-br from-blue-50/50 to-blue-100/30">
+                            <div className="p-4 rounded-full bg-gradient-to-br from-blue-500/20 to-blue-600/10 mb-4">
+                                <ArrowUpRight className="h-10 w-10 text-blue-600" />
+                            </div>
+                            <h3 className="text-xl font-semibold">No tienes cuentas por cobrar</h3>
+                            <p className="text-muted-foreground text-center max-w-sm mt-2 mb-6">
+                                Registra los préstamos que has otorgado para mantener un control financiero completo.
+                            </p>
+                            <Button onClick={() => setCreateLoanModalOpen(true)} className="shadow-lg">
+                                <Plus className="mr-2 h-4 w-4" /> Registrar Préstamo
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {receivables.map((receivable: AccountReceivable) => (
+                                <LoanCardReceivable
+                                    key={receivable.id}
+                                    receivable={receivable}
+                                    onRegisterPayment={handleRegisterPayment}
+                                    onViewDetails={handleViewDetails}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* Accounts Payable Tab */}
+                <TabsContent value="payable" className="space-y-4 mt-6">
+                    {payablesLoading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="h-80 rounded-xl bg-muted/20 animate-pulse" />
+                            ))}
+                        </div>
+                    ) : payables.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed rounded-xl bg-gradient-to-br from-orange-50/50 to-orange-100/30">
+                            <div className="p-4 rounded-full bg-gradient-to-br from-orange-500/20 to-orange-600/10 mb-4">
+                                <ArrowDownLeft className="h-10 w-10 text-orange-600" />
+                            </div>
+                            <h3 className="text-xl font-semibold">No tienes cuentas por pagar</h3>
+                            <p className="text-muted-foreground text-center max-w-sm mt-2 mb-6">
+                                Registra los préstamos que has recibido para llevar un control de tus obligaciones.
+                            </p>
+                            <Button onClick={() => setCreateLoanModalOpen(true)} className="shadow-lg">
+                                <Plus className="mr-2 h-4 w-4" /> Registrar Deuda
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {payables.map((payable: AccountPayable) => (
+                                <LoanCardPayable
+                                    key={payable.id}
+                                    payable={payable}
+                                    onRegisterPayment={handleRegisterPayment}
+                                    onViewDetails={handleViewDetails}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
+
+            {/* Create Loan Modal */}
+            <CreateLoanModal
+                open={createLoanModalOpen}
+                onClose={() => setCreateLoanModalOpen(false)}
+            />
+
+            {/* Payment Modal */}
+            <PaymentModal
+                open={paymentModalOpen}
+                onClose={() => {
+                    setPaymentModalOpen(false)
+                    setSelectedLoan(null)
+                }}
+                onSubmit={handlePaymentSubmit}
+                loan={selectedLoan}
+                isLoading={registerReceivablePayment.isPending || payDebt.isPending}
+            />
+
+            {/* View Details Modal */}
+            <LoanDetailsModal
+                open={detailModalOpen}
+                onClose={() => {
+                    setDetailModalOpen(false)
+                    setSelectedFullLoan(null)
+                }}
+                loan={selectedFullLoan}
+            />
+        </div>
+    )
+}

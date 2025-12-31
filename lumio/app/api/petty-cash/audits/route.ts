@@ -1,0 +1,295 @@
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import * as z from 'zod'
+import { mapPettyCashAudit } from '@/lib/mappers'
+
+const auditSchema = z.object({
+    fundId: z.string().uuid(),
+    auditDate: z.string(),
+    auditType: z.enum(['SURPRISE', 'SCHEDULED', 'ANNUAL', 'REQUESTED']),
+    expectedCash: z.number().min(0),
+    actualCash: z.number().min(0),
+    pendingExpenses: z.number().min(0).default(0),
+    auditedBy: z.string().min(1, 'Auditor requerido'),
+    responsiblePresent: z.boolean(),
+    findings: z.string().optional(),
+    recommendations: z.string().optional(),
+    attachmentUrl: z.string().url().optional(),
+})
+
+const updateAuditSchema = z.object({
+    findings: z.string().optional(),
+    recommendations: z.string().optional(),
+    attachmentUrl: z.string().url().optional(),
+    status: z.enum(['COMPLETED', 'IN_REVIEW', 'RESOLVED']).optional(),
+})
+
+export async function GET(request: Request) {
+    try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return new NextResponse('Unauthorized', { status: 401 })
+        }
+
+        const { searchParams } = new URL(request.url)
+        const fundId = searchParams.get('fundId')
+        const auditType = searchParams.get('auditType')
+        const startDate = searchParams.get('startDate')
+        const endDate = searchParams.get('endDate')
+
+        let query = supabase
+            .from('petty_cash_audits')
+            .select(`
+                *,
+                fund:petty_cash_funds(
+                    id,
+                    fund_code,
+                    fund_name,
+                    responsible_name,
+                    current_balance,
+                    assigned_amount
+                )
+            `)
+            .eq('user_id', user.id)
+            .order('audit_date', { ascending: false })
+
+        if (fundId) {
+            query = query.eq('fund_id', fundId)
+        }
+
+        if (auditType) {
+            query = query.eq('audit_type', auditType)
+        }
+
+        if (startDate) {
+            query = query.gte('audit_date', startDate)
+        }
+
+        if (endDate) {
+            query = query.lte('audit_date', endDate)
+        }
+
+        const { data: audits, error } = await query
+
+        if (error) {
+            console.error('[PETTY_CASH_AUDITS_GET]', error)
+            return new NextResponse(JSON.stringify({ error: error.message }), { status: 500 })
+        }
+
+        return NextResponse.json(audits?.map(mapPettyCashAudit) || [])
+    } catch (error: any) {
+        console.error('[PETTY_CASH_AUDITS_GET]', error)
+        return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
+    }
+}
+
+export async function POST(request: Request) {
+    try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return new NextResponse('Unauthorized', { status: 401 })
+        }
+
+        const body = await request.json()
+        const validData = auditSchema.parse(body)
+
+        // Validate fund exists
+        const { data: fund, error: fundError } = await supabase
+            .from('petty_cash_funds')
+            .select('id, fund_name, current_balance, status')
+            .eq('id', validData.fundId)
+            .eq('user_id', user.id)
+            .single()
+
+        if (fundError || !fund) {
+            return new NextResponse(
+                JSON.stringify({ error: 'Fondo no encontrado o no autorizado' }),
+                { status: 404 }
+            )
+        }
+
+        // Calculate variance
+        const variance = validData.actualCash - validData.expectedCash
+
+        // Determine audit result
+        const variancePercentage = validData.expectedCash > 0
+            ? Math.abs(variance / validData.expectedCash) * 100
+            : 0
+
+        let auditResult = 'NORMAL'
+        if (variancePercentage > 5) {
+            auditResult = 'CRITICAL' // > 5% variance is critical
+        } else if (variancePercentage > 1) {
+            auditResult = 'ATTENTION' // > 1% needs attention
+        }
+
+        // Auto-generate findings if variance exists
+        let autoFindings = validData.findings || ''
+        if (variance !== 0) {
+            const varianceText = variance > 0
+                ? `Sobrante de S/ ${variance.toFixed(2)}`
+                : `Faltante de S/ ${Math.abs(variance).toFixed(2)}`
+
+            autoFindings = autoFindings
+                ? `${varianceText}. ${autoFindings}`
+                : varianceText
+
+            if (variancePercentage > 5) {
+                autoFindings += '. ALERTA: Diferencia mayor al 5% requiere investigación inmediata.'
+            }
+        }
+
+        // Create audit (audit_code auto-generated by trigger)
+        const { data: audit, error: auditError } = await supabase
+            .from('petty_cash_audits')
+            .insert({
+                user_id: user.id,
+                fund_id: validData.fundId,
+                audit_date: validData.auditDate,
+                audit_type: validData.auditType,
+                expected_cash: validData.expectedCash,
+                actual_cash: validData.actualCash,
+                variance: variance,
+                pending_expenses: validData.pendingExpenses,
+                audited_by: validData.auditedBy,
+                responsible_present: validData.responsiblePresent,
+                findings: autoFindings,
+                recommendations: validData.recommendations,
+                attachment_url: validData.attachmentUrl,
+                status: variancePercentage > 5 ? 'IN_REVIEW' : 'COMPLETED'
+            })
+            .select()
+            .single()
+
+        if (auditError) {
+            console.error('[PETTY_CASH_AUDIT_CREATE]', auditError)
+            return new NextResponse(JSON.stringify({ error: auditError.message }), { status: 500 })
+        }
+
+        return NextResponse.json({
+            audit: mapPettyCashAudit(audit),
+            auditResult,
+            variancePercentage: variancePercentage.toFixed(2),
+            message: variance === 0
+                ? 'Arqueo completado sin diferencias'
+                : `Arqueo registrado con ${variance > 0 ? 'sobrante' : 'faltante'} de S/ ${Math.abs(variance).toFixed(2)}`
+        })
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return new NextResponse(JSON.stringify({ error: 'Datos inválidos', details: error.issues }), { status: 400 })
+        }
+        console.error('[PETTY_CASH_AUDIT_POST]', error)
+        return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
+    }
+}
+
+export async function PATCH(request: Request) {
+    try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return new NextResponse('Unauthorized', { status: 401 })
+        }
+
+        const body = await request.json()
+        const { id, ...updates } = body
+
+        if (!id) {
+            return new NextResponse(JSON.stringify({ error: 'ID requerido' }), { status: 400 })
+        }
+
+        const validData = updateAuditSchema.parse(updates)
+
+        // Update audit
+        const { data: audit, error: updateError } = await supabase
+            .from('petty_cash_audits')
+            .update({
+                ...validData,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .select()
+            .single()
+
+        if (updateError) {
+            console.error('[PETTY_CASH_AUDIT_UPDATE]', updateError)
+            return new NextResponse(JSON.stringify({ error: updateError.message }), { status: 500 })
+        }
+
+        if (!audit) {
+            return new NextResponse(JSON.stringify({ error: 'Arqueo no encontrado' }), { status: 404 })
+        }
+
+        return NextResponse.json(mapPettyCashAudit(audit))
+    } catch (error: any) {
+        if (error instanceof z.ZodError) {
+            return new NextResponse(JSON.stringify({ error: 'Datos inválidos', details: error.issues }), { status: 400 })
+        }
+        console.error('[PETTY_CASH_AUDIT_PATCH]', error)
+        return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
+    }
+}
+
+export async function DELETE(request: Request) {
+    try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return new NextResponse('Unauthorized', { status: 401 })
+        }
+
+        const { searchParams } = new URL(request.url)
+        const id = searchParams.get('id')
+
+        if (!id) {
+            return new NextResponse(JSON.stringify({ error: 'ID requerido' }), { status: 400 })
+        }
+
+        // Get audit
+        const { data: audit } = await supabase
+            .from('petty_cash_audits')
+            .select('id, variance, status')
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .single()
+
+        if (!audit) {
+            return new NextResponse(JSON.stringify({ error: 'Arqueo no encontrado' }), { status: 404 })
+        }
+
+        // Cannot delete audits with critical variance unless resolved
+        if (Math.abs(Number(audit.variance)) > 0 && audit.status === 'IN_REVIEW') {
+            return new NextResponse(
+                JSON.stringify({
+                    error: 'No se puede eliminar',
+                    details: 'El arqueo tiene diferencias en revisión. Debe resolverse primero.'
+                }),
+                { status: 400 }
+            )
+        }
+
+        // Delete audit
+        const { error: deleteError } = await supabase
+            .from('petty_cash_audits')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', user.id)
+
+        if (deleteError) {
+            console.error('[PETTY_CASH_AUDIT_DELETE]', deleteError)
+            return new NextResponse(JSON.stringify({ error: deleteError.message }), { status: 500 })
+        }
+
+        return NextResponse.json({ success: true, message: 'Arqueo eliminado exitosamente' })
+    } catch (error: any) {
+        console.error('[PETTY_CASH_AUDIT_DELETE]', error)
+        return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
+    }
+}

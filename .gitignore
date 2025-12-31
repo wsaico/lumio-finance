@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+
+# production
+build/
+
+# misc
+.DS_Store
+*.pem
+*.log
+.vercel
+.claude/
+.antigravity/
+
+# env files
+.env*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+nul
+**/nul

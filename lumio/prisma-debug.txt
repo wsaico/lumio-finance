@@ -1,0 +1,27 @@
+Connection failed: 
+Invalid `prisma.profile.count()` invocation in
+E:\WILLY\Lumio-finance\lumio\test-prisma.js:8:44
+
+  5 
+  6 async function main() {
+  7     try {
+→ 8         const count = await prisma.profile.count(
+Can't reach database server at `db.ocztmztsjnulshaudcnx.supabase.co:5432`
+
+Please make sure your database server is running at `db.ocztmztsjnulshaudcnx.supabase.co:5432`.
+PrismaClientInitializationError: 
+Invalid `prisma.profile.count()` invocation in
+E:\WILLY\Lumio-finance\lumio\test-prisma.js:8:44
+
+  5 
+  6 async function main() {
+  7     try {
+→ 8         const count = await prisma.profile.count(
+Can't reach database server at `db.ocztmztsjnulshaudcnx.supabase.co:5432`
+
+Please make sure your database server is running at `db.ocztmztsjnulshaudcnx.supabase.co:5432`.
+    at ei.handleRequestError (E:\WILLY\Lumio-finance\lumio\node_modules\@prisma\client\runtime\library.js:121:7568)
+    at ei.handleAndLogRequestError (E:\WILLY\Lumio-finance\lumio\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (E:\WILLY\Lumio-finance\lumio\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (E:\WILLY\Lumio-finance\lumio\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async main (E:\WILLY\Lumio-finance\lumio\test-prisma.js:8:23)

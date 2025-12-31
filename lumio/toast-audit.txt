@@ -1,0 +1,63 @@
+./app/(auth)/login/page.tsx:58:                toast.error("Error al iniciar sesión", {
+./app/(auth)/login/page.tsx:64:            toast.success("Bienvenido de nuevo", {
+./app/(auth)/login/page.tsx:71:            toast.error("Error inesperado", {
+./app/(auth)/register/page.tsx:67:                toast.error("Error al registrarse", {
+./app/(auth)/register/page.tsx:73:            toast.success("Cuenta creada", {
+./app/(auth)/register/page.tsx:79:            toast.error("Error inesperado", {
+./app/(dashboard)/dashboard/budgets/page.tsx:79:                    toast.error(`¡PRESUPUESTO EXCEDIDO!`, {
+./app/(dashboard)/dashboard/budgets/page.tsx:87:                    toast.error(`¡Alerta Crítica!`, {
+./app/(dashboard)/dashboard/budgets/page.tsx:95:                    toast.warning(`Presupuesto en riesgo`, {
+./app/(dashboard)/dashboard/budgets/page.tsx:105:                    toast.success(`¡Meta de ahorro alcanzada!`, {
+./components/layout/app-sidebar.tsx:38:            toast.success("Has cerrado sesión correctamente")
+./components/layout/app-sidebar.tsx:42:            toast.error("Error al cerrar sesión")
+./components/transactions/transaction-form-modal.tsx:273:            toast.info("Esta transacción se repetirá automáticamente según la frecuencia configurada")
+./components/transactions/transaction-form-modal.tsx:275:            toast.info("Préstamo registrado. Podrás marcarlo como cobrado más tarde desde la lista de transacciones")
+./components/transactions/transaction-form-modal.tsx:277:            toast.info("Deuda registrada. Podrás marcarla como pagada más tarde desde la lista de transacciones")
+./components/transactions/transaction-form-modal.tsx:349:            toast.success("Préstamo recolectado y registrado en caja")
+./components/transactions/transaction-form-modal.tsx:353:            toast.error("Error al recolectar el préstamo")
+./components/transactions/transaction-form-modal.tsx:385:            toast.success("Deuda pagada y registrada en caja")
+./components/transactions/transaction-form-modal.tsx:389:            toast.error("Error al pagar la deuda")
+./components/transactions/transaction-form-modal.tsx:870:                                        toast.success("Transacción eliminada")
+./components/transactions/transaction-form-modal.tsx:873:                                        toast.error("Error al eliminar")
+./hooks/use-accounts.ts:30:            toast.success('Cuenta creada exitosamente')
+./hooks/use-accounts.ts:33:            toast.error('Error al crear cuenta')
+./hooks/use-accounts.ts:49:            toast.success('Cuenta actualizada')
+./hooks/use-accounts.ts:51:        onError: () => toast.error('Error al actualizar'),
+./hooks/use-accounts.ts:63:            toast.success('Cuenta eliminada')
+./hooks/use-accounts.ts:65:        onError: () => toast.error('Error al eliminar'),
+./hooks/use-loans.ts:30:            toast.success('Préstamo registrado')
+./hooks/use-loans.ts:33:            toast.error('Error al registrar préstamo')
+./hooks/use-loans.tsx:49:            toast.success('Préstamo actualizado')
+./hooks/use-loans.tsx:52:            toast.error('Error al actualizar préstamo')
+./hooks/use-savings-goals.ts:29:            toast.success('Meta de ahorro creada')
+./hooks/use-savings-goals.ts:32:            toast.error('Error al crear meta')
+./hooks/use-transactions.tsx:58:            toast.success('Transacción guardada exitosamente')
+./hooks/use-transactions.tsx:70:            toast.error(error.message || 'Error al registrar transacción')
+./hooks/use-transactions.tsx:98:            toast.success('Transacción actualizada')
+./hooks/use-transactions.tsx:101:            toast.error('Error al actualizar transacción')
+./hooks/use-transactions.tsx:118:            toast.success('Transacción eliminada')
+./hooks/use-transactions.tsx:122:            toast.error('Error al eliminar transacción')
+./lib/toast-manager.ts:32:            toast.success("Transacción guardada exitosamente")
+./lib/toast-manager.ts:37:        toast.success('Transacción actualizada')
+./lib/toast-manager.ts:41:        toast.success('Transacción eliminada')
+./lib/toast-manager.ts:45:        toast.error(message || 'Error al procesar transacción')
+./lib/toast-manager.ts:52:        toast.success("Bienvenido de nuevo")
+./lib/toast-manager.ts:56:        toast.error(message || "Error al iniciar sesión")
+./lib/toast-manager.ts:60:        toast.success("Cuenta creada")
+./lib/toast-manager.ts:64:        toast.error(message || "Error al registrarse")
+./lib/toast-manager.ts:68:        toast.success("Has cerrado sesión correctamente")
+./lib/toast-manager.ts:72:        toast.error("Error al cerrar sesión")
+./lib/toast-manager.ts:79:        toast.success('Cuenta creada exitosamente')
+./lib/toast-manager.ts:83:        toast.success('Cuenta actualizada')
+./lib/toast-manager.ts:87:        toast.success('Cuenta eliminada')
+./lib/toast-manager.ts:91:        toast.error(message || 'Error al procesar cuenta')
+./lib/toast-manager.ts:98:        toast.success('Préstamo registrado')
+./lib/toast-manager.ts:102:        toast.success('Préstamo actualizado')
+./lib/toast-manager.ts:106:        toast.success("Préstamo recolectado y registrado en caja")
+./lib/toast-manager.ts:110:        toast.success("Deuda pagada y registrada en caja")
+./lib/toast-manager.ts:114:        toast.error(message || 'Error al procesar préstamo')
+./lib/toast-manager.ts:121:        toast.success('Meta de ahorro creada')
+./lib/toast-manager.ts:125:        toast.error(message || 'Error al crear meta')
+./lib/toast-manager.ts:132:        toast.info("Esta transacción se repetirá automáticamente según la frecuencia configurada")
+./lib/toast-manager.ts:136:        toast.info("Préstamo registrado. Podrás marcarlo como cobrado más tarde desde la lista de transacciones")
+./lib/toast-manager.ts:140:        toast.info("Deuda registrada. Podrás marcarla como pagada más tarde desde la lista de transacciones")
