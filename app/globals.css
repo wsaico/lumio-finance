@@ -354,9 +354,9 @@
   position: relative;
   overflow: hidden;
   border-radius: 1.25rem;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.7), rgba(248, 250, 252, 0.9));
-  box-shadow: 0 18px 45px -30px rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 249, 0.98));
+  box-shadow: 0 22px 55px -32px rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
@@ -383,7 +383,7 @@
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.9rem 1.1rem 0.6rem;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14);
 }
 
 .dashboard-premium .widget-kicker {
@@ -391,18 +391,22 @@
   font-weight: 700;
   letter-spacing: 0.25em;
   text-transform: uppercase;
-  color: rgba(71, 85, 105, 0.85);
+  color: rgba(30, 41, 59, 0.9);
 }
 
 .dashboard-premium .widget-title {
   font-size: 1rem;
   font-weight: 600;
-  color: rgba(15, 23, 42, 0.92);
+  color: rgba(15, 23, 42, 0.98);
 }
 
 .dashboard-premium .widget-subtitle {
   font-size: 0.75rem;
-  color: rgba(71, 85, 105, 0.85);
+  color: rgba(30, 41, 59, 0.78);
+}
+
+.dashboard-premium .widget-surface .text-muted-foreground {
+  color: rgba(30, 41, 59, 0.75);
 }
 
 .dark .dashboard-premium .widget-kicker,

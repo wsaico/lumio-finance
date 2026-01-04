@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import type { Widget } from '@/types/dashboard';
 import { useDashboard } from '@/hooks/useDashboard';
 import { cn } from '@/lib/utils';
-import { WidgetRenderer } from './WidgetRenderer';
+import { WidgetRenderer } from './widget-renderer';
 import { useState } from 'react';
 
 interface DraggableWidgetProps {

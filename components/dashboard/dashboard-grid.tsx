@@ -17,7 +17,7 @@ import {
   rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { useDashboard } from '@/hooks/useDashboard';
-import { DraggableWidget } from './DraggableWidget';
+import { DraggableWidget } from './draggable-widget';
 import { cn } from '@/lib/utils';
 
 export function DashboardGrid() {

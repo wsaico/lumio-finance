@@ -1,8 +1,8 @@
 "use client"
 
 import { useDashboardStore, WidgetId } from "@/hooks/use-dashboard-store"
-import { WIDGET_REGISTRY } from "@/components/dashboard/registry"
-import { ResizableWidget } from "@/components/dashboard/ResizableWidget"
+import { WIDGET_REGISTRY } from "@/components/dashboard/widget-registry"
+import { ResizableWidget } from "@/components/dashboard/resizable-widget"
 import { Button } from "@/components/ui/button"
 import { LayoutDashboard, Plus, RotateCcw, Save, Sparkles } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
