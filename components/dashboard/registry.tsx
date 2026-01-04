@@ -140,6 +140,13 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
         defaultColSpan: 'col-span-1 md:col-span-1',
         minH: 'min-h-[240px]'
     },
+    'activity-heatmap-v2': {
+        id: 'activity-heatmap-v2',
+        title: 'Mapa de Calor',
+        component: <CalendarHeatmapWidget />,
+        defaultColSpan: 'col-span-1 md:col-span-2',
+        minH: 'min-h-[240px]'
+    },
     'age-of-money': {
         id: 'age-of-money',
         title: 'Edad del Dinero',
@@ -148,4 +155,3 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
         minH: 'min-h-[120px]'
     }
 }
-
