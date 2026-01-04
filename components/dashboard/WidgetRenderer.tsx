@@ -2,9 +2,9 @@
 
 import type { Widget } from '@/types/dashboard';
 import { BalanceWidget } from './widgets/balance-widget';
-import { SpendingChartWidget } from './widgets/SpendingChartWidget';
-import { CategoryBreakdownWidget } from './widgets/CategoryBreakdownWidget';
-import { RecentTransactionsWidget } from './widgets/RecentTransactionsWidget';
+import { SpendingChartWidget } from './widgets/spending-chart-widget';
+import { CategoryBreakdownWidget } from './widgets/category-breakdown-widget';
+import { RecentTransactionsWidget } from './widgets/recent-transactions-widget';
 import { BudgetProgressWidget } from './widgets/budget-progress-widget';
 
 interface WidgetRendererProps {
