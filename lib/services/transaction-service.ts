@@ -141,7 +141,8 @@ export class TransactionService {
             }
         }
 
-        // 2. Reverse Account impact (handles unified CREDIT_CARD accounts)
+        // 2. REVERSE ACCOUNT IMPACT -> HANDLED BY DB TRIGGER
+        /*
         const { data: acc } = await supabase.from('accounts').select('current_balance, account_type, used_balance').eq('id', account_id).single()
 
         if (acc) {
@@ -166,8 +167,10 @@ export class TransactionService {
                 await supabase.from('accounts').update({ current_balance: newBal }).eq('id', account_id)
             }
         }
+        */
 
-        // 3. Reverse Transfer Destination impact
+        // 3. REVERSE DESTINATION IMPACT -> HANDLED BY DB TRIGGER
+        /*
         if (transaction_type === 'TRANSFER' && transfer_to_account_id) {
             const { data: dest } = await supabase.from('accounts').select('current_balance, account_type, used_balance').eq('id', transfer_to_account_id).single()
             if (dest) {
@@ -183,6 +186,7 @@ export class TransactionService {
                 }
             }
         }
+        */
     }
 
     /**
@@ -304,7 +308,8 @@ export class TransactionService {
             }
         }
 
-        // 2. Primary Account Impact (handles unified CREDIT_CARD accounts)
+        // 2. PRIMARY ACCOUNT IMPACT -> HANDLED BY DB TRIGGER (update_account_balance_trigger)
+        /*
         const { data: acc } = await supabase.from('accounts').select('current_balance, account_type, used_balance').eq('id', accountId).single()
 
         if (acc) {
@@ -328,8 +333,10 @@ export class TransactionService {
                 await supabase.from('accounts').update({ current_balance: newBal }).eq('id', accountId)
             }
         }
+        */
 
-        // 3. Transfer Destination Impact
+        // 3. TRANSFER DESTINATION IMPACT -> HANDLED BY DB TRIGGER
+        /*
         if (type === 'TRANSFER' && transfer_to_account_id) {
             const { data: dest } = await supabase.from('accounts').select('current_balance, account_type, used_balance').eq('id', transfer_to_account_id).single()
             if (dest) {
@@ -345,6 +352,7 @@ export class TransactionService {
                 }
             }
         }
+        */
     }
 
     /**

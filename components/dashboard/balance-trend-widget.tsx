@@ -5,10 +5,15 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useEffect, useState } from "react"
 import { TrendingUp, TrendingDown } from "lucide-react"
 
+import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useFormat } from "@/hooks/use-format"
+
 export function BalanceTrendWidget() {
     const [data, setData] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [change, setChange] = useState<{ value: number, percent: number } | null>(null)
+    const { currencyCode } = useSettingsStore() // Get global currency
+    const { getCurrencySymbol } = useFormat() // Assume this helper exists or just map manually if not
 
     useEffect(() => {
         async function fetchData() {
@@ -67,7 +72,7 @@ export function BalanceTrendWidget() {
                 </div>
                 <div className="mt-1">
                     <span className="text-2xl font-bold">
-                        S/ {data[data.length - 1]?.balance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        {data[data.length - 1]?.balance.toLocaleString('es-PE', { style: 'currency', currency: currencyCode })}
                     </span>
                     <span className="text-xs text-muted-foreground ml-2">vs mes anterior</span>
                 </div>
@@ -95,7 +100,10 @@ export function BalanceTrendWidget() {
                                 border: '1px solid hsl(var(--border))',
                                 borderRadius: '8px'
                             }}
-                            formatter={(value: number) => [`S/ ${value.toLocaleString()}`, 'Saldo']}
+                            formatter={(value: any) => [
+                                Number(value || 0).toLocaleString('es-PE', { style: 'currency', currency: currencyCode }),
+                                'Saldo'
+                            ]}
                         />
                         <Area
                             type="monotone"

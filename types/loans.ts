@@ -23,6 +23,9 @@ export interface AccountReceivable {
     collectedAt?: string
     notes?: string
     interestRate?: number
+    interestType?: 'SIMPLE' | 'COMPOUND'
+    paymentFrequency?: 'MONTHLY' | 'WEEKLY' | 'BIWEEKLY' | 'SINGLE'
+    totalInstallments?: number
     linkedTransactionId?: string
     metadata?: Record<string, any>
     createdAt: string
@@ -52,6 +55,9 @@ export interface AccountPayable {
     paidAt?: string
     notes?: string
     interestRate?: number
+    interestType?: 'SIMPLE' | 'COMPOUND'
+    paymentFrequency?: 'MONTHLY' | 'WEEKLY' | 'BIWEEKLY' | 'SINGLE'
+    totalInstallments?: number
     linkedTransactionId?: string
     metadata?: Record<string, any>
     createdAt: string
@@ -77,6 +83,8 @@ export interface LoanPayment {
     transactionId?: string
     notes?: string
     paymentMethod?: PaymentMethod
+    principalAmount?: number
+    interestAmount?: number
     createdAt: string
 }
 
@@ -93,7 +101,10 @@ export interface CreateAccountReceivableDTO {
     dueDate?: string
     notes?: string
     interestRate?: number
-    accountId: string // Para la transacción de salida de caja
+    interestType?: 'SIMPLE' | 'COMPOUND'
+    paymentFrequency?: 'MONTHLY' | 'WEEKLY' | 'BIWEEKLY' | 'SINGLE'
+    totalInstallments?: number
+    accountId: string
 }
 
 export interface CreateAccountPayableDTO {
@@ -105,7 +116,10 @@ export interface CreateAccountPayableDTO {
     dueDate?: string
     notes?: string
     interestRate?: number
-    accountId: string // Para la transacción de entrada de caja
+    interestType?: 'SIMPLE' | 'COMPOUND'
+    paymentFrequency?: 'MONTHLY' | 'WEEKLY' | 'BIWEEKLY' | 'SINGLE'
+    totalInstallments?: number
+    accountId: string
 }
 
 export interface CreatePaymentDTO {
@@ -115,7 +129,9 @@ export interface CreatePaymentDTO {
     paymentDate?: string
     notes?: string
     paymentMethod?: PaymentMethod
-    accountId: string // Cuenta donde se registra el movimiento
+    accountId: string
+    principalAmount?: number
+    interestAmount?: number
 }
 
 // ============================================

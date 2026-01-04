@@ -13,6 +13,11 @@ export type WidgetId =
     | 'balance-trend'
     | 'currency-breakdown'
     | 'expense-nature'
+    | 'credit-card-alerts'
+    | 'credit-card-alerts'
+    | 'daily-volatility'
+    | 'activity-heatmap'
+    | 'age-of-money'
 
 // Widget size configuration
 export interface WidgetSize {
@@ -38,13 +43,17 @@ interface DashboardState {
 
 const DEFAULT_WIDGETS: WidgetId[] = [
     'total-balance',
+    'activity-heatmap',
     'financial-health',
     'savings-goals',
     'critical-budgets',
     'quick-actions',
     'cash-flow',
     'expense-structure',
-    'recent-activity'
+    'recent-activity',
+    'credit-card-alerts',
+    'daily-volatility',
+    'age-of-money'
 ]
 
 const ALL_WIDGETS: WidgetId[] = [
@@ -58,7 +67,12 @@ const ALL_WIDGETS: WidgetId[] = [
     'expense-structure',
     'balance-trend',
     'currency-breakdown',
-    'expense-nature'
+    'expense-nature',
+    'credit-card-alerts',
+    'credit-card-alerts',
+    'daily-volatility',
+    'activity-heatmap',
+    'age-of-money'
 ]
 
 // Default sizes based on widget type
@@ -69,11 +83,15 @@ const DEFAULT_WIDGET_SIZES: Record<WidgetId, WidgetSize> = {
     'critical-budgets': { colSpan: 1 },
     'quick-actions': { colSpan: 1 },
     'cash-flow': { colSpan: 3 },
-    'expense-structure': { colSpan: 1 },
+    'expense-structure': { colSpan: 2 },
     'recent-activity': { colSpan: 2 },
     'balance-trend': { colSpan: 1 },
     'currency-breakdown': { colSpan: 1 },
     'expense-nature': { colSpan: 1 },
+    'credit-card-alerts': { colSpan: 1 },
+    'daily-volatility': { colSpan: 2 },
+    'activity-heatmap': { colSpan: 2 },
+    'age-of-money': { colSpan: 1 },
 }
 
 export const useDashboardStore = create<DashboardState>()(
@@ -130,7 +148,7 @@ export const useDashboardStore = create<DashboardState>()(
             setDragging: (isDragging) => set({ isDragging })
         }),
         {
-            name: 'dashboard-layout-storage',
+            name: 'dashboard-layout-storage-v4',
             partialize: (state) => ({
                 activeWidgets: state.activeWidgets,
                 widgetSizes: state.widgetSizes

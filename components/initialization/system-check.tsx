@@ -5,6 +5,18 @@ import { useCategories } from "@/hooks/use-categories"
 import { toast } from "sonner"
 
 export function SystemCheck() {
+    const [mounted, setMounted] = React.useState(false)
+
+    React.useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted) return null
+
+    return <SystemCheckContent />
+}
+
+function SystemCheckContent() {
     const { categories, isLoading } = useCategories()
     const [isHealing, setIsHealing] = React.useState(false)
 
@@ -21,7 +33,6 @@ export function SystemCheck() {
 
     const handleHeal = async () => {
         setIsHealing(true)
-        console.log("SystemCheck: Missing categories detected. Healing...")
 
         try {
             const response = await fetch('/api/categories/heal', {
@@ -30,7 +41,6 @@ export function SystemCheck() {
 
             if (response.ok) {
                 const data = await response.json()
-                console.log("SystemCheck: Healing complete", data)
                 if (data.inserted > 0 || data.updated > 0) {
                     toast.success("Categorías sincronizadas", {
                         description: `Se han restaurado ${data.inserted + data.updated} categorías del sistema.`

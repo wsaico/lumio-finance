@@ -57,7 +57,7 @@ export async function GET() {
         return NextResponse.json(mappedAccounts)
     } catch (error) {
         console.error('[ACCOUNTS_GET]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }
 
@@ -131,6 +131,6 @@ export async function POST(req: Request) {
             return new NextResponse('Invalid data', { status: 400 })
         }
         console.error('[ACCOUNTS_POST]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }

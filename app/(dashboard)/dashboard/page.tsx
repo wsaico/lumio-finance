@@ -29,8 +29,8 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuTrigger,
-    DropdownMenuSeparator
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 
 export default function DashboardPage() {
@@ -82,35 +82,11 @@ export default function DashboardPage() {
     const activeWidget = activeId ? WIDGET_REGISTRY[activeId] : null
 
     return (
-        <div className="space-y-6 pb-20 md:pb-6 relative min-h-screen">
+        <div className="dashboard-compact dashboard-premium space-y-4 pb-20 md:pb-6 relative min-h-screen">
             {/* Header with Premium Animation */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                >
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-primary via-primary/80 to-primary bg-clip-text text-transparent">
-                            Dashboard
-                        </h1>
-                        <AnimatePresence>
-                            {isEditMode && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0, x: -10 }}
-                                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                                    exit={{ opacity: 0, scale: 0, x: -10 }}
-                                    className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-primary/20 to-primary/10 text-primary text-xs font-semibold border border-primary/20"
-                                >
-                                    <Sparkles className="h-3 w-3" />
-                                    Modo Edición
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                    <p className="text-muted-foreground mt-1">
-                        {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </p>
-                </motion.div>
+                {/* Header removed for global uniqueness */}
+                <div />
 
                 {/* Control Buttons */}
                 <div className="flex items-center gap-2">
@@ -207,7 +183,7 @@ export default function DashboardPage() {
                         layout
                         className={cn(
                             "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-min transition-all duration-300",
-                            isEditMode ? "gap-6 md:gap-8" : "gap-4 md:gap-6"
+                            isEditMode ? "gap-4 md:gap-6" : "gap-3 md:gap-4"
                         )}
                         style={{ gridAutoFlow: 'dense' }}
                     >

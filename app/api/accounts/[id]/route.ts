@@ -14,6 +14,15 @@ const accountUpdateSchema = z.object({
     customBankName: z.string().optional(),
     excludeFromStats: z.boolean().optional(),
     archived: z.boolean().optional(),
+    // Credit Card fields
+    lastFourDigits: z.string().optional(),
+    creditLimit: z.number().optional(),
+    usedBalance: z.number().optional(),
+    closingDay: z.number().optional(),
+    paymentDueDay: z.number().optional(),
+    cardNetwork: z.string().optional(),
+    interestRateAnnual: z.number().optional(),
+    minPaymentPercent: z.number().optional(),
 })
 
 
@@ -46,6 +55,16 @@ export async function PATCH(
         if (validData.customBankName !== undefined) updateData.custom_bank_name = validData.customBankName
         if (validData.excludeFromStats !== undefined) updateData.exclude_from_stats = validData.excludeFromStats
         if (validData.archived !== undefined) updateData.archived = validData.archived
+
+        // Credit Card fields mapping
+        if (validData.lastFourDigits !== undefined) updateData.last_four_digits = validData.lastFourDigits
+        if (validData.creditLimit !== undefined) updateData.credit_limit = validData.creditLimit
+        if (validData.usedBalance !== undefined) updateData.used_balance = validData.usedBalance
+        if (validData.closingDay !== undefined) updateData.closing_day = validData.closingDay
+        if (validData.paymentDueDay !== undefined) updateData.payment_due_day = validData.paymentDueDay
+        if (validData.cardNetwork !== undefined) updateData.card_network = validData.cardNetwork
+        if (validData.interestRateAnnual !== undefined) updateData.interest_rate_annual = validData.interestRateAnnual
+        if (validData.minPaymentPercent !== undefined) updateData.min_payment_percent = validData.minPaymentPercent
 
         // Update
         const { data: account, error } = await supabase
@@ -88,7 +107,16 @@ export async function PATCH(
             includeInTotal: account.include_in_total,
             sortOrder: account.sort_order,
             createdAt: account.created_at,
-            updatedAt: account.updated_at
+            updatedAt: account.updated_at,
+            // Credit Card fields in response
+            lastFourDigits: account.last_four_digits,
+            creditLimit: account.credit_limit,
+            usedBalance: account.used_balance,
+            closingDay: account.closing_day,
+            paymentDueDay: account.payment_due_day,
+            cardNetwork: account.card_network,
+            interestRateAnnual: account.interest_rate_annual,
+            minPaymentPercent: account.min_payment_percent
         }
 
         return NextResponse.json(mappedAccount)

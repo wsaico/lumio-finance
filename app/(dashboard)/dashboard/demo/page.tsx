@@ -30,9 +30,9 @@ export default function DemoPage() {
 
     // Setup keyboard shortcuts
     const shortcuts = useGlobalKeyboardShortcuts(
-        () => console.log("New transaction"),
-        () => console.log("Search"),
-        () => console.log("Toggle sidebar"),
+        () => {},
+        () => {},
+        () => {},
         () => router.push("/dashboard"),
         () => router.push("/dashboard/transactions"),
         () => router.push("/dashboard/budgets"),

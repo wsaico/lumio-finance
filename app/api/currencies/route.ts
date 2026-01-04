@@ -10,15 +10,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: currencies, error: fetchError } = await supabase
+    const { data: currencies, error } = await supabase
       .from('currencies')
       .select('*')
       .order('code', { ascending: true });
 
-    if (fetchError) {
-      console.error('Failed to fetch currencies:', fetchError);
-      return NextResponse.json({ error: 'Failed to fetch currencies' }, { status: 500 });
-    }
+    if (error) throw error;
 
     return NextResponse.json({ currencies }, { status: 200 });
   } catch (error) {
@@ -45,7 +42,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: currency, error: insertError } = await supabase
+    const { data: currency, error } = await supabase
       .from('currencies')
       .insert({
         code: code.toUpperCase(),
@@ -55,12 +52,11 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    if (insertError) {
-      if (insertError.code === '23505') { // Postgres unique violation (instead of P2002)
+    if (error) {
+      if (error.code === '23505') { // Postgres unique_violation
         return NextResponse.json({ error: 'Currency code already exists' }, { status: 409 });
       }
-      console.error('Failed to create currency:', insertError);
-      return NextResponse.json({ error: 'Failed to create currency' }, { status: 500 });
+      throw error;
     }
 
     return NextResponse.json({ currency }, { status: 201 });

@@ -70,7 +70,6 @@ export async function POST(req: NextRequest) {
         categoryError = null;
       } else {
         // Log specifically what ID failed
-        console.warn(`[LEARN_API] Category not found in DB: ${categoryId}. User: ${user.id}`);
         return NextResponse.json({
           message: 'Category not found (skipping learning)',
           details: `ID ${categoryId} not materialized.`,
@@ -107,7 +106,6 @@ export async function POST(req: NextRequest) {
             console.error('[LEARN_API] Failed to materialize default subcategory:', createSubError);
           }
         } else {
-          console.warn(`[LEARN_API] Subcategory not found in defaults: ${subcategoryId}`);
         }
       }
     }

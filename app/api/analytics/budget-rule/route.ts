@@ -138,6 +138,6 @@ export async function GET(req: Request) {
 
     } catch (error: any) {
         console.error('[ANALYTICS_50_30_20]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }

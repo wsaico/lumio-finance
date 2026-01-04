@@ -208,32 +208,23 @@ export default function BudgetsPage() {
         <div className="container mx-auto py-6 space-y-6 animate-in fade-in duration-500">
             {/* Header with stats */}
             <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                            Presupuestos
-                        </h1>
-                        <p className="text-muted-foreground mt-1.5">
-                            Controla tus gastos y alcanza tus metas de ahorro
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={handleRefresh}
-                            disabled={isRefreshing}
-                            className={cn(isRefreshing && "animate-spin")}
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            onClick={() => setIsWizardOpen(true)}
-                            className="gap-2 shadow-md hover:shadow-lg transition-all"
-                        >
-                            <Plus className="h-4 w-4" /> Nuevo Presupuesto
-                        </Button>
-                    </div>
+                {/* Header Toolbar */}
+                <div className="flex items-center justify-end gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className={cn(isRefreshing && "animate-spin")}
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        onClick={() => window.location.href = '/dashboard/planning'}
+                        className="gap-2 shadow-md hover:shadow-lg transition-all"
+                    >
+                        <TrendingUp className="h-4 w-4" /> Planificar Mes
+                    </Button>
                 </div>
 
                 {/* Stats cards */}
@@ -306,8 +297,8 @@ export default function BudgetsPage() {
                     <p className="text-muted-foreground text-center max-w-sm mt-2 mb-6">
                         Crea tu primer presupuesto para tomar el control total de tus finanzas.
                     </p>
-                    <Button onClick={() => setIsWizardOpen(true)} className="shadow-lg">
-                        <Plus className="mr-2 h-4 w-4" /> Crear Presupuesto
+                    <Button onClick={() => window.location.href = '/dashboard/planning'} className="shadow-lg">
+                        <TrendingUp className="mr-2 h-4 w-4" /> Ir al Planificador
                     </Button>
                 </div>
             ) : (

@@ -20,13 +20,8 @@ export default function SavingsGoalsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Metas de Ahorro</h2>
-                    <p className="text-muted-foreground">
-                        Alcanza tus objetivos financieros con metas inteligentes
-                    </p>
-                </div>
+            {/* Header Toolbar */}
+            <div className="flex items-center justify-end">
                 <Button asChild className="gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-lg shadow-orange-500/20">
                     <Link href="/dashboard/savings-goals/new">
                         <Plus className="h-4 w-4" />
@@ -59,9 +54,9 @@ export default function SavingsGoalsPage() {
                             <Target className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">S/ {analytics?.totalSaved?.toFixed(2) || '0.00'}</div>
-                            <p className="text-xs text-muted-foreground">
-                                de S/ {analytics?.totalTarget?.toFixed(2) || '0.00'} objetivo
+                            <div className="text-2xl font-bold">{analytics?.totalSaved?.toFixed(2) || '0.00'}</div>
+                            <p className="text-xs text-muted-foreground whitespace-nowrap">
+                                Monto total de ahorro
                             </p>
                         </CardContent>
                     </Card>

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, ArrowRight, Check, Calendar as CalendarIcon, TrendingDown, TrendingUp, Wallet, Info, Sparkles, X, Loader2, CreditCard } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Calendar as CalendarIcon, TrendingDown, TrendingUp, Wallet, Info, Sparkles, X, Loader2, CreditCard, AlertTriangle } from "lucide-react"
 import { useSettingsStore } from "@/hooks/use-settings-store"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -207,7 +207,14 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                 amount: Number(values.amount),
                 startDate: startDate?.toISOString(),
                 endDate: endDate?.toISOString(),
-                currencyCode: values.currencyCode || currencyCode
+                currencyCode: values.currencyCode || currencyCode,
+
+                // ZBB Desynchronization Logic
+                // If this budget was ZBB controlled, manual edits break the link
+                ...(editingBudget?.is_zbb_controlled ? {
+                    is_zbb_controlled: false,
+                    zbb_allocation_id: null
+                } : {})
             }
 
             const url = isEditing ? `/api/budgets/${editingBudget.id}` : '/api/budgets'
@@ -266,6 +273,20 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                 </div>
                 {/* Optional: Add a helper icon or status here if needed */}
             </div>
+
+            {/* ZBB WARNING BANNER */}
+            {isEditing && editingBudget?.is_zbb_controlled && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/50 px-10 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-full text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="w-4 h-4" />
+                        </div>
+                        <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                            Este presupuesto está <strong>sincronizado con ZBB</strong>. Si editas aquí, se perderá la conexión automática.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* 2. Main Content Area */}
             <Form {...form}>

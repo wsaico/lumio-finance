@@ -12,7 +12,7 @@ interface MonthlyComparisonChartProps {
 export function MonthlyComparisonChart({ transactions, currencyCode }: MonthlyComparisonChartProps) {
     // Group transactions by month
     const monthlyData = transactions.reduce((acc: any, transaction: any) => {
-        const date = new Date(transaction.transaction_date)
+        const date = new Date(transaction.transactionDate)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         const monthName = date.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })
 
@@ -27,9 +27,9 @@ export function MonthlyComparisonChart({ transactions, currencyCode }: MonthlyCo
         }
 
         const amount = Number(transaction.amount)
-        if (transaction.transaction_type === 'INCOME') {
+        if (transaction.transactionType === 'INCOME') {
             acc[monthKey].ingresos += amount
-        } else if (transaction.transaction_type === 'EXPENSE') {
+        } else if (transaction.transactionType === 'EXPENSE') {
             acc[monthKey].gastos += amount
         }
 
@@ -65,37 +65,40 @@ export function MonthlyComparisonChart({ transactions, currencyCode }: MonthlyCo
                     </div>
                 ) : (
                     <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }} barGap={2}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
                             <XAxis
                                 dataKey="month"
-                                className="text-xs"
-                                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                                dy={10}
                             />
                             <YAxis
-                                className="text-xs"
-                                tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                                tickFormatter={(value) => `${currencyCode} ${value.toFixed(0)}`}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                                tickFormatter={(value) => `${currencyCode} ${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`}
                             />
                             <Tooltip
                                 content={({ active, payload, label }) => {
                                     if (active && payload && payload.length) {
                                         return (
-                                            <div className="rounded-lg border bg-background p-4 shadow-lg">
+                                            <div className="rounded-xl border bg-background/95 backdrop-blur-sm p-4 shadow-xl ring-1 ring-border/50">
                                                 <div className="grid gap-3">
-                                                    <div className="font-semibold">{label}</div>
+                                                    <div className="font-semibold text-sm border-b pb-2">{label}</div>
                                                     {payload.map((entry: any, index: number) => (
-                                                        <div key={index} className="flex items-center justify-between gap-4">
+                                                        <div key={index} className="flex items-center justify-between gap-8">
                                                             <div className="flex items-center gap-2">
                                                                 <div
-                                                                    className="h-3 w-3 rounded-full"
+                                                                    className="h-2 w-2 rounded-full"
                                                                     style={{ backgroundColor: entry.color }}
                                                                 />
-                                                                <span className="text-sm text-muted-foreground">
+                                                                <span className="text-xs text-muted-foreground uppercase font-medium">
                                                                     {entry.name}
                                                                 </span>
                                                             </div>
-                                                            <span className="font-bold">
+                                                            <span className="font-bold font-mono">
                                                                 {currencyCode} {Number(entry.value).toFixed(2)}
                                                             </span>
                                                         </div>
@@ -106,21 +109,30 @@ export function MonthlyComparisonChart({ transactions, currencyCode }: MonthlyCo
                                     }
                                     return null
                                 }}
+                                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
                             />
                             <Legend
+                                verticalAlign="top"
+                                align="right"
+                                iconType="circle"
+                                iconSize={8}
                                 wrapperStyle={{
-                                    paddingTop: '20px'
+                                    paddingBottom: '20px',
+                                    fontSize: '12px',
+                                    fontWeight: 500
                                 }}
                             />
                             <Bar
                                 dataKey="Ingresos"
                                 fill="#10b981"
-                                radius={[8, 8, 0, 0]}
+                                radius={[4, 4, 0, 0]}
+                                maxBarSize={50}
                             />
                             <Bar
                                 dataKey="Gastos"
                                 fill="#ef4444"
-                                radius={[8, 8, 0, 0]}
+                                radius={[4, 4, 0, 0]}
+                                maxBarSize={50}
                             />
                         </BarChart>
                     </ResponsiveContainer>
@@ -130,15 +142,17 @@ export function MonthlyComparisonChart({ transactions, currencyCode }: MonthlyCo
                 {chartData.length > 0 && (
                     <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t">
                         <div>
-                            <p className="text-xs text-muted-foreground">Promedio Ingresos/mes</p>
-                            <p className="text-lg font-bold text-emerald-600">
-                                {currencyCode} {(chartData.reduce((sum, item) => sum + item.Ingresos, 0) / chartData.length).toFixed(2)}
+                            <p className="text-xs text-muted-foreground font-medium mb-1">Promedio Ingresos</p>
+                            <p className="text-xl font-bold text-emerald-600">
+                                {currencyCode} {(chartData.reduce((sum, item) => sum + item.Ingresos, 0) / chartData.length).toFixed(0)}
+                                <span className="text-xs text-muted-foreground/60 font-medium ml-1">/mes</span>
                             </p>
                         </div>
                         <div>
-                            <p className="text-xs text-muted-foreground">Promedio Gastos/mes</p>
-                            <p className="text-lg font-bold text-red-600">
-                                {currencyCode} {(chartData.reduce((sum, item) => sum + item.Gastos, 0) / chartData.length).toFixed(2)}
+                            <p className="text-xs text-muted-foreground font-medium mb-1">Promedio Gastos</p>
+                            <p className="text-xl font-bold text-red-600">
+                                {currencyCode} {(chartData.reduce((sum, item) => sum + item.Gastos, 0) / chartData.length).toFixed(0)}
+                                <span className="text-xs text-muted-foreground/60 font-medium ml-1">/mes</span>
                             </p>
                         </div>
                         <div>

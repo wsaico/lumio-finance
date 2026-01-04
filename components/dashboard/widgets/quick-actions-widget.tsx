@@ -65,31 +65,22 @@ export function QuickActionsWidget() {
             animate={{ opacity: 1, y: 0 }}
             className="h-full"
         >
-            <Card className="relative overflow-hidden border-none h-full shadow-2xl">
-                {/* Premium Background */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900" />
-
-                {/* Animated Orbs */}
-                <div className="absolute inset-0 overflow-hidden">
-                    <motion.div
-                        className="absolute top-0 right-1/4 w-32 h-32 bg-violet-500/15 rounded-full blur-3xl"
-                        animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-                        transition={{ duration: 4, repeat: Infinity }}
-                    />
-                    <motion.div
-                        className="absolute bottom-0 left-1/4 w-28 h-28 bg-fuchsia-500/15 rounded-full blur-3xl"
-                        animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.4, 0.2] }}
-                        transition={{ duration: 5, repeat: Infinity }}
-                    />
-                </div>
+            <Card className="widget-surface h-full">
+                <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-violet-400/20 blur-3xl" />
+                <div className="absolute -bottom-24 left-0 h-28 w-28 rounded-full bg-fuchsia-400/15 blur-3xl" />
 
                 <div className="relative h-full flex flex-col">
                     {/* Header */}
-                    <div className="p-4 flex items-center gap-2 border-b border-white/5">
-                        <div className="p-1.5 rounded-lg bg-violet-500/20">
-                            <Zap className="h-4 w-4 text-violet-400" />
+                    <div className="widget-header">
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 rounded-lg bg-primary/10 border border-white/10">
+                                <Zap className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                                <p className="widget-kicker">Acciones</p>
+                                <h3 className="widget-title">Acciones rapidas</h3>
+                            </div>
                         </div>
-                        <h3 className="font-bold text-sm text-white/90 uppercase tracking-wider">Acciones Rápidas</h3>
                         <motion.div
                             animate={{ rotate: [0, 15, -15, 0] }}
                             transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
@@ -99,7 +90,7 @@ export function QuickActionsWidget() {
                     </div>
 
                     {/* Actions Grid */}
-                    <div className="flex-1 p-4 grid grid-cols-3 gap-3">
+                    <div className="flex-1 px-4 pb-4 grid grid-cols-3 gap-3">
                         {actions.map((action, index) => (
                             <motion.button
                                 key={action.label}
@@ -135,3 +126,11 @@ export function QuickActionsWidget() {
         </motion.div>
     )
 }
+
+
+
+
+
+
+
+

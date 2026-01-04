@@ -333,7 +333,7 @@ export default function NewSavingsGoalPage() {
                                         <SelectItem value="none">Sin vincular</SelectItem>
                                         {accounts.map((account: any) => (
                                             <SelectItem key={account.id} value={account.id}>
-                                                {account.name} - S/ {Number(account.balance).toFixed(2)}
+                                                {account.name} - S/ {Number(account.currentBalance).toFixed(2)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

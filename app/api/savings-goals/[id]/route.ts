@@ -9,13 +9,8 @@ export async function GET(
 ) {
     try {
         const params = await context.params
-        console.log('[GOAL_DETAILS] Starting request for ID:', params.id)
-
         const supabase = await createClient()
-        console.log('[GOAL_DETAILS] Supabase client created')
-
         const { data: { user } } = await supabase.auth.getUser()
-        console.log('[GOAL_DETAILS] User:', user?.id)
 
         if (!user) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -29,8 +24,6 @@ export async function GET(
             .select('*')
             .eq('id', goalId)
             .eq('user_id', user.id)
-
-        console.log('[GOAL_DETAILS] Query result:', { goals, error })
 
         if (error) {
             console.error('[GOAL_DETAILS] Database error:', error)

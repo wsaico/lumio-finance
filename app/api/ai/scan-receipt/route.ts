@@ -59,8 +59,6 @@ export async function POST(req: Request) {
             base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         }
 
-        console.log(`[Gemini Scan] Processing MIME: ${mimeType}, Size: ${base64Data.length} chars`);
-
         const result = await model.generateContent([
             prompt,
             {

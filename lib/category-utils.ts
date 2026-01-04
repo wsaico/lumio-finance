@@ -21,7 +21,6 @@ export async function resolveCategory(supabase: any, table: string, id: string |
     if (existing) return existing.id
 
     // Create if missing
-    console.log(`[RESOLVE_CATEGORY] Creating System Category: ${def.name}`)
     const { data: newCat, error } = await supabase
         .from(table)
         .insert({

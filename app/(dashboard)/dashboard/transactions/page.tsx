@@ -1,18 +1,28 @@
 "use client"
 
 import { TransactionList } from "@/components/transactions/transaction-list"
-import { TransactionFilterBar } from "@/components/transactions/transaction-filter-bar"
+import dynamic from "next/dynamic"
+import { Skeleton } from "@/components/ui/skeleton"
+
+const TransactionFilterBar = dynamic(
+    () => import("@/components/transactions/transaction-filter-bar").then((mod) => mod.TransactionFilterBar),
+    {
+        ssr: false,
+        loading: () => <div className="w-full h-32 space-y-4">
+            <div className="flex gap-4">
+                <Skeleton className="h-10 w-full rounded-xl" />
+                <Skeleton className="h-10 w-[300px] rounded-xl" />
+                <Skeleton className="h-10 w-24 rounded-xl" />
+            </div>
+        </div>
+    }
+)
 
 export default function TransactionsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-1">
-                <h2 className="text-3xl font-bold tracking-tight">Transacciones</h2>
-                <p className="text-muted-foreground text-sm">
-                    Historial de movimientos e ingresos inteligentes.
-                </p>
-            </div>
+
 
             <div className="bg-background/40 backdrop-blur-sm border border-muted-foreground/10 rounded-2xl p-4 shadow-sm">
                 <TransactionFilterBar />

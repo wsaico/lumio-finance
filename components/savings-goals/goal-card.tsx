@@ -41,7 +41,7 @@ export function GoalCard({ goal }: GoalCardProps) {
 
     // Format currency
     const formatCurrency = (amount: number) => {
-        return `S/ ${amount.toFixed(2)}`
+        return `${goal.currency || 'S/'} ${amount.toFixed(2)}`
     }
 
     return (

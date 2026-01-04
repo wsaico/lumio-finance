@@ -35,6 +35,11 @@ export function SavingsGoalCard({ goal }: SavingsGoalCardProps) {
         daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     }
 
+    // Smart Target Logic
+    const monthlyNeeded = (goal as any).monthlyNeeded || 0
+    const isOnTrack = (goal as any).isOnTrack
+    const isOffTrack = !isOnTrack && !isComplete && monthlyNeeded > 0
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -43,11 +48,12 @@ export function SavingsGoalCard({ goal }: SavingsGoalCardProps) {
             whileHover={{ scale: 1.02, y: -4 }}
         >
             <Card className={`relative overflow-hidden border-none shadow-premium-md hover:shadow-premium-lg transition-all duration-300 ${isComplete ? 'bg-gradient-to-br from-emerald-500/10 to-green-500/10' : 'glass'
-                }`}>
+                } ${isOffTrack ? 'border-amber-500/50 dark:border-amber-500/30' : ''}`}>
+
                 {/* Accent Border */}
                 <div
                     className="absolute left-0 top-0 bottom-0 w-1"
-                    style={{ backgroundColor: goal.color }}
+                    style={{ backgroundColor: isOffTrack ? '#f59e0b' : goal.color }}
                 />
 
                 {/* Celebration Effect for Completed Goals */}
@@ -82,8 +88,16 @@ export function SavingsGoalCard({ goal }: SavingsGoalCardProps) {
                         <div className="text-2xl md:text-3xl font-bold">
                             {formatMoney(goal.currentAmount)}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                            Meta: {formatMoney(goal.targetAmount)}
+                        <div className="text-sm text-muted-foreground flex justify-between items-center">
+                            <span>Meta: {formatMoney(goal.targetAmount)}</span>
+                            {!isComplete && monthlyNeeded > 0 && (
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isOnTrack
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                    }`}>
+                                    {isOnTrack ? 'A tiempo' : 'Ajustar Aporte'}
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -93,7 +107,7 @@ export function SavingsGoalCard({ goal }: SavingsGoalCardProps) {
                         <div className="h-3 rounded-full bg-muted/30 overflow-hidden">
                             <motion.div
                                 className="h-full rounded-full"
-                                style={{ backgroundColor: goal.color }}
+                                style={{ backgroundColor: isOffTrack ? '#f59e0b' : goal.color }}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${percentage}%` }}
                                 transition={{ duration: 1, ease: "easeOut" }}
@@ -115,6 +129,22 @@ export function SavingsGoalCard({ goal }: SavingsGoalCardProps) {
                         </div>
                     </div>
 
+                    {/* Smart Target Recommendation */}
+                    {!isComplete && monthlyNeeded > 0 && (
+                        <div className={`text-xs p-2 rounded-md border ${isOnTrack
+                            ? 'bg-emerald-50/50 border-emerald-100 text-emerald-700 dark:bg-emerald-900/10 dark:border-emerald-800 dark:text-emerald-400'
+                            : 'bg-amber-50/50 border-amber-100 text-amber-700 dark:bg-amber-900/10 dark:border-amber-800 dark:text-amber-400'
+                            }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                <span className="font-semibold">Plan Mensual</span>
+                            </div>
+                            <p>
+                                <span className="font-bold">{formatMoney(monthlyNeeded)}/mes</span> requeridos para cumplir la meta el {goal.targetDate ? format(new Date(goal.targetDate), "d MMM yyyy", { locale: es }) : ''}.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Target Date & Days Remaining */}
                     {goal.targetDate && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border/50">
@@ -130,8 +160,8 @@ export function SavingsGoalCard({ goal }: SavingsGoalCardProps) {
                         </div>
                     )}
 
-                    {/* Remaining Amount */}
-                    {!isComplete && (
+                    {/* Remaining Amount (Simplified as redundant with Smart Target) */}
+                    {!isComplete && monthlyNeeded <= 0 && (
                         <div className="flex items-center gap-2 text-xs">
                             <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
                             <span className="text-muted-foreground">

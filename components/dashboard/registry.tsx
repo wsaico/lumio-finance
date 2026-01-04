@@ -3,8 +3,13 @@
 import { TotalBalanceCard } from "./total-balance-card"
 import { FinancialHealthWidget } from "./widgets/financial-health-widget"
 import { SavingsGoalsWidget } from "./widgets/savings-goals-widget"
+import { AgeOfMoneyWidget } from "./age-of-money-widget"
 import { CriticalBudgetsWidget } from "./widgets/critical-budgets-widget"
 import { QuickActionsWidget } from "./widgets/quick-actions-widget"
+import { CreditCardAlertWidget } from "./widgets/credit-card-alert-widget"
+import { DailyVolatilityWidget } from "./widgets/daily-volatility-widget"
+import { MonthlyActivityWidget } from "./widgets/monthly-activity-widget"
+import { CalendarHeatmapWidget } from "./widgets/CalendarHeatmapWidget"
 import { SmartInsightsWidget } from "./smart-insights-widget"
 import { CashFlowSummaryWidget } from "./cash-flow-summary-widget"
 import { ExpenseStructureWidget } from "./expense-structure-widget"
@@ -55,21 +60,21 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
         title: 'Salud Financiera',
         component: <FinancialHealthWidget />,
         defaultColSpan: 'col-span-1',
-        minH: 'min-h-[300px]'
+        minH: 'min-h-[260px]'
     },
     'savings-goals': {
         id: 'savings-goals',
         title: 'Metas de Ahorro',
         component: <SavingsGoalsWidget />,
         defaultColSpan: 'col-span-1 md:col-span-2 lg:col-span-3',
-        minH: 'min-h-[280px]'
+        minH: 'min-h-[240px]'
     },
     'critical-budgets': {
         id: 'critical-budgets',
         title: 'Alertas de Presupuesto',
         component: <CriticalBudgetsWidget />,
         defaultColSpan: 'col-span-1',
-        minH: 'min-h-[300px]'
+        minH: 'min-h-[240px]'
     },
     'quick-actions': {
         id: 'quick-actions',
@@ -77,6 +82,13 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
         component: <QuickActionsWidget />,
         defaultColSpan: 'col-span-1',
         minH: 'min-h-[150px]'
+    },
+    'credit-card-alerts': {
+        id: 'credit-card-alerts',
+        title: 'Vencimientos TC',
+        component: <CreditCardAlertWidget />,
+        defaultColSpan: 'col-span-1',
+        minH: 'min-h-[180px]'
     },
     'cash-flow': {
         id: 'cash-flow',
@@ -88,7 +100,7 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
         id: 'expense-structure',
         title: 'Estructura',
         component: <ExpenseStructureWidget />,
-        defaultColSpan: 'col-span-1 md:col-span-1 lg:col-span-1'
+        defaultColSpan: 'col-span-1 md:col-span-2'
     },
     'recent-activity': {
         id: 'recent-activity',
@@ -113,5 +125,27 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDefinition> = {
         title: 'Naturaleza (50/30/20)',
         component: <ExpenseNatureWidget />,
         defaultColSpan: 'col-span-1'
+    },
+    'daily-volatility': {
+        id: 'daily-volatility',
+        title: 'Volatilidad Diaria',
+        component: <DailyVolatilityWidget />,
+        defaultColSpan: 'col-span-1 md:col-span-2',
+        minH: 'min-h-[160px]'
+    },
+    'activity-heatmap': {
+        id: 'activity-heatmap',
+        title: 'Intensidad de Gastos',
+        component: <MonthlyActivityWidget />,
+        defaultColSpan: 'col-span-1 md:col-span-1',
+        minH: 'min-h-[240px]'
+    },
+    'age-of-money': {
+        id: 'age-of-money',
+        title: 'Edad del Dinero',
+        component: <AgeOfMoneyWidget />,
+        defaultColSpan: 'col-span-1',
+        minH: 'min-h-[120px]'
     }
 }
+

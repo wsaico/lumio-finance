@@ -1,38 +1,37 @@
 "use client"
 
-import { useSettingsStore } from "@/hooks/use-settings-store"
 import { useEffect } from "react"
+import { useSettingsStore } from "@/hooks/use-settings-store"
 
 export function SettingsEffects() {
-    const store = useSettingsStore()
+    const { accentColor, fontFamily } = useSettingsStore()
 
     useEffect(() => {
-        const root = document.documentElement
+        if (accentColor) {
+            // Convert Hex to OKLCH or just use HEX if preferred. 
+            // Tailwinds v4 variables typically use OKLCH, but we can override with HEX for simplicity 
+            // since we are targeting the --primary variable.
+            document.documentElement.style.setProperty('--primary', accentColor)
+            document.documentElement.style.setProperty('--ring', accentColor)
 
-        // Reset previous classes
-        root.classList.remove('font-inter', 'font-roboto', 'font-mono')
-        root.classList.remove('high-contrast')
-        root.classList.remove('animations-none', 'animations-minimal')
-
-        // Apply Font
-        if (store.font !== 'default') {
-            root.classList.add(`font-${store.font}`)
+            // Also update sidebar specific if needed
+            document.documentElement.style.setProperty('--sidebar-primary', accentColor)
         }
+    }, [accentColor])
 
-        // Apply High Contrast
-        if (store.highContrast) {
-            root.classList.add('high-contrast')
+    useEffect(() => {
+        if (fontFamily) {
+            const fontVars: Record<string, string> = {
+                'Geist': 'var(--font-geist-sans)',
+                'Inter': 'var(--font-inter)',
+                'Montserrat': 'var(--font-montserrat)',
+                'Outfit': 'var(--font-outfit)',
+                'Plus Jakarta Sans': 'var(--font-plus-jakarta-sans)',
+                'HONOR Sans': 'var(--font-honor-sans)', // Error if files missing in layout.tsx
+            }
+            document.documentElement.style.setProperty('--font-family', fontVars[fontFamily] || 'var(--font-geist-sans)')
         }
-
-        // Apply Animations
-        if (store.animations !== 'all') {
-            root.classList.add(`animations-${store.animations}`)
-        }
-
-        // Apply Root Variables for dynamic sizing if needed
-        // e.g., root.style.setProperty('--header-height', store.headerHeight === 'large' ? '80px' : '60px')
-
-    }, [store.font, store.highContrast, store.animations, store.headerHeight])
+    }, [fontFamily])
 
     return null
 }

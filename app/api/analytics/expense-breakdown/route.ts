@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getExchangeRatesMap, convertAmount } from '@/lib/currency'
+import { format } from 'date-fns'
 
 export async function GET(req: Request) {
     try {
@@ -17,23 +19,45 @@ export async function GET(req: Request) {
             return new NextResponse('Unauthorized', { status: 401 })
         }
 
-        // Parse month
+        // Fetch rates
+        // Fetch rates and Accounts parallel
+        const [rateMap, accountsRes] = await Promise.all([
+            getExchangeRatesMap(supabase),
+            supabase.from('accounts').select('id, currency_code').eq('user_id', user.id)
+        ])
+        const targetCurrency = user.user_metadata?.currency || 'PEN'
+
+        const accounts = accountsRes.data || []
+        const accountCurrencyMap: Record<string, string> = {}
+        accounts.forEach(acc => {
+            accountCurrencyMap[acc.id] = acc.currency_code
+        })
+
+        // Parse month (YYYY-MM)
         const [year, monthNum] = month.split('-').map(Number)
-        const startDate = new Date(year, monthNum - 1, 1)
-        const endDate = new Date(year, monthNum, 0, 23, 59, 59)
+
+        // Use local start/end of month to match how transaction_date (without time) is usually stored or perceived
+        const startDate = new Date(year, monthNum - 1, 1, 0, 0, 0)
+        const endDate = new Date(year, monthNum, 0, 23, 59, 59, 999)
+
+        // Use format to get YYYY-MM-DD strings to avoid toISOString() timezone shifts
+        const startDateStr = format(startDate, 'yyyy-MM-dd')
+        const endDateStr = format(endDate, 'yyyy-MM-dd HH:mm:ss')
 
         // Get all expenses for the month with categories
         const { data: transactions, error } = await supabase
             .from('transactions')
             .select(`
                 amount,
+                currency_code,
                 expense_category_id,
+                account_id,
                 expense_category:expense_categories(name, color)
             `)
             .eq('user_id', user.id)
             .eq('transaction_type', 'EXPENSE')
-            .gte('transaction_date', startDate.toISOString())
-            .lte('transaction_date', endDate.toISOString())
+            .gte('transaction_date', startDateStr)
+            .lte('transaction_date', endDateStr)
 
         if (error) {
             console.error('[EXPENSE_BREAKDOWN]', error)
@@ -45,7 +69,10 @@ export async function GET(req: Request) {
         let total = 0
 
         transactions?.forEach((tx: any) => {
-            const amount = Number(tx.amount)
+            const rawAmount = Number(tx.amount)
+            const currency = tx.currency_code || accountCurrencyMap[tx.account_id] || 'PEN'
+            const amount = convertAmount(rawAmount, currency, targetCurrency, rateMap)
+
             total += amount
 
             const categoryName = tx.expense_category?.name || 'Sin categoría'

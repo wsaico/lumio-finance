@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,19 +24,15 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useSettingsStore } from "@/hooks/use-settings-store"
 import {
-    MoreVertical,
+    MoreHorizontal,
     Edit2,
     Trash2,
     Copy,
     Pause,
     Play,
-    TrendingUp,
-    TrendingDown,
     AlertCircle,
     CheckCircle2,
-    AlertTriangle,
-    XCircle,
-    ShieldAlert,
+    TrendingUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -48,20 +45,17 @@ interface BudgetCardPremiumProps {
     onRefresh?: () => void
 }
 
-// Helper function to determine budget health status
 type BudgetStatus = 'healthy' | 'warning' | 'danger' | 'critical' | 'exceeded' | 'goal-achieved'
 
 function getBudgetStatus(percentage: number, type: 'EXPENSE' | 'SAVINGS'): BudgetStatus {
     if (type === 'EXPENSE') {
-        if (percentage >= 120) return 'exceeded'
-        if (percentage >= 100) return 'critical'
-        if (percentage >= 85) return 'danger'
-        if (percentage >= 70) return 'warning'
+        if (percentage > 100) return 'exceeded'
+        if (percentage >= 90) return 'critical'
+        if (percentage >= 80) return 'danger'
+        if (percentage >= 60) return 'warning'
         return 'healthy'
     } else {
-        // SAVINGS
         if (percentage >= 100) return 'goal-achieved'
-        if (percentage >= 75) return 'warning' // Nearly there
         return 'healthy'
     }
 }
@@ -87,65 +81,27 @@ export function BudgetCardPremium({
     const remaining = stats?.remaining || 0
     const limit = Number(budget.amount)
 
-    // Determine budget health status
     const status = getBudgetStatus(percentage, budget.type)
 
-    // Color and styling based on status
-    let statusColor = budget.color
-    let statusBg = `${budget.color}15`
-    let borderColor = budget.color
-    let pulseAnimation = false
+    // Modern "Finance App" aesthetic colors
+    // We move away from pure "Traffic Light" colors to more sophisticated shades
+    let accentColor = budget.color
 
+    // Override color based on critical status, but keep user color if healthy
     if (budget.type === 'EXPENSE') {
-        switch (status) {
-            case 'exceeded':
-                statusColor = '#dc2626' // Red 600
-                statusBg = '#dc262620'
-                borderColor = '#dc2626'
-                pulseAnimation = true
-                break
-            case 'critical':
-                statusColor = '#ef4444' // Red 500
-                statusBg = '#ef444420'
-                borderColor = '#ef4444'
-                pulseAnimation = true
-                break
-            case 'danger':
-                statusColor = '#f59e0b' // Amber 500
-                statusBg = '#f59e0b20'
-                borderColor = '#f59e0b'
-                break
-            case 'warning':
-                statusColor = '#eab308' // Yellow 500
-                statusBg = '#eab30815'
-                borderColor = '#eab308'
-                break
-        }
-    } else {
-        if (status === 'goal-achieved') {
-            statusColor = '#10b981' // Green 500
-            statusBg = '#10b98120'
-            borderColor = '#10b981'
-        }
+        if (status === 'exceeded') accentColor = '#ef4444' // Red 500
+        else if (status === 'critical') accentColor = '#f97316' // Orange 500
+        else if (status === 'warning') accentColor = '#eab308' // Yellow 500
     }
 
     const handleDelete = async () => {
         setIsDeleting(true)
         try {
-            const res = await fetch(`/api/budgets/${budget.id}`, {
-                method: 'DELETE',
-            })
-
-            if (!res.ok) {
-                const errorData = await res.json()
-                alert(`Error al eliminar: ${errorData.error || 'Error desconocido'}`)
-                return
-            }
-
+            await fetch(`/api/budgets/${budget.id}`, { method: 'DELETE' })
             onDelete?.(budget.id)
             onRefresh?.()
         } catch (error) {
-            alert('Error de red. Por favor intenta nuevamente.')
+            // Error handling
         } finally {
             setIsDeleting(false)
             setShowDeleteDialog(false)
@@ -154,339 +110,131 @@ export function BudgetCardPremium({
 
     const handleToggleActive = async () => {
         try {
-            const res = await fetch(`/api/budgets/${budget.id}`, {
+            await fetch(`/api/budgets/${budget.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isActive: !budget.isActive })
             })
-
-            if (!res.ok) {
-                const errorData = await res.json()
-                alert(`Error al cambiar estado: ${errorData.error || 'Error desconocido'}`)
-                return
-            }
-
             onToggleActive?.(budget.id, !budget.isActive)
             onRefresh?.()
-        } catch (error) {
-            alert('Error de red. Por favor intenta nuevamente.')
-        }
+        } catch (error) { }
     }
 
-    // Get status label and icon
-    const getStatusInfo = () => {
-        if (budget.type === 'EXPENSE') {
-            switch (status) {
-                case 'exceeded':
-                    return {
-                        label: 'EXCEDIDO',
-                        icon: XCircle,
-                        description: `Has superado el presupuesto en ${symbol}${Math.abs(remaining).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`
-                    }
-                case 'critical':
-                    return {
-                        label: 'CRÍTICO',
-                        icon: ShieldAlert,
-                        description: 'Presupuesto casi agotado'
-                    }
-                case 'danger':
-                    return {
-                        label: 'RIESGO',
-                        icon: AlertTriangle,
-                        description: 'Acercándose al límite'
-                    }
-                case 'warning':
-                    return {
-                        label: 'PRECAUCIÓN',
-                        icon: AlertCircle,
-                        description: 'Monitorea tus gastos'
-                    }
-                default:
-                    return {
-                        label: 'SALUDABLE',
-                        icon: CheckCircle2,
-                        description: 'Dentro del presupuesto'
-                    }
-            }
-        } else {
-            if (status === 'goal-achieved') {
-                return {
-                    label: 'META ALCANZADA',
-                    icon: CheckCircle2,
-                    description: '¡Felicidades!'
-                }
-            }
-            return {
-                label: percentage >= 75 ? 'CASI COMPLETO' : 'EN PROGRESO',
-                icon: TrendingUp,
-                description: `${(100 - percentage).toFixed(0)}% para completar`
-            }
-        }
+    const formatMoney = (amount: number) => {
+        return `${symbol}${Math.abs(amount).toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
     }
-
-    const statusInfo = getStatusInfo()
-    const StatusIcon = statusInfo.icon
 
     return (
         <>
-            <Card
-                className={cn(
-                    "group relative overflow-hidden transition-all duration-300 hover:shadow-lg",
-                    !budget.isActive && "opacity-60",
-                    pulseAnimation && "animate-pulse"
-                )}
-                style={{
-                    background: `linear-gradient(135deg, ${statusBg} 0%, transparent 100%)`,
-                    borderColor: borderColor,
-                    borderWidth: '2px',
-                    borderStyle: 'solid'
-                }}
-            >
-                {/* Top accent bar with animation */}
+            <Card className={cn(
+                "group relative overflow-hidden transition-all duration-300 hover:shadow-md border-border/50 bg-card/50 backdrop-blur-sm",
+                !budget.isActive && "opacity-60 grayscale-[0.5]"
+            )}>
+                {/* Thin Accent Line - Elegant Indicator */}
                 <div
-                    className={cn(
-                        "absolute top-0 left-0 right-0 h-1.5 transition-all duration-300",
-                        pulseAnimation && "animate-pulse"
-                    )}
-                    style={{ backgroundColor: statusColor }}
+                    className="absolute top-0 left-0 w-1 h-full opacity-80 transition-all group-hover:opacity-100"
+                    style={{ backgroundColor: accentColor }}
                 />
 
-                {/* Critical Alert Banner */}
-                {(status === 'exceeded' || status === 'critical') && budget.type === 'EXPENSE' && (
-                    <div
-                        className="absolute top-0 left-0 right-0 bg-gradient-to-r from-red-600 to-red-500 text-white text-xs font-bold py-1.5 px-3 flex items-center justify-center gap-2 shadow-md z-10"
-                    >
-                        <StatusIcon className="w-3.5 h-3.5 animate-pulse" />
-                        <span>{statusInfo.label}: {statusInfo.description}</span>
-                    </div>
-                )}
-
-                {/* Header */}
-                <CardHeader className={cn(
-                    "flex flex-row items-start justify-between space-y-0 pb-3",
-                    (status === 'exceeded' || status === 'critical') && budget.type === 'EXPENSE' && "pt-12"
-                )}>
-                    <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-lg truncate">{budget.name}</h3>
-                            {!budget.isActive && (
-                                <div className="px-2 py-0.5 bg-muted text-muted-foreground text-[10px] font-medium rounded-full">
-                                    PAUSADO
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                            {budget.type === 'EXPENSE' ? (
-                                <TrendingDown className="w-3 h-3" style={{ color: statusColor }} />
-                            ) : (
-                                <TrendingUp className="w-3 h-3" style={{ color: statusColor }} />
-                            )}
-                            <span className="text-muted-foreground">{budget.type === 'EXPENSE' ? 'Gastos' : 'Ahorros'}</span>
-                            <span className="text-muted-foreground">•</span>
-                            <span className="text-muted-foreground">{budget.period === 'MONTHLY' ? 'Mensual' : 'Personalizado'}</span>
-                            {status !== 'healthy' && status !== 'goal-achieved' && (
-                                <>
-                                    <span className="text-muted-foreground">•</span>
-                                    <span className="font-semibold flex items-center gap-1" style={{ color: statusColor }}>
-                                        <StatusIcon className="w-3 h-3" />
-                                        {statusInfo.label}
+                <CardContent className="p-5 pl-6 space-y-5">
+                    {/* Header: Name + Actions */}
+                    <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                            <h3 className="font-semibold text-base tracking-tight text-foreground/90 truncate pr-4">
+                                {budget.name}
+                            </h3>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground/80 font-medium">
+                                <span className={cn(
+                                    "px-1.5 py-0.5 rounded-[4px] bg-secondary text-secondary-foreground text-[10px] tracking-wide uppercase",
+                                    !budget.isActive && "bg-muted"
+                                )}>
+                                    {budget.isActive ? (budget.period === 'MONTHLY' ? 'Mensual' : 'Personal') : 'Pausado'}
+                                </span>
+                                {status === 'exceeded' && (
+                                    <span className="text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3" /> Excedido
                                     </span>
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Actions dropdown */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                                <MoreVertical className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => onEdit?.(budget)}>
-                                <Edit2 className="mr-2 h-4 w-4" />
-                                Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onDuplicate?.(budget)}>
-                                <Copy className="mr-2 h-4 w-4" />
-                                Duplicar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleToggleActive}>
-                                {budget.isActive ? (
-                                    <>
-                                        <Pause className="mr-2 h-4 w-4" />
-                                        Pausar
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="mr-2 h-4 w-4" />
-                                        Activar
-                                    </>
-                                )}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={() => setShowDeleteDialog(true)}
-                                className="text-destructive focus:text-destructive"
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </CardHeader>
-
-                {/* Content */}
-                <CardContent className="space-y-4">
-                    {/* Primary metric - What matters most */}
-                    <div className="space-y-3">
-                        {/* Main amount - Gastado vs Límite */}
-                        <div className="space-y-1">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-4xl font-bold tracking-tight" style={{ color: statusColor }}>
-                                    {symbol}{spent.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                </span>
-                                <span className="text-xl text-muted-foreground">
-                                    / {symbol}{limit.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground font-medium">
-                                    {budget.type === 'EXPENSE' ? 'Gastado de tu presupuesto' : 'Ahorrado de tu meta'}
-                                </span>
-                                <span className="text-sm font-bold" style={{ color: statusColor }}>
-                                    {percentage.toFixed(0)}%
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Progress bar with segments */}
-                        <div className="space-y-2">
-                            <div className="relative">
-                                <Progress
-                                    value={Math.min(percentage, 100)}
-                                    className="h-3 rounded-full"
-                                    indicatorColor={statusColor}
-                                />
-                                {/* Threshold markers for expense budgets */}
-                                {budget.type === 'EXPENSE' && (
-                                    <>
-                                        <div className="absolute top-0 h-3 border-l-2 border-yellow-500 opacity-40" style={{ left: '70%' }} title="70% - Precaución" />
-                                        <div className="absolute top-0 h-3 border-l-2 border-orange-500 opacity-50" style={{ left: '85%' }} title="85% - Riesgo" />
-                                    </>
                                 )}
                             </div>
                         </div>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground/50 hover:text-foreground">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => onEdit?.(budget)}><Edit2 className="mr-2 h-3.5 w-3.5" /> Editar</DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleToggleActive}>
+                                    {budget.isActive ? <><Pause className="mr-2 h-3.5 w-3.5" /> Pausar</> : <><Play className="mr-2 h-3.5 w-3.5" /> Activar</>}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive focus:text-destructive">
+                                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
-                    {/* Key Financial Metrics */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                {remaining >= 0 ? (
-                                    <>
-                                        <CheckCircle2 className="w-3 h-3" />
-                                        <span>Disponible</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <XCircle className="w-3 h-3 text-red-600" />
-                                        <span className="text-red-600">Excedido</span>
-                                    </>
-                                )}
-                            </div>
-                            <div className={cn(
-                                "text-2xl font-bold",
-                                remaining < 0 ? "text-red-600" : ""
-                            )} style={{ color: remaining >= 0 ? statusColor : undefined }}>
-                                {symbol}{Math.abs(remaining).toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                                {remaining >= 0
-                                    ? `${((remaining / limit) * 100).toFixed(0)}% restante`
-                                    : `${((Math.abs(remaining) / limit) * 100).toFixed(0)}% sobre límite`
-                                }
-                            </div>
+                    {/* Main Numbers: Left-Aligned for quick scanning */}
+                    <div className="space-y-1">
+                        <div className="flex items-baseline gap-2">
+                            {/* Primary Number: AVAILABLE (Psychological Safety) or SPENT? 
+                                Expert View: "Available" is actionable. "Spent" is historical.
+                                Let's show AVAILABLE big if healthy, OVERSPENT big if not.
+                             */}
+                            <span className={cn(
+                                "text-2xl font-bold tracking-tight title-font",
+                                status === 'exceeded' ? "text-red-500" : "text-foreground"
+                            )}>
+                                {formatMoney(remaining)}
+                            </span>
+                            <span className="text-sm font-medium text-muted-foreground/70">
+                                {remaining >= 0 ? 'disponibles' : 'excedidos'}
+                            </span>
                         </div>
 
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <StatusIcon className="w-3 h-3" />
-                                <span>Estado</span>
-                            </div>
-                            <div className="text-lg font-bold flex items-center gap-1.5" style={{ color: statusColor }}>
-                                <span>{statusInfo.label}</span>
-                            </div>
-                            <div className="text-xs" style={{ color: statusColor, opacity: 0.8 }}>
-                                {statusInfo.description}
-                            </div>
+                        {/* Context: Total Spend */}
+                        <div className="text-xs text-muted-foreground font-medium flex justify-between items-center">
+                            <span>Gastado: {formatMoney(spent)}</span>
+                            <span>Límite: {formatMoney(limit)}</span>
                         </div>
                     </div>
 
-                    {/* Warning/Info Messages */}
-                    {status === 'danger' && budget.type === 'EXPENSE' && (
-                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs">
-                                <div className="font-semibold text-amber-700">Alerta de presupuesto</div>
-                                <div className="text-amber-600/90 mt-0.5">{statusInfo.description}. Solo te quedan {symbol}{remaining.toLocaleString('es-PE', { minimumFractionDigits: 2 })} disponibles.</div>
-                            </div>
+                    {/* Minimalist Progress Bar */}
+                    <div className="space-y-1.5">
+                        <Progress
+                            value={Math.min(percentage, 100)}
+                            className="h-1.5 bg-secondary" // Ultra thin, classy
+                            indicatorColor={accentColor}
+                        />
+                        <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
+                            <span>{percentage.toFixed(0)}%</span>
+                            {/* Smart Status Label */}
+                            <span className={cn(
+                                status === 'exceeded' && "text-red-500",
+                                status === 'warning' && "text-amber-500",
+                                status === 'healthy' && "text-emerald-500"
+                            )}>
+                                {status === 'healthy' ? 'En orden' :
+                                    status === 'exceeded' ? 'Atención' :
+                                        status === 'goal-achieved' ? 'Completado' : 'Cuidado'}
+                            </span>
                         </div>
-                    )}
-
-                    {status === 'warning' && budget.type === 'EXPENSE' && (
-                        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2.5 flex items-start gap-2">
-                            <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs">
-                                <div className="font-semibold text-yellow-700">Precaución</div>
-                                <div className="text-yellow-600/90 mt-0.5">{statusInfo.description} para mantener el control.</div>
-                            </div>
-                        </div>
-                    )}
-
-                    {status === 'goal-achieved' && budget.type === 'SAVINGS' && (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2.5 flex items-start gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs">
-                                <div className="font-semibold text-green-700">¡Meta alcanzada!</div>
-                                <div className="text-green-600/90 mt-0.5">Has completado tu objetivo de ahorro.</div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Additional info */}
-                    {budget.accountIds && budget.accountIds.length > 0 && (
-                        <div className="text-xs text-muted-foreground pt-2 border-t flex items-center gap-1">
-                            <span className="font-medium">{budget.accountIds.length}</span>
-                            <span>cuenta(s) monitoreada(s)</span>
-                        </div>
-                    )}
+                    </div>
                 </CardContent>
             </Card>
 
-            {/* Delete confirmation dialog */}
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar presupuesto?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción no se puede deshacer. El presupuesto "{budget.name}" será eliminado permanentemente.
-                        </AlertDialogDescription>
+                        <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDelete}
-                            disabled={isDeleting}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            {isDeleting ? 'Eliminando...' : 'Eliminar'}
-                        </AlertDialogAction>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

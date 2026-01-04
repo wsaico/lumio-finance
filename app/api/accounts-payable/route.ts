@@ -16,10 +16,16 @@ const createPayableSchema = z.object({
     notes: z.string().optional(),
     interestRate: z.number().min(0).max(100).optional(),
     accountId: z.string().uuid('Cuenta inválida'),
+    // Expert Loan Fields
+    interestType: z.enum(['SIMPLE', 'COMPOUND']).default('SIMPLE'),
+    paymentFrequency: z.enum(['MONTHLY', 'WEEKLY', 'BIWEEKLY', 'SINGLE']).default('MONTHLY'),
+    totalInstallments: z.number().int().positive().default(1),
 })
 
 const updateBalanceSchema = z.object({
     paymentAmount: z.number().positive('El monto debe ser positivo'),
+    principalAmount: z.number().min(0).optional(),
+    interestAmount: z.number().min(0).optional(),
     accountId: z.string().uuid(),
     paymentMethod: z.enum(['CASH', 'TRANSFER', 'CHECK', 'CARD', 'OTHER']).optional(),
     notes: z.string().optional(),
@@ -31,6 +37,35 @@ const updateBalanceSchema = z.object({
 
 function mapAccountPayable(row: any): any {
     if (!row) return null
+
+    // Self-Healing Status Logic:
+    const totalPrincipalPaid = Number(row.original_amount) - Number(row.outstanding_balance)
+    let accumulatedPrincipalPaid = 0
+
+    const installments = (row.loan_installments || [])
+        .sort((a: any, b: any) => a.installment_number - b.installment_number)
+        .map((i: any) => {
+            const principal = Number(i.principal_amount)
+            let status = i.status
+
+            if (accumulatedPrincipalPaid + (principal - 0.05) <= totalPrincipalPaid) {
+                status = 'PAID'
+            }
+
+            accumulatedPrincipalPaid += principal
+
+            return {
+                id: i.id,
+                installmentNumber: i.installment_number,
+                dueDate: i.due_date,
+                principalAmount: principal,
+                interestAmount: Number(i.interest_amount),
+                totalAmount: Number(i.total_amount),
+                status: status,
+                paidAt: i.paid_at,
+            }
+        })
+
     return {
         id: row.id,
         userId: row.user_id,
@@ -60,6 +95,12 @@ function mapAccountPayable(row: any): any {
         totalPaid: Number(row.totalPaid || 0),
         percentPaid: Number(row.percentPaid || 0),
         daysOverdue: row.daysOverdue,
+        // Expert Fields Mapping
+        interestType: row.interest_type,
+        paymentFrequency: row.payment_frequency,
+        totalInstallments: row.total_installments,
+        startDate: row.start_date,
+        installments: installments,
     }
 }
 
@@ -83,7 +124,8 @@ export async function GET(request: Request) {
             .from('accounts_payable')
             .select(`
                 *,
-                payments:loan_payments(*)
+                payments:loan_payments(*),
+                loan_installments(*)
             `)
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
@@ -148,6 +190,35 @@ export async function POST(request: Request) {
         const body = await request.json()
         const validated = createPayableSchema.parse(body)
 
+        // 1.0 Robust Categorization: Find or Create 'Préstamos' Income Category
+        let categoryId = null
+        const categoryName = 'Préstamos'
+
+        const { data: existingCat } = await supabase
+            .from('income_categories')
+            .select('id')
+            .eq('user_id', user.id)
+            .ilike('name', categoryName)
+            .single()
+
+        if (existingCat) {
+            categoryId = existingCat.id
+        } else {
+            const { data: newCat } = await supabase
+                .from('income_categories')
+                .insert({
+                    user_id: user.id,
+                    name: categoryName,
+                    icon: 'landmark',
+                    color: '#10b981',
+                    is_system: false,
+                    is_active: true
+                })
+                .select('id')
+                .single()
+            if (newCat) categoryId = newCat.id
+        }
+
         // 1. Create cash inflow transaction (money entering your account as debt)
         const transactionPayload = {
             user_id: user.id,
@@ -157,9 +228,10 @@ export async function POST(request: Request) {
             currency_code: validated.currencyCode,
             transaction_date: new Date().toISOString(),
             description: `Préstamo recibido de ${validated.contactName}`,
+            income_category_id: categoryId, // CATEGORIZED
             metadata: {
                 isLoanMovement: true,
-                hideFromList: true, // Hide from normal transaction list
+                hideFromList: false, // Show it now
                 loanType: 'BORROWED',
             },
         }
@@ -201,6 +273,11 @@ export async function POST(request: Request) {
             interest_rate: validated.interestRate || 0,
             linked_transaction_id: transaction.id,
             metadata: {},
+            // Expert Fields
+            interest_type: validated.interestType,
+            payment_frequency: validated.paymentFrequency,
+            total_installments: validated.totalInstallments,
+            start_date: new Date().toISOString()
         }
 
 
@@ -214,6 +291,44 @@ export async function POST(request: Request) {
             console.error('[ACCOUNTS_PAYABLE_POST] Insert Error:', payError)
             throw payError
         }
+
+        // 3. Generate Installments (Automatic Payment Scheduling)
+        // Adapted from expert loans logic
+        const totalInstallments = validated.totalInstallments || 1
+        if (totalInstallments > 0) {
+            const installments = []
+            const principalPerInstallment = validated.amount / totalInstallments
+            const interestRate = validated.interestRate || 0
+            const totalInterest = (validated.amount * (interestRate / 100))
+            const interestPerInstallment = totalInterest / totalInstallments
+
+            let currentDate = new Date(validated.dueDate ? validated.dueDate : new Date())
+            if (!validated.dueDate) {
+                currentDate = new Date()
+                if (validated.paymentFrequency === 'MONTHLY') currentDate.setMonth(currentDate.getMonth() + 1)
+                else if (validated.paymentFrequency === 'WEEKLY') currentDate.setDate(currentDate.getDate() + 7)
+                else if (validated.paymentFrequency === 'BIWEEKLY') currentDate.setDate(currentDate.getDate() + 14)
+            }
+
+            for (let i = 1; i <= totalInstallments; i++) {
+                installments.push({
+                    account_payable_id: payable.id, // Linked to this AP
+                    installment_number: i,
+                    due_date: currentDate.toISOString(),
+                    principal_amount: principalPerInstallment,
+                    interest_amount: interestPerInstallment,
+                    status: 'PENDING'
+                })
+
+                if (validated.paymentFrequency === 'MONTHLY') currentDate.setMonth(currentDate.getMonth() + 1)
+                else if (validated.paymentFrequency === 'WEEKLY') currentDate.setDate(currentDate.getDate() + 7)
+                else if (validated.paymentFrequency === 'BIWEEKLY') currentDate.setDate(currentDate.getDate() + 14)
+            }
+
+            const { error: instError } = await supabase.from('loan_installments').insert(installments)
+            if (instError) console.error('[ACCOUNTS_PAYABLE_POST] Error creating installments:', instError)
+        }
+
 
 
         return NextResponse.json(mapAccountPayable(payable), { status: 201 })
@@ -233,6 +348,112 @@ export async function POST(request: Request) {
         )
     }
 }
+
+// ============================================
+// DELETE - Delete account payable and revert balance
+// ============================================
+
+export async function DELETE(request: Request) {
+    try {
+        const supabase = await createClient()
+
+        // Auth check
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        }
+
+        const { searchParams } = new URL(request.url)
+        const id = searchParams.get('id')
+
+        if (!id) {
+            return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+        }
+
+        // 1. Get the loan details
+        const { data: loan, error: fetchError } = await supabase
+            .from('accounts_payable')
+            .select('*')
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .single()
+
+        if (fetchError || !loan) {
+            return NextResponse.json({ error: 'Préstamo no encontrado' }, { status: 404 })
+        }
+
+        // 2. Revert Account Balance
+        // For Payable: We BORROWED money (Income). Balance increased.
+        // To revert: Balance -= Original Amount.
+        // But we might have paid some back (Expense). Balance decreased.
+        // To revert payments: Balance += Paid Amount.
+        // Net Change: Balance -= (Original - Paid)
+
+        if (loan.linked_transaction_id) {
+            const { data: transaction } = await supabase
+                .from('transactions')
+                .select('account_id')
+                .eq('id', loan.linked_transaction_id)
+                .single()
+
+            if (transaction && transaction.account_id) {
+                const { data: acc } = await supabase.from('accounts').select('current_balance').eq('id', transaction.account_id).single()
+
+                if (acc) {
+                    const { data: payments } = await supabase
+                        .from('loan_payments')
+                        .select('amount')
+                        .eq('account_payable_id', id)
+
+                    const totalPaidBack = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+
+                    const amountToDeduct = Number(loan.original_amount) - totalPaidBack
+                    const newBalance = Number(acc.current_balance) - amountToDeduct
+
+                    await supabase
+                        .from('accounts')
+                        .update({ current_balance: newBalance })
+                        .eq('id', transaction.account_id)
+                }
+            }
+        }
+
+        // 3. Delete Linked Transaction (Initial Income)
+        if (loan.linked_transaction_id) {
+            await supabase.from('transactions').delete().eq('id', loan.linked_transaction_id)
+        }
+
+        // 4. Delete Payment Transactions
+        const { data: paymentsToDelete } = await supabase
+            .from('loan_payments')
+            .select('transaction_id')
+            .eq('account_payable_id', id)
+
+        if (paymentsToDelete && paymentsToDelete.length > 0) {
+            const txIds = paymentsToDelete.map(p => p.transaction_id).filter(Boolean)
+            if (txIds.length > 0) {
+                await supabase.from('transactions').delete().in('id', txIds)
+            }
+        }
+
+        // 5. Delete Loan Record
+        const { error: deleteError } = await supabase
+            .from('accounts_payable')
+            .delete()
+            .eq('id', id)
+
+        if (deleteError) throw deleteError
+
+        return NextResponse.json({ success: true })
+    } catch (error: any) {
+        console.error('[ACCOUNTS_PAYABLE_DELETE] Error:', error)
+        return NextResponse.json(
+            { error: 'Error al eliminar el préstamo', details: error.message },
+            { status: 500 }
+        )
+    }
+}
+
 
 // ============================================
 // PATCH - Update account payable (partial payment)
@@ -270,9 +491,15 @@ export async function PATCH(request: Request) {
                 return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 })
             }
 
-            if (validated.paymentAmount > payable.outstanding_balance) {
+            // 1. Expert Accounting: Split between Principal and Interest
+            const principalAmount = validated.principalAmount ?? validated.paymentAmount
+            const interestAmount = validated.interestAmount ?? 0
+
+            // VALIDATION: Principal component cannot exceed outstanding principal balance
+            // But total payment CAN exceed it (if it includes interest)
+            if (principalAmount > (payable.outstanding_balance + 0.05)) { // Small buffer for rounding
                 return NextResponse.json(
-                    { error: 'El monto del pago excede el saldo pendiente' },
+                    { error: 'El abono a capital excede el saldo pendiente' },
                     { status: 400 }
                 )
             }
@@ -305,30 +532,126 @@ export async function PATCH(request: Request) {
                 }
             }
 
-            // 1. Create expense transaction (money leaving to pay debt)
-            const expensePayload = {
-                user_id: user.id,
-                transaction_type: 'EXPENSE',
-                account_id: validated.accountId,
-                amount: validated.paymentAmount,
-                currency_code: payable.currency_code,
-                transaction_date: new Date().toISOString(),
-                description: `Pago de deuda a ${payable.contact_name}`,
-                metadata: {
-                    isDebtPayment: true,
-                    accountPayableId: id,
-                },
-            }
+            // 1. Expert Accounting: Split between Principal and Interest
+            // Variables already declared above for validation
 
-            const { data: transaction, error: txError } = await supabase
-                .from('transactions')
-                .insert(expensePayload)
-                .select()
+            // 1.1 Find/Create Interest Expense Category
+            let interestCategoryId = null
+            const { data: intCat } = await supabase
+                .from('expense_categories')
+                .select('id')
+                .eq('user_id', user.id)
+                .ilike('name', 'Gastos por Intereses')
                 .single()
 
-            if (txError) throw txError
+            if (intCat) {
+                interestCategoryId = intCat.id
+            } else {
+                const { data: newCat } = await supabase
+                    .from('expense_categories')
+                    .insert({
+                        user_id: user.id,
+                        name: 'Gastos por Intereses',
+                        icon: 'trending-down',
+                        color: '#ef4444',
+                        budget_rule: 'NEEDS', // Interest is usually a commitment/need
+                        is_system: false,
+                        is_active: true
+                    })
+                    .select('id')
+                    .single()
+                if (newCat) interestCategoryId = newCat.id
+            }
 
-            // 1.1 Update Account Balance (Financial Outflow) - use existing account data
+            // 1.1b Find/Create 'Préstamos' Expense Category for Principal Payment
+            let principalCategoryId = null
+            const { data: princCat } = await supabase
+                .from('expense_categories')
+                .select('id')
+                .eq('user_id', user.id)
+                .ilike('name', 'Préstamos')
+                .single()
+
+            if (princCat) {
+                principalCategoryId = princCat.id
+            } else {
+                const { data: newPCat } = await supabase
+                    .from('expense_categories')
+                    .insert({
+                        user_id: user.id,
+                        name: 'Préstamos',
+                        icon: 'landmark',
+                        color: '#10b981',
+                        budget_rule: 'SAVINGS',
+                        is_system: false,
+                        is_active: true
+                    })
+                    .select('id')
+                    .single()
+                if (newPCat) principalCategoryId = newPCat.id
+            }
+
+            // 1.2 Create transactions (Split Strategy)
+            let principalTransactionId = null
+            let interestTransactionId = null
+
+            // Transaction A: Principal (Debt Reduction)
+            if (principalAmount > 0) {
+                const principalPayload = {
+                    user_id: user.id,
+                    transaction_type: 'EXPENSE',
+                    account_id: validated.accountId,
+                    amount: principalAmount,
+                    currency_code: payable.currency_code,
+                    transaction_date: new Date().toISOString(),
+                    description: `Pago capital: ${payable.contact_name}`,
+                    expense_category_id: principalCategoryId, // CATEGORIZED
+                    metadata: {
+                        isDebtPayment: true,
+                        isPrincipal: true,
+                        accountPayableId: id,
+                    },
+                }
+
+                const { data: pTx, error: pError } = await supabase
+                    .from('transactions')
+                    .insert(principalPayload)
+                    .select()
+                    .single()
+
+                if (pError) throw pError
+                principalTransactionId = pTx.id
+            }
+
+            // Transaction B: Interest (Financial Expense)
+            if (interestAmount > 0) {
+                const interestPayload = {
+                    user_id: user.id,
+                    transaction_type: 'EXPENSE',
+                    account_id: validated.accountId,
+                    amount: interestAmount,
+                    currency_code: payable.currency_code,
+                    transaction_date: new Date().toISOString(),
+                    description: `Interés pagado: ${payable.contact_name}`,
+                    expense_category_id: interestCategoryId, // Valid Expense
+                    metadata: {
+                        isDebtPayment: true,
+                        isInterest: true,
+                        accountPayableId: id,
+                    },
+                }
+
+                const { data: iTx, error: iError } = await supabase
+                    .from('transactions')
+                    .insert(interestPayload)
+                    .select()
+                    .single()
+
+                if (iError) throw iError
+                interestTransactionId = iTx.id
+            }
+
+            // 1.3 Update Account Balance (Financial Outflow) - use existing account data
             if (account) {
                 const updatedBalance = Number(account.current_balance) - validated.paymentAmount
                 await supabase
@@ -337,15 +660,21 @@ export async function PATCH(request: Request) {
                     .eq('id', validated.accountId)
             }
 
-            // 2. Record payment
+            // 2. Record payment with split details
             const paymentPayload = {
                 user_id: user.id,
                 account_payable_id: id,
                 amount: validated.paymentAmount,
+                principal_amount: principalAmount,
+                interest_amount: interestAmount,
                 currency_code: payable.currency_code,
-                transaction_id: transaction.id,
+                transaction_id: principalTransactionId || interestTransactionId,
                 payment_method: validated.paymentMethod || 'TRANSFER',
                 notes: validated.notes || null,
+                metadata: {
+                    principalTransactionId,
+                    interestTransactionId
+                }
             }
 
             const { error: paymentError } = await supabase
@@ -354,8 +683,37 @@ export async function PATCH(request: Request) {
 
             if (paymentError) throw paymentError
 
-            // 3. Update outstanding balance
-            const newBalance = payable.outstanding_balance - validated.paymentAmount
+            // 2.1 Update Installment Statuses (Waterfall Method - Payable)
+            let remainingPrincipalPayment = principalAmount
+
+            const { data: installments } = await supabase
+                .from('loan_installments')
+                .select('*')
+                .eq('account_payable_id', id)
+                .order('installment_number', { ascending: true })
+
+            if (installments) {
+                for (const inst of installments) {
+                    if (remainingPrincipalPayment <= 0.01) break
+                    if (inst.status === 'PAID') continue
+
+                    const openAmount = Number(inst.principal_amount)
+
+                    if (remainingPrincipalPayment >= (openAmount - 0.05)) {
+                        await supabase
+                            .from('loan_installments')
+                            .update({ status: 'PAID', paid_at: new Date().toISOString() })
+                            .eq('id', inst.id)
+
+                        remainingPrincipalPayment -= openAmount
+                    } else {
+                        remainingPrincipalPayment = 0
+                    }
+                }
+            }
+
+            // 3. Update outstanding balance (Only reduce by Principal)
+            const newBalance = payable.outstanding_balance - principalAmount
 
             const { data: updated, error: updateError } = await supabase
                 .from('accounts_payable')
@@ -392,7 +750,7 @@ export async function PATCH(request: Request) {
         }
 
         return NextResponse.json(
-            { error: 'Error al actualizar cuenta', details: error.message },
+            { error: `Error al actualizar cuenta: ${error.message}`, details: error.message },
             { status: 500 }
         )
     }

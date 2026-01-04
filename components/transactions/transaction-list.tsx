@@ -6,13 +6,14 @@ import { useTransactionFilters } from "@/hooks/use-transaction-filters"
 import { format, isToday, isYesterday } from "date-fns"
 import { es } from "date-fns/locale"
 import { Loader2, Repeat, HandCoins, CalendarClock, Calendar, Clock, Calculator, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Zap } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAccounts } from "@/hooks/use-accounts"
 import { useSettingsStore } from "@/hooks/use-settings-store"
 import { cn } from "@/lib/utils"
 import { MonthSelector } from "./month-selector"
 import { Badge } from "@/components/ui/badge"
 import { CategoryIcon } from "@/components/icons/category-icon"
+import { useExchangeRates } from "@/hooks/use-exchange-rates"
 
 function useInView() {
     const [inView, setInView] = useState(false)
@@ -42,8 +43,31 @@ function useInView() {
 
 export function TransactionList({ limit, overrideFilters, hideMonthSelector }: { limit?: number, overrideFilters?: any, hideMonthSelector?: boolean }) {
     const router = useRouter()
-    const [currentMonth, setCurrentMonth] = useState(new Date())
+    const searchParams = useSearchParams()
+
+    // Initialize with URL params if present, otherwise current date
+    const [currentMonth, setCurrentMonth] = useState(() => {
+        const urlMonth = searchParams.get('month')
+        const urlYear = searchParams.get('year')
+        if (urlMonth && urlYear) {
+            return new Date(parseInt(urlYear), parseInt(urlMonth), 1)
+        }
+        return new Date()
+    })
+
     const { filters: globalFilters } = useTransactionFilters()
+
+    // Sync state if URL changes while mounted
+    useEffect(() => {
+        const urlMonth = searchParams.get('month')
+        const urlYear = searchParams.get('year')
+        if (urlMonth && urlYear) {
+            const newDate = new Date(parseInt(urlYear), parseInt(urlMonth), 1)
+            if (newDate.getMonth() !== currentMonth.getMonth() || newDate.getFullYear() !== currentMonth.getFullYear()) {
+                setCurrentMonth(newDate)
+            }
+        }
+    }, [searchParams])
 
     // Merge global filters with overrides
     const filters = useMemo(() => ({
@@ -73,14 +97,14 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
         isFetchingNextPage
     } = useTransactions(hookFilters)
     const { accounts } = useAccounts()
-    const { showAccountLabel } = useSettingsStore()
+    const { currencyCode: userCurrency } = useSettingsStore()
+    const { convert } = useExchangeRates()
 
     // Infinite Scroll Intersection Observer
     const { ref, inView } = useInView()
 
     useEffect(() => {
         if (inView && hasNextPage) {
-            console.log("Loading more transactions...")
             fetchNextPage()
         }
     }, [inView, hasNextPage, fetchNextPage])
@@ -88,6 +112,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
     // Filter out loan transactions that should be hidden
     const filteredTransactions = useMemo(() => {
         if (!transactions) return []
+
         let txs = transactions.filter((tx: any) => {
             // Hide transactions marked as loan movements
             if (tx.metadata?.hideFromList) return false
@@ -117,7 +142,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
             }
 
             // Apply type filter
-            if (filters.type && tx.transactionType !== filters.type) {
+            if (filters.type && tx.transactionType?.toUpperCase() !== filters.type?.toUpperCase()) {
                 return false
             }
 
@@ -240,15 +265,25 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                                 {group.map((tx: any) => {
                                     const account = getAccountDetails(tx)
                                     const metadata = tx.metadata as any
-                                    const originalAmount = metadata?.originalAmount || tx.amount
+                                    const originalAmount = Number(metadata?.originalAmount || tx.amount)
                                     const currency = metadata?.originalCurrency || tx.currencyCode || account?.currencyCode || 'USD'
-                                    const currencyMap: Record<string, string> = { 'USD': '$', 'EUR': '€', 'PEN': 'S/', 'MXN': 'MX$' }
-                                    const symbol = currencyMap[currency] || currency
+
+                                    // Currency Conversion Logic
+                                    const showConversion = currency !== userCurrency
+                                    const convertedAmount = showConversion ? convert(originalAmount, currency, userCurrency) : originalAmount
+
+                                    // Dynamic Symbol (Simplified for now, ideally use a hook or lib)
+                                    const getSymbol = (c: string) => {
+                                        return c === 'USD' ? '$' : c === 'EUR' ? '€' : c === 'PEN' ? 'S/' : c === 'MXN' ? 'MX$' : c
+                                    }
+                                    const symbol = getSymbol(currency)
+                                    const userSymbol = getSymbol(userCurrency)
 
                                     const isExpense = tx.transactionType === 'EXPENSE'
                                     const isIncome = tx.transactionType === 'INCOME'
                                     const isTransfer = tx.transactionType === 'TRANSFER'
-                                    const category = isExpense ? tx.expenseCategory : isIncome ? tx.incomeCategory : null
+                                    // For transfers, never show income/expense categories even if mistakenly assigned
+                                    const category = isTransfer ? null : (isExpense ? tx.expenseCategory : isIncome ? tx.incomeCategory : null)
                                     const categoryIcon = category?.icon
                                     const mode = metadata?.mode
                                     const showModeBadge = mode && ['RECURRING', 'SCHEDULED', 'SUBSCRIPTION', 'LOAN_LENT', 'LOAN_BORROWED'].includes(mode)
@@ -337,8 +372,13 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                                                     "text-base font-bold tracking-tight tabular-nums",
                                                     isIncome ? "text-emerald-600" : isExpense ? "text-rose-600" : "text-blue-600"
                                                 )}>
-                                                    {isExpense ? '-' : '+'}{symbol} {Number(originalAmount).toFixed(2)}
+                                                    {isExpense ? '-' : '+'}{symbol} {originalAmount.toFixed(2)}
                                                 </span>
+                                                {showConversion && (
+                                                    <span className="text-xs font-medium text-muted-foreground italic flex items-center gap-1">
+                                                        ~ {userSymbol} {convertedAmount.toFixed(2)}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     )

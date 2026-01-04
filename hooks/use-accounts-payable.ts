@@ -30,11 +30,18 @@ async function createAccountPayable(data: CreateAccountPayableDTO): Promise<Acco
     return res.json()
 }
 
-async function registerPayment(id: string, paymentAmount: number, accountId: string, notes?: string): Promise<AccountPayable> {
+async function registerPayment(data: {
+    id: string
+    paymentAmount: number
+    accountId: string
+    principalAmount?: number
+    interestAmount?: number
+    notes?: string
+}): Promise<AccountPayable> {
     const res = await fetch('/api/accounts-payable', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, paymentAmount, accountId, notes }),
+        body: JSON.stringify(data),
     })
 
     if (!res.ok) {
@@ -74,12 +81,12 @@ export function useCreateAccountPayable() {
     })
 }
 
-export function usePayDebt() {
+export function useUpdateAccountPayable() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: ({ id, paymentAmount, accountId, notes }: { id: string; paymentAmount: number; accountId: string; notes?: string }) =>
-            registerPayment(id, paymentAmount, accountId, notes),
+        mutationFn: (data: { id: string; paymentAmount: number; accountId: string; principalAmount?: number; interestAmount?: number; notes?: string }) =>
+            registerPayment(data),
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['accounts-payable'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })

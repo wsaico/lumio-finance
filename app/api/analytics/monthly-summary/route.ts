@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getExchangeRatesMap, convertAmount } from '@/lib/currency'
+import { format } from 'date-fns'
 
 export async function GET(req: Request) {
     try {
@@ -18,44 +20,72 @@ export async function GET(req: Request) {
             return new NextResponse('Month and Year required', { status: 400 })
         }
 
-        const startDate = new Date(Number(year), Number(month) - 1, 1).toISOString()
-        const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59).toISOString()
+        const startDate = new Date(Number(year), Number(month) - 1, 1)
+        const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59)
 
-        // Fetch Income Transactions
-        const { data: incomeData, error: incomeError } = await supabase
-            .from('transactions')
-            .select('amount')
-            .eq('user_id', user.id)
-            .eq('transaction_type', 'INCOME')
-            .gte('transaction_date', startDate)
-            .lte('transaction_date', endDate)
+        const startDateStr = format(startDate, 'yyyy-MM-dd')
+        const endDateStr = format(endDate, 'yyyy-MM-dd HH:mm:ss')
 
-        if (incomeError) throw incomeError
+        // Parallel fetch for ALL required data
+        const [
+            rateMapRes,
+            accountsRes,
+            incomeRes,
+            expenseRes,
+            countRes
+        ] = await Promise.all([
+            getExchangeRatesMap(supabase),
+            supabase.from('accounts').select('id, currency_code').eq('user_id', user.id),
+            supabase.from('transactions')
+                .select('amount, currency_code, account_id')
+                .eq('user_id', user.id)
+                .eq('transaction_type', 'INCOME')
+                .gte('transaction_date', startDateStr)
+                .lte('transaction_date', endDateStr),
+            supabase.from('transactions')
+                .select('amount, currency_code, account_id')
+                .eq('user_id', user.id)
+                .eq('transaction_type', 'EXPENSE')
+                .gte('transaction_date', startDateStr)
+                .lte('transaction_date', endDateStr),
+            supabase.from('transactions')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .gte('transaction_date', startDateStr)
+                .lte('transaction_date', endDateStr)
+        ])
 
-        const totalIncome = incomeData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0
+        if (incomeRes.error) throw incomeRes.error
+        if (expenseRes.error) throw expenseRes.error
+        if (countRes.error) throw countRes.error
 
-        // Fetch Expense Transactions
-        const { data: expenseData, error: expenseError } = await supabase
-            .from('transactions')
-            .select('amount')
-            .eq('user_id', user.id)
-            .eq('transaction_type', 'EXPENSE')
-            .gte('transaction_date', startDate)
-            .lte('transaction_date', endDate)
+        const rateMap = rateMapRes
+        const userCurrencyCode = user.user_metadata?.currency || 'PEN'
+        const accounts = accountsRes.data || []
+        const incomeData = incomeRes.data || []
+        const expenseData = expenseRes.data || []
+        const transactionCount = countRes.count || 0
 
-        if (expenseError) throw expenseError
+        const accountCurrencyMap: Record<string, string> = {}
+        accounts.forEach(acc => {
+            accountCurrencyMap[acc.id] = acc.currency_code
+        })
 
-        const totalExpense = expenseData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0
+        // Calculate converted income
+        let totalIncome = 0
+        for (const t of incomeData) {
+            const amount = Number(t.amount) || 0
+            const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || 'PEN'
+            totalIncome += convertAmount(amount, currency, userCurrencyCode, rateMap)
+        }
 
-        // Count total transactions
-        const { count: transactionCount, error: countError } = await supabase
-            .from('transactions')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-            .gte('transaction_date', startDate)
-            .lte('transaction_date', endDate)
-
-        if (countError) throw countError
+        // Calculate converted expense
+        let totalExpense = 0
+        for (const t of expenseData) {
+            const amount = Number(t.amount) || 0
+            const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || 'PEN'
+            totalExpense += convertAmount(amount, currency, userCurrencyCode, rateMap)
+        }
 
         return NextResponse.json({
             month: Number(month),
@@ -64,11 +94,22 @@ export async function GET(req: Request) {
             totalExpense,
             balance: totalIncome - totalExpense,
             transactionCount: transactionCount || 0,
-            currency: user.user_metadata?.currency || 'PEN'
+            currency: userCurrencyCode
         })
 
     } catch (error: any) {
-        console.error('[ANALYTICS_MONTHLY_SUMMARY]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        console.error('[ANALYTICS_MONTHLY_SUMMARY] CRITICAL_ERROR:', {
+            message: error.message,
+            code: error.code,
+            hint: error.hint,
+            details: error.details,
+            stack: error.stack
+        })
+
+        return NextResponse.json({
+            error: 'Internal Error',
+            details: error.message || String(error),
+            code: error.code
+        }, { status: 500 })
     }
 }

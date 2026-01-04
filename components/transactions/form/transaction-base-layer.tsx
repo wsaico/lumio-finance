@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,7 +29,9 @@ import {
     ChevronUp,
     ChevronDown,
     CalendarDays,
-    Clock
+    Clock,
+    AlertTriangle,
+    ShieldAlert
 } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
@@ -47,6 +49,7 @@ import { TransferModal } from "../transfer-modal"
 import { useSmartCategories } from "@/hooks/useSmartCategories"
 import { Calendar } from "@/components/ui/calendar"
 import { CategoryGrid } from "@/components/transactions/category-selector"
+import { useBudget } from "@/hooks/use-budget"
 
 interface TransactionBaseLayerProps {
     form: any
@@ -106,7 +109,48 @@ export function TransactionBaseLayer({
     const recurrenceEndDate = form.watch("recurrenceEndDate")
     const transferToAccountId = form.watch("transferToAccountId")
     const currentLoanId = form.watch("loanId")
-    const transactionDate = form.watch("date") ? new Date(form.watch("date")) : new Date()
+    const transactionDate = form.watch("transactionDate") ? new Date(form.watch("transactionDate")) : new Date()
+
+    // --- REAL TIME BUDGET CHECKING ---
+    const { budgets } = useBudget(transactionDate.getFullYear(), transactionDate.getMonth() + 1)
+
+    const budgetAlert = useMemo(() => {
+        if (activeTab !== 'EXPENSE' || !currentCategoryId || !budgets?.length) return null
+
+        // STRICT ID MATCHING (Professional / Best Practice)
+        // Only trigger alert if the budget explicitly includes this Category ID
+        const budget = budgets.find((b: any) =>
+            b.include_categories?.includes(currentCategoryId) ||
+            (currentSubcategoryId && b.include_categories?.includes(currentSubcategoryId))
+        )
+
+        if (!budget) return null
+
+        const limit = Number(budget.amount)
+        const spentSoFar = Number(budget.stats?.spent || 0)
+        const newTotal = spentSoFar + Number(currentAmount || 0)
+        const percentage = (newTotal / limit) * 100
+        const remaining = limit - newTotal
+
+        if (percentage > 100) {
+            return {
+                type: 'exceeded',
+                message: `Excederás el presupuesto "${budget.name}"`,
+                details: `Total proyectado: ${currencySymbol}${newTotal.toFixed(2)} / ${currencySymbol}${limit.toFixed(2)}`,
+                diff: remaining
+            }
+        }
+        if (percentage >= 90) {
+            return {
+                type: 'critical',
+                message: `Presupuesto "${budget.name}" casi agotado`,
+                details: `Quedarán solo ${currencySymbol}${remaining.toFixed(2)}`,
+                diff: remaining
+            }
+        }
+        return null
+    }, [budgets, currentCategoryId, currentSubcategoryId, currentAmount, activeTab, currencySymbol])
+
 
     const currentLoan = loans?.find(l => l.id === currentLoanId)
 
@@ -208,7 +252,6 @@ export function TransactionBaseLayer({
     // Auto-assign category if confidence is high and user hasn't manually set one recently
     useEffect(() => {
         if (smartCategory?.categoryId && !currentCategoryId) {
-            console.log("Smart category detected:", smartCategory.categoryName, "confidence:", smartCategory.confidence);
             form.setValue("categoryId", smartCategory.categoryId);
             // Restore the subcategory detection fallback
             if (smartCategory.subcategoryId) {
@@ -218,7 +261,6 @@ export function TransactionBaseLayer({
                 // try to find its parent and set the subcategoryId.
                 const foundParent = categories?.find(c => c.subcategories?.some((s: any) => s.id === smartCategory.categoryId));
                 if (foundParent) {
-                    console.log("Smart category ID is a subcategory, setting parent:", foundParent.name);
                     form.setValue("categoryId", foundParent.id);
                     form.setValue("subcategoryId", smartCategory.categoryId);
                 }
@@ -358,6 +400,24 @@ export function TransactionBaseLayer({
                             </div>
                         </div>
                     </div>
+
+                    {/* Budget Alert Banner */}
+                    {budgetAlert && (
+                        <div className={cn(
+                            "rounded-2xl p-4 flex items-start gap-3 shadow-lg animate-in slide-in-from-top-2 border",
+                            budgetAlert.type === 'exceeded'
+                                ? "bg-red-500 text-white border-red-600 shadow-red-500/20"
+                                : "bg-orange-500 text-white border-orange-600 shadow-orange-500/20"
+                        )}>
+                            <div className="p-2 bg-white/20 rounded-xl shrink-0">
+                                {budgetAlert.type === 'exceeded' ? <ShieldAlert className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-base leading-tight">{budgetAlert.message}</h4>
+                                <p className="text-white/90 text-xs mt-1 font-medium">{budgetAlert.details}</p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* 2. Compact Input Stack */}
                     <div className="flex flex-col gap-2">
@@ -807,7 +867,6 @@ export function TransactionBaseLayer({
                                 categoryId={currentCategoryId}
                                 subcategoryId={currentSubcategoryId}
                                 onSelect={(catId, subId) => {
-                                    console.log('Category selected:', { catId, subId });
                                     form.setValue("categoryId", catId, { shouldDirty: true, shouldValidate: true })
                                     form.setValue("subcategoryId", subId || "", { shouldDirty: true, shouldValidate: true })
                                     setIsCategorySheetOpen(false)

@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { useFormat } from "@/hooks/use-format"
-import { AlertCircle, CheckCircle2, TrendingUp } from "lucide-react"
+import { AlertCircle, CheckCircle2, TrendingUp, Link } from "lucide-react"
 import { motion } from "framer-motion"
 
 interface BudgetCardProps {
@@ -56,12 +56,25 @@ export function BudgetCard({ budget }: BudgetCardProps) {
                 />
 
                 <CardHeader className="flex flex-row items-center justify-between pb-3 pl-4">
-                    <CardTitle className="text-base font-semibold truncate pr-4">
-                        {budget.name}
+                    <CardTitle className="text-base font-semibold truncate pr-4 flex flex-col gap-1">
+                        <span>{budget.name}</span>
+                        {budget.is_zbb_controlled ? (
+                            <div className="flex items-center gap-1.5 w-fit bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                                <Link className="w-3 h-3" />
+                                Controlado por ZBB
+                            </div>
+                        ) : (
+                            budget.zbb_allocation_id && (
+                                <div className="flex items-center gap-1.5 w-fit bg-amber-50 text-amber-700 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                                    <AlertCircle className="w-3 h-3" />
+                                    Desincronizado
+                                </div>
+                            )
+                        )}
                     </CardTitle>
                     <div className={`text-xs px-2.5 py-1 rounded-full font-medium glass ${isOverBudget ? 'bg-red-500/20 text-red-700 dark:text-red-300' :
-                            isNearLimit ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
-                                'bg-muted/50 text-muted-foreground'
+                        isNearLimit ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                            'bg-muted/50 text-muted-foreground'
                         }`}>
                         {budget.period === 'MONTHLY' ? 'Mensual' : 'Personalizado'}
                     </div>

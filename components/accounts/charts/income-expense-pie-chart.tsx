@@ -16,11 +16,11 @@ const COLORS = {
 
 export function IncomeExpensePieChart({ transactions, currencyCode }: IncomeExpensePieChartProps) {
     const totalIncome = transactions
-        .filter((t: any) => t.transaction_type === 'INCOME')
+        .filter((t: any) => t.transactionType === 'INCOME')
         .reduce((sum: number, t: any) => sum + Number(t.amount), 0)
 
     const totalExpenses = transactions
-        .filter((t: any) => t.transaction_type === 'EXPENSE')
+        .filter((t: any) => t.transactionType === 'EXPENSE')
         .reduce((sum: number, t: any) => sum + Number(t.amount), 0)
 
     const data = [
@@ -49,53 +49,61 @@ export function IncomeExpensePieChart({ transactions, currencyCode }: IncomeExpe
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <ResponsiveContainer width="100%" height={250}>
-                            <PieChart>
-                                <Pie
-                                    data={data}
-                                    cx="50%"
-                                    cy="50%"
-                                    labelLine={false}
-                                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                                    outerRadius={80}
-                                    fill="#8884d8"
-                                    dataKey="value"
-                                >
-                                    {data.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    content={({ active, payload }) => {
-                                        if (active && payload && payload.length) {
-                                            return (
-                                                <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                                    <div className="grid gap-2">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[0.70rem] uppercase text-muted-foreground">
-                                                                {payload[0].name}
-                                                            </span>
-                                                            <span className="font-bold" style={{ color: payload[0].payload.color }}>
+                        <div className="relative h-[250px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={data}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                        stroke="none"
+                                        cornerRadius={5}
+                                    >
+                                        {data.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                return (
+                                                    <div className="rounded-xl border bg-background/95 backdrop-blur-sm p-3 shadow-xl ring-1 ring-border/50">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="h-2 w-2 rounded-full" style={{ background: payload[0].payload.color }} />
+                                                                <span className="text-xs font-medium text-muted-foreground uppercase">
+                                                                    {payload[0].name}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-lg font-bold">
                                                                 {currencyCode} {Number(payload[0].value).toFixed(2)}
                                                             </span>
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[0.70rem] uppercase text-muted-foreground">
-                                                                Porcentaje
-                                                            </span>
-                                                            <span className="font-bold">
-                                                                {((Number(payload[0].value) / total) * 100).toFixed(1)}%
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {((Number(payload[0].value) / total) * 100).toFixed(1)}% del total
                                                             </span>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            )
-                                        }
-                                        return null
-                                    }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
+                                                )
+                                            }
+                                            return null
+                                        }}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            {/* Central Text */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="text-center">
+                                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Flujo</span>
+                                    <div className={`text-xl font-bold ${netBalance >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                        {netBalance >= 0 ? '+' : ''}{currencyCode} {Math.abs(netBalance).toFixed(0)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         {/* Summary Stats */}
                         <div className="grid grid-cols-3 gap-4 pt-4 border-t">

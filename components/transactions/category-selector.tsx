@@ -41,7 +41,6 @@ export function CategoryGrid({ categories, categoryId, subcategoryId, onSelect, 
     // Sync activeParentId with incoming categoryId ONLY ONCE on mount
     React.useEffect(() => {
         if (categoryId && !activeParentId && !searchTerm && !hasAutoOpened.current) {
-            console.log("CategoryGrid: Auto-drilling into category", categoryId);
             setActiveParentId(categoryId)
             hasAutoOpened.current = true
         }

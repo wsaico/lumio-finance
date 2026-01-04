@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { startOfMonth, endOfMonth, subMonths, format, differenceInDays, endOfDay, startOfDay } from 'date-fns'
 import { expandCategoryIds } from '@/lib/category-utils'
+import { getExchangeRatesMap, convertAmount } from '@/lib/currency'
 
 export async function GET(request: Request) {
     try {
@@ -21,8 +22,28 @@ export async function GET(request: Request) {
         }
 
         const now = new Date()
+        const targetCurrency = searchParams.get('currency') || user.user_metadata?.currency || 'PEN' // Helper param
+
+        // ... auth check
 
         // 0. Fetch Categories explicitly (Robust Split queries)
+        // 0. Fetch Data Parallel
+        const [rateMap, accountsRes] = await Promise.all([
+            getExchangeRatesMap(supabase),
+            supabase.from('accounts').select('id, currency_code, current_balance, account_type').eq('user_id', user.id)
+        ])
+
+        const accounts = accountsRes.data || []
+        const accountCurrencyMap: Record<string, string> = {}
+        accounts.forEach(acc => {
+            accountCurrencyMap[acc.id] = acc.currency_code
+        })
+
+        // Helper to convert inline - DEFINED EARLY
+        const toBase = (amount: number, currency: string) => {
+            return convertAmount(amount, currency, targetCurrency, rateMap)
+        }
+
         const [userExp, sysExp, userInc, sysInc] = await Promise.all([
             supabase.from('expense_categories').select('*').eq('user_id', user.id),
             supabase.from('expense_categories').select('*').is('user_id', null),
@@ -54,7 +75,11 @@ export async function GET(request: Request) {
         let analyticsStart: string
         let analyticsEnd: string
 
-        if (periodParam === 'custom' && startDateParam && endDateParam) {
+        if (periodParam === '1m') {
+            const thirtyDaysAgo = startOfDay(subMonths(now, 1))
+            analyticsStart = thirtyDaysAgo.toISOString()
+            analyticsEnd = endOfDay(now).toISOString()
+        } else if (periodParam === 'custom' && startDateParam && endDateParam) {
             analyticsStart = startOfDay(new Date(startDateParam)).toISOString()
             analyticsEnd = endOfDay(new Date(endDateParam)).toISOString()
         } else {
@@ -68,9 +93,7 @@ export async function GET(request: Request) {
         // Helper to apply common filters
         const applyCommonFilters = (query: any) => {
             let q = query.eq('user_id', user.id)
-
             if (categoriesFilter.length > 0) {
-                // Correctly filter by either expense or income category ID
                 q = q.or(`expense_category_id.in.(${categoriesFilter.join(',')}),income_category_id.in.(${categoriesFilter.join(',')})`)
             }
             if (accountsFilter.length > 0) {
@@ -82,75 +105,60 @@ export async function GET(request: Request) {
             return q
         }
 
-        // 1. Multi-month Trend (Historical context usually 6/12 months regardless of custom range for visualization)
-        const trend = []
-        const monthsCount = periodParam === '12m' ? 12 : periodParam === '3m' ? 3 : 6
-
-        for (let i = monthsCount - 1; i >= 0; i--) {
-            const mStart = startOfMonth(subMonths(now, i)).toISOString()
-            const mEnd = endOfMonth(subMonths(now, i)).toISOString()
-
-            let monthQuery = supabase
-                .from('transactions')
-                .select('amount, transaction_type')
-                .gte('transaction_date', mStart)
-                .lte('transaction_date', mEnd)
-
-            monthQuery = applyCommonFilters(monthQuery)
-            const { data: monthTxs } = await monthQuery
-
-            let inc = 0
-            let exp = 0
-            monthTxs?.forEach(tx => {
-                const amt = Number(tx.amount)
-                if (tx.transaction_type === 'INCOME') inc += amt
-                if (tx.transaction_type === 'EXPENSE') exp += amt
-            })
-
-            trend.push({
-                name: format(subMonths(now, i), 'MMM'),
-                income: inc,
-                expense: exp
-            })
-        }
-
-        // 2. Performance Stats for the SELECTED range
+        // Helper specifically for stats - DEFINED BEFORE USAGE
         const getStatsForRange = async (start: string, end: string) => {
             let q = supabase
                 .from('transactions')
-                .select('amount, transaction_type')
+                .select('amount, transaction_type, currency_code, account_id')
                 .gte('transaction_date', start)
                 .lte('transaction_date', end)
 
             q = applyCommonFilters(q)
-            const { data: txs } = await q
+            const { data: txs, error: rangeError } = await q
+            if (rangeError) throw rangeError
 
             let inc = 0
             let exp = 0
             txs?.forEach(tx => {
-                const amt = Number(tx.amount)
+                const rawAmount = Number(tx.amount)
+                const currency = tx.currency_code || accountCurrencyMap[tx.account_id]
+                const amt = toBase(rawAmount, currency)
+
                 if (tx.transaction_type === 'INCOME') inc += amt
                 if (tx.transaction_type === 'EXPENSE') exp += amt
             })
             return { income: inc, expense: exp }
         }
 
-        const current = await getStatsForRange(analyticsStart, analyticsEnd)
+        // 1. Multi-month Trend
+        const trend = []
+        const monthsCount = periodParam === '12m' ? 12 : periodParam === '3m' ? 3 : 6
 
-        // Previous period for comparison (same duration as current)
-        const currentDuration = differenceInDays(new Date(analyticsEnd), new Date(analyticsStart)) + 1
-        const prevStart = subMonths(new Date(analyticsStart), 1).toISOString() // Fallback comparison
+        for (let i = monthsCount - 1; i >= 0; i--) {
+            const mData = await getStatsForRange(
+                startOfMonth(subMonths(now, i)).toISOString(),
+                endOfMonth(subMonths(now, i)).toISOString()
+            )
+            trend.push({
+                name: format(subMonths(now, i), 'MMM'),
+                income: mData.income,
+                expense: mData.expense
+            })
+        }
+
+        const current = await getStatsForRange(analyticsStart, analyticsEnd)
         const previous = await getStatsForRange(prevMonthStart, prevMonthEnd)
 
         // 3. Category Analysis & 50/30/20
         let catQuery = supabase
             .from('transactions')
-            .select('*')
+            .select('*, account_id')
             .gte('transaction_date', analyticsStart)
             .lte('transaction_date', analyticsEnd)
 
         catQuery = applyCommonFilters(catQuery)
-        const { data: catTxs } = await catQuery
+        const { data: catTxs, error: catError } = await catQuery
+        if (catError) console.error('[FinancialHealth] Category Query Error:', catError)
 
         const categorySpending: Record<string, { id: string, name: string, amount: number, color: string }> = {}
         let needsVal = 0
@@ -158,7 +166,9 @@ export async function GET(request: Request) {
         let savingsVal = 0
 
         catTxs?.forEach((tx: any) => {
-            const amt = Number(tx.amount)
+            const rawAmount = Number(tx.amount)
+            const currency = tx.currency_code || accountCurrencyMap[tx.account_id]
+            const amt = toBase(rawAmount, currency)
             const type = tx.transaction_type
 
             // 1. Income Logic - EXCLUDED: This report is for expenses only.
@@ -288,13 +298,16 @@ export async function GET(request: Request) {
 
         // 5. Executive Suite: Health Score, Runway, & Forecast
         // Fix: Use correct column 'current_balance' and filter by user/type (exclude CREDIT_CARD) to get true liquidity.
-        const { data: accounts } = await supabase
-            .from('accounts')
-            .select('current_balance')
-            .eq('user_id', user.id)
-            .neq('account_type', 'CREDIT_CARD')
+        // Already fetched 'accounts' at the top!
+        // Filter here for liquidity
+        const liquidityAccounts = accounts.filter((acc: any) => acc.account_type !== 'CREDIT_CARD')
+        const totalLiquidity = liquidityAccounts?.reduce((sum: number, acc: any) => {
+            return sum + toBase(Number(acc.current_balance || 0), acc.currency_code)
+        }, 0) || 0
 
-        const totalLiquidity = accounts?.reduce((sum, acc) => sum + Number(acc.current_balance || 0), 0) || 0
+        const liabilities = accounts.filter((acc: any) => acc.account_type === 'CREDIT_CARD').reduce((sum: number, acc: any) => {
+            return sum + toBase(Number(acc.current_balance || 0), acc.currency_code)
+        }, 0) || 0
 
         // Runway (Months of oxygen)
         const avgMonthlyExpense = previous.expense > 0 ? (current.expense + previous.expense) / 2 : current.expense
@@ -302,8 +315,8 @@ export async function GET(request: Request) {
 
         // Financial Health Score (0-100)
         // Weights: Savings Rate (40), Runway (30), Budget Adherence/Stability (20), Income Growth (10)
-        const savingsScore = Math.min(40, (savingsRate / 20) * 40) // 20% = 40pts
-        const runwayScore = Math.min(30, (runwayMonths / 6) * 30) // 6 months = 30pts
+        const savingsScore = Math.max(0, Math.min(40, (savingsRate / 20) * 40)) // 20% = 40pts
+        const runwayScore = Math.max(0, Math.min(30, (runwayMonths / 6) * 30)) // 6 months = 30pts
         const stabilityScore = current.expense < current.income ? 20 : 10
         const growthScore = current.income >= previous.income ? 10 : 5
         const healthScore = Math.round(savingsScore + runwayScore + stabilityScore + growthScore)
@@ -446,7 +459,8 @@ export async function GET(request: Request) {
                 netCashFlow: current.income - current.expense,
                 healthScore,
                 runwayMonths: Math.round(runwayMonths * 10) / 10,
-                totalLiquidity
+                totalLiquidity,
+                liabilities
             },
             comparison: {
                 incomeChange: previous.income > 0 ? (current.income / previous.income - 1) * 100 : 0,

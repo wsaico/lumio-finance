@@ -35,7 +35,6 @@ export const useTransactionFilters = create<TransactionFiltersStore>((set, get) 
         set({ filters })
         // Calculate active filters count (excluding search which is always visible)
         const count = [
-            filters.type,
             filters.accountId,
             filters.categoryId,
             filters.currency,

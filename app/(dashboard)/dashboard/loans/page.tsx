@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw, ArrowUpRight, ArrowDownLeft } from "lucide-react"
@@ -10,8 +10,8 @@ import { LoansSummary } from "@/components/loans/loans-summary"
 import { PaymentModal, PaymentFormData } from "@/components/loans/payment-modal"
 import { CreateLoanModal } from "@/components/loans/create-loan-modal"
 import { LoanDetailsModal } from "@/components/loans/loan-details-modal"
-import { useAccountsReceivable, useRegisterPayment } from "@/hooks/use-accounts-receivable"
-import { useAccountsPayable, usePayDebt } from "@/hooks/use-accounts-payable"
+import { useAccountsReceivable, useUpdateAccountReceivable } from "@/hooks/use-accounts-receivable"
+import { useAccountsPayable, useUpdateAccountPayable } from "@/hooks/use-accounts-payable"
 import { useSettingsStore } from "@/hooks/use-settings-store"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -29,8 +29,17 @@ export default function LoansPage() {
         id: string
         contactName: string
         outstandingBalance: number
+        totalPendingAmount?: number
         currencyCode: string
         type: LoanType
+        paymentFrequency?: string
+        nextInstallment?: {
+            number: number
+            amount: number
+            dueDate: string
+            principal: number
+            interest: number
+        } | null
     } | null>(null)
 
     const [selectedFullLoan, setSelectedFullLoan] = useState<(AccountReceivable | AccountPayable) & { type: LoanType } | null>(null)
@@ -49,8 +58,8 @@ export default function LoansPage() {
     } = useAccountsPayable()
 
     // Mutations
-    const registerReceivablePayment = useRegisterPayment()
-    const payDebt = usePayDebt()
+    const updateReceivable = useUpdateAccountReceivable()
+    const updatePayable = useUpdateAccountPayable()
 
     // Handle payment registration
     const handleRegisterPayment = (id: string) => {
@@ -60,12 +69,34 @@ export default function LoansPage() {
 
         if (!loan) return
 
+        // Calculate smart defaults (Same logic as LoanDetailsModal)
+        const installments = ((loan as any).installments || [])
+            .sort((a: any, b: any) => a.installmentNumber - b.installmentNumber)
+
+        const nextPendingInstallment = installments.find((i: any) =>
+            i.status !== 'PAID' && i.status !== 'CANCELLED'
+        )
+
+        // Calculate total payable amount (Principal + Interest of all pending installments)
+        const totalPendingAmount = installments
+            .filter((i: any) => i.status !== 'PAID' && i.status !== 'CANCELLED')
+            .reduce((sum: number, i: any) => sum + Number(i.totalAmount), 0) || loan.outstandingBalance
+
         setSelectedLoan({
             id: loan.id,
             contactName: loan.contactName,
             outstandingBalance: loan.outstandingBalance,
+            totalPendingAmount, // New Field
             currencyCode: loan.currencyCode,
-            type: activeTab === 'receivable' ? 'RECEIVABLE' : 'PAYABLE'
+            type: activeTab === 'receivable' ? 'RECEIVABLE' : 'PAYABLE',
+            paymentFrequency: (loan as any).paymentFrequency,
+            nextInstallment: nextPendingInstallment ? {
+                number: nextPendingInstallment.installmentNumber,
+                amount: nextPendingInstallment.totalAmount,
+                dueDate: nextPendingInstallment.dueDate,
+                principal: nextPendingInstallment.principalAmount,
+                interest: nextPendingInstallment.interestAmount,
+            } : null
         })
         setPaymentModalOpen(true)
     }
@@ -89,12 +120,12 @@ export default function LoansPage() {
 
         try {
             if (selectedLoan.type === 'RECEIVABLE') {
-                await registerReceivablePayment.mutateAsync({
+                await updateReceivable.mutateAsync({
                     id: selectedLoan.id,
                     ...data
                 })
             } else {
-                await payDebt.mutateAsync({
+                await updatePayable.mutateAsync({
                     id: selectedLoan.id,
                     ...data
                 })
@@ -129,36 +160,51 @@ export default function LoansPage() {
 
     const isLoading = receivablesLoading || payablesLoading
 
-    return (
-        <div className="container mx-auto py-6 space-y-6 animate-in fade-in duration-500">
-            {/* Header */}
+    const [mounted, setMounted] = useState(false)
+
+    // Prevent hydration mismatch
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted) {
+        return <div className="container mx-auto py-6 space-y-6">
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                            Préstamos y Deudas
-                        </h1>
-                        <p className="text-muted-foreground mt-1.5">
-                            Gestiona tus cuentas por cobrar y por pagar de forma profesional
-                        </p>
+                        <div className="h-9 w-48 bg-muted/20 rounded-lg animate-pulse mb-2"></div>
+                        <div className="h-5 w-96 bg-muted/20 rounded-lg animate-pulse"></div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={handleRefresh}
-                            disabled={isLoading}
-                            className={cn(isLoading && "animate-spin")}
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            onClick={() => setCreateLoanModalOpen(true)}
-                            className="gap-2 shadow-md hover:shadow-lg transition-all"
-                        >
-                            <Plus className="h-4 w-4" /> Nuevo Préstamo
-                        </Button>
-                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="h-32 rounded-xl bg-muted/20 animate-pulse" />
+                    ))}
+                </div>
+            </div>
+        </div>
+    }
+
+    return (
+        <div className="container mx-auto py-6 space-y-6 animate-in fade-in duration-500">
+            {/* Header Toolbar */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-end gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleRefresh}
+                        disabled={isLoading}
+                        className={cn(isLoading && "animate-spin")}
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        onClick={() => setCreateLoanModalOpen(true)}
+                        className="gap-2 shadow-md hover:shadow-lg transition-all"
+                    >
+                        <Plus className="h-4 w-4" /> Nuevo Préstamo
+                    </Button>
                 </div>
 
                 {/* Summary Cards */}
@@ -264,7 +310,7 @@ export default function LoansPage() {
                 }}
                 onSubmit={handlePaymentSubmit}
                 loan={selectedLoan}
-                isLoading={registerReceivablePayment.isPending || payDebt.isPending}
+                isLoading={updateReceivable.isPending || updatePayable.isPending}
             />
 
             {/* View Details Modal */}

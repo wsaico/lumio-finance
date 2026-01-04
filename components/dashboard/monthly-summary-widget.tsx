@@ -12,24 +12,31 @@ export function MonthlySummaryWidget() {
     const { formatMoney, formatCompactMoney } = useFormat()
 
     useEffect(() => {
+        const controller = new AbortController()
+
         async function fetchData() {
             try {
                 const now = new Date()
                 const month = now.getMonth() + 1
                 const year = now.getFullYear()
 
-                const res = await fetch(`/api/analytics/monthly-summary?month=${month}&year=${year}`)
+                const res = await fetch(`/api/analytics/monthly-summary?month=${month}&year=${year}`, {
+                    signal: controller.signal
+                })
                 if (!res.ok) throw new Error('Failed to fetch')
 
                 const json = await res.json()
                 setData(json)
-            } catch (err) {
+            } catch (err: any) {
+                if (err.name === 'AbortError') return
                 console.error(err)
             } finally {
                 setLoading(false)
             }
         }
         fetchData()
+
+        return () => controller.abort()
     }, [])
 
     if (loading) return (
@@ -109,8 +116,8 @@ export function MonthlySummaryWidget() {
                     {/* Balance */}
                     <motion.div
                         className={`flex items-center justify-between p-3 rounded-xl ${isPositive
-                                ? 'bg-blue-500/5 border border-blue-500/10'
-                                : 'bg-amber-500/5 border border-amber-500/10'
+                            ? 'bg-blue-500/5 border border-blue-500/10'
+                            : 'bg-amber-500/5 border border-amber-500/10'
                             }`}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -121,15 +128,15 @@ export function MonthlySummaryWidget() {
                             <div className={`p-2 rounded-lg ${isPositive ? 'bg-blue-500/10' : 'bg-amber-500/10'
                                 }`}>
                                 <ArrowUpDown className={`w-4 h-4 ${isPositive
-                                        ? 'text-blue-600 dark:text-blue-400'
-                                        : 'text-amber-600 dark:text-amber-400'
+                                    ? 'text-blue-600 dark:text-blue-400'
+                                    : 'text-amber-600 dark:text-amber-400'
                                     }`} />
                             </div>
                             <div>
                                 <p className="text-xs text-muted-foreground">Balance</p>
                                 <p className={`text-lg font-bold ${isPositive
-                                        ? 'text-blue-600 dark:text-blue-400'
-                                        : 'text-amber-600 dark:text-amber-400'
+                                    ? 'text-blue-600 dark:text-blue-400'
+                                    : 'text-amber-600 dark:text-amber-400'
                                     }`}>
                                     {isPositive ? '+' : ''}{formatCompactMoney(balance)}
                                 </p>

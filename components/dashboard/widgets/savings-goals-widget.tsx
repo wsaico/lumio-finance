@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card"
 import { useSavingsGoals } from "@/hooks/use-savings-goals"
 import { useFormat } from "@/hooks/use-format"
+import { useSettingsStore } from "@/hooks/use-settings-store"
 import { Button } from "@/components/ui/button"
 import { Target, Plus, ChevronRight, Calendar, TrendingUp, Sparkles, Rocket } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -21,6 +22,7 @@ const goalColors: Record<string, { gradient: string; glow: string; icon: string 
 export function SavingsGoalsWidget() {
     const { data, isLoading } = useSavingsGoals('ACTIVE')
     const { formatMoney } = useFormat()
+    const { goalTotalType } = useSettingsStore()
     const router = useRouter()
 
     const goals = data?.goals || []
@@ -41,7 +43,7 @@ export function SavingsGoalsWidget() {
 
     if (isLoading) {
         return (
-            <Card className="relative overflow-hidden border-none h-full">
+            <Card className="widget-surface h-full">
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" />
                 <div className="relative p-6 h-full flex items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
@@ -58,7 +60,7 @@ export function SavingsGoalsWidget() {
     if (goals.length === 0) {
         return (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-                <Card className="relative overflow-hidden border-none h-full shadow-2xl">
+                <Card className="widget-surface h-full">
                     <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" />
                     <motion.div
                         className="absolute top-10 right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"
@@ -90,7 +92,7 @@ export function SavingsGoalsWidget() {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-            <Card className="relative overflow-hidden border-none h-full shadow-2xl">
+            <Card className="widget-surface h-full">
                 {/* Premium Background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" />
 
@@ -189,10 +191,16 @@ export function SavingsGoalsWidget() {
                                             <h4 className="font-bold text-white truncate mb-1">{goal.name}</h4>
                                             <div className="flex items-baseline gap-1.5">
                                                 <span className="text-xl font-black text-white">
-                                                    {formatMoney(goal.current_amount, goal.currency)}
+                                                    {goalTotalType === 'remaining'
+                                                        ? formatMoney(Math.max(0, goal.target_amount - goal.current_amount), goal.currency)
+                                                        : formatMoney(goal.current_amount, goal.currency)
+                                                    }
                                                 </span>
                                                 <span className="text-xs text-white/40">
-                                                    / {formatMoney(goal.target_amount, goal.currency)}
+                                                    {goalTotalType === 'remaining'
+                                                        ? ' para la meta'
+                                                        : ` / ${formatMoney(goal.target_amount, goal.currency)}`
+                                                    }
                                                 </span>
                                             </div>
                                         </div>
@@ -254,3 +262,4 @@ export function SavingsGoalsWidget() {
         </motion.div>
     )
 }
+

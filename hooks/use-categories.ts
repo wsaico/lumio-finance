@@ -1,5 +1,8 @@
+"use client"
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+
+const EMPTY_ARRAY: any[] = []
 
 export function useCategories() {
     const { data: categories, isLoading, error } = useQuery({
@@ -11,12 +14,27 @@ export function useCategories() {
         },
     })
 
-    const queryClient = useQueryClient()
+    let queryClient;
+    try {
+        queryClient = useQueryClient()
+    } catch (e) {
+        // Safe return during SSR
+        return {
+            categories: EMPTY_ARRAY,
+            expense: EMPTY_ARRAY,
+            income: EMPTY_ARRAY,
+            isLoading,
+            error,
+            createCategory: { mutate: () => { } } as any,
+            updateCategory: { mutate: () => { } } as any,
+            deleteCategory: { mutate: () => { } } as any,
+        }
+    }
 
     // Derived data for compatibility
-    const allCategories = categories?.all || []
-    const expenseCategories = categories?.expense || []
-    const incomeCategories = categories?.income || []
+    const allCategories = categories?.all || EMPTY_ARRAY
+    const expenseCategories = categories?.expense || EMPTY_ARRAY
+    const incomeCategories = categories?.income || EMPTY_ARRAY
 
     const createCategory = useMutation({
         mutationFn: async (newCategory: any) => {

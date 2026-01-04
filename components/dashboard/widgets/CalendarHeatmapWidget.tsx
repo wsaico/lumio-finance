@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Calendar } from 'lucide-react';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
+import { useQuery } from '@tanstack/react-query';
 import type { WidgetProps } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
 
@@ -13,30 +14,21 @@ interface HeatmapValue {
 }
 
 export function CalendarHeatmapWidget({ config }: WidgetProps) {
-  // TODO: Replace with actual transaction data
-  const generateMockData = (): HeatmapValue[] => {
-    const data: HeatmapValue[] = [];
-    const today = new Date();
-    const oneYearAgo = new Date(today);
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
-
-    for (let d = new Date(oneYearAgo); d <= today; d.setDate(d.getDate() + 1)) {
-      const randomCount = Math.floor(Math.random() * 10);
-      if (randomCount > 0) {
-        data.push({
-          date: new Date(d).toISOString().split('T')[0],
-          count: randomCount,
-        });
-      }
+  const { data: heatmapData, isLoading } = useQuery({
+    queryKey: ['activity-heatmap'],
+    queryFn: async () => {
+      const res = await fetch('/api/analytics/activity-heatmap')
+      if (!res.ok) throw new Error('Failed')
+      return res.json()
     }
+  })
 
-    return data;
-  };
-
-  const heatmapData = generateMockData();
   const today = new Date();
   const oneYearAgo = new Date(today);
   oneYearAgo.setFullYear(today.getFullYear() - 1);
+
+  if (isLoading) return <div className="h-[180px] animate-pulse bg-neutral-100 dark:bg-neutral-800 rounded-xl" />
+
 
   return (
     <motion.div
@@ -47,10 +39,10 @@ export function CalendarHeatmapWidget({ config }: WidgetProps) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            Activity Overview
+            Resumen de Actividad
           </h3>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Transaction frequency over the past year
+            Frecuencia de transacciones en el último año
           </p>
         </div>
         <Calendar className="w-5 h-5 text-neutral-400" />
@@ -78,12 +70,11 @@ export function CalendarHeatmapWidget({ config }: WidgetProps) {
           }}
           tooltipDataAttrs={(value: HeatmapValue) => {
             if (!value || !value.date) {
-              return { 'data-tip': 'No transactions' };
+              return { 'data-tip': 'Sin transacciones' };
             }
             return {
-              'data-tip': `${value.count} transaction${value.count !== 1 ? 's' : ''} on ${
-                value.date
-              }`,
+              'data-tip': `${value.count} transacción${value.count !== 1 ? 'es' : ''} el ${value.date
+                }`,
             };
           }}
           showWeekdayLabels
@@ -91,7 +82,7 @@ export function CalendarHeatmapWidget({ config }: WidgetProps) {
       </div>
 
       <div className="flex items-center justify-end gap-2 mt-4">
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">Less</span>
+        <span className="text-xs text-neutral-500 dark:text-neutral-400">Menos</span>
         <div className="flex gap-1">
           <div className="w-3 h-3 rounded-sm bg-neutral-100 dark:bg-neutral-700" />
           <div className="w-3 h-3 rounded-sm bg-primary-200 dark:bg-primary-900" />
@@ -99,7 +90,7 @@ export function CalendarHeatmapWidget({ config }: WidgetProps) {
           <div className="w-3 h-3 rounded-sm bg-primary-600 dark:bg-primary-500" />
           <div className="w-3 h-3 rounded-sm bg-primary-800 dark:bg-primary-400" />
         </div>
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">More</span>
+        <span className="text-xs text-neutral-500 dark:text-neutral-400">Más</span>
       </div>
 
       <style jsx global>{`

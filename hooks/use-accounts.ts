@@ -1,14 +1,35 @@
+"use client"
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useExchangeRates } from './use-exchange-rates'
 import { useSettingsStore } from './use-settings-store'
 import { useEffect, useState, useMemo } from 'react'
 
+const EMPTY_ARRAY: any[] = []
+
 // Manual definition or just use any to unblock build
 type Account = any
 
 export function useAccounts() {
-    const queryClient = useQueryClient()
+    // SSR Safety: useQueryClient throws if used outside Provider, which can happen during SSR pre-rendering
+    let queryClient;
+    try {
+        queryClient = useQueryClient()
+    } catch (e) {
+        // Return a mock state or null during SSR if context is missing
+        return {
+            accounts: EMPTY_ARRAY,
+            transactionAccounts: EMPTY_ARRAY,
+            isLoading: true,
+            error: null,
+            totalBalanceConverted: 0,
+            balancesByCurrency: {},
+            createAccount: { mutate: () => { } } as any,
+            updateAccount: { mutate: () => { } } as any,
+            deleteAccount: { mutate: () => { } } as any,
+        }
+    }
+
     const { convert } = useExchangeRates()
     const { currencyCode: baseCurrency } = useSettingsStore()
     const [totalBalanceConverted, setTotalBalanceConverted] = useState(0)
@@ -93,23 +114,15 @@ export function useAccounts() {
             })
 
             if (!res.ok) {
-                // Log full response for debugging
-                console.log('[DELETE_ACCOUNT] Status:', res.status)
-                console.log('[DELETE_ACCOUNT] Headers:', Object.fromEntries(res.headers.entries()))
-
-                // Try to parse error message
                 const contentType = res.headers.get('content-type')
-                console.log('[DELETE_ACCOUNT] Content-Type:', contentType)
 
                 if (contentType && contentType.includes('application/json')) {
                     const errorData = await res.json()
-                    console.log('[DELETE_ACCOUNT] Error data:', errorData)
                     throw new Error(errorData.message || 'Error deleting account')
                 }
 
                 // Try to read as text
                 const errorText = await res.text()
-                console.log('[DELETE_ACCOUNT] Error text:', errorText)
                 throw new Error(errorText || 'Error deleting account')
             }
         },

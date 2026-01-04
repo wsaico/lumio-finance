@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,22 @@ interface TransferModalProps {
 }
 
 export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalProps) {
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted || !open) return null
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <TransferModalContent onOpenChange={onOpenChange} onSuccess={onSuccess} />
+        </Dialog>
+    )
+}
+
+function TransferModalContent({ onOpenChange, onSuccess }: Omit<TransferModalProps, 'open'>) {
     const { accounts } = useAccounts()
     const [expression, setExpression] = useState("0")
     const [displayValue, setDisplayValue] = useState("0")
@@ -101,6 +117,19 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
             setConvertedAmount(null)
         }
     }, [expression, exchangeRate, needsCurrencyConversion])
+
+    const amount = useMemo(() => evaluateExpression(expression), [expression])
+
+    const isOverdraft = useMemo(() => {
+        if (!fromAccount || amount <= 0) return false
+
+        if (fromAccount.accountType === 'CREDIT_CARD') {
+            const available = Number(fromAccount.creditLimit || 0) - Number(fromAccount.usedBalance || 0)
+            return (available - amount) < 0
+        }
+
+        return (Number(fromAccount.currentBalance) || 0) - amount < 0
+    }, [fromAccount, amount])
 
     const getCurrencySymbol = (code?: string) => {
         if (!code) return "$"
@@ -196,6 +225,11 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
             return
         }
 
+        if (isOverdraft) {
+            toast.error("Saldo insuficiente en la cuenta de origen")
+            return
+        }
+
         // If different currencies, ensure we have exchange rate
         if (needsCurrencyConversion && !exchangeRate) {
             toast.error("No se encontró tasa de cambio para estas monedas")
@@ -262,186 +296,192 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
 
     return (
         <>
-            {/* Main Transfer Modal */}
-            <Dialog open={open && activeSubModal === 'none'} onOpenChange={onOpenChange}>
-                <DialogContent className="w-[95vw] max-w-[420px] max-h-[90vh] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[24px] overflow-hidden flex flex-col" showCloseButton={false}>
-                    <DialogTitle className="sr-only">Transferir Saldo</DialogTitle>
+            {/* Main Transfer Modal Content */}
+            <DialogContent className="w-[95vw] max-w-[420px] max-h-[90vh] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[24px] overflow-hidden flex flex-col" showCloseButton={false}>
+                <DialogTitle className="sr-only">Transferir Saldo</DialogTitle>
 
-                    {/* Scrollable Content */}
-                    <div className="flex-1 overflow-y-auto">
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-                            <h2 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">Transferir Saldo</h2>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onOpenChange(false)}
-                                className="rounded-full cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 h-7 w-7"
-                            >
-                                <X className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-                            </Button>
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                        <h2 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">Transferir Saldo</h2>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onOpenChange(false)}
+                            className="rounded-full cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 h-7 w-7"
+                        >
+                            <X className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                        </Button>
+                    </div>
+
+                    {/* Description Input */}
+                    <div className="px-4 pb-2">
+                        <div className="relative">
+                            <Input
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Transferir saldo"
+                                className="h-9 bg-zinc-100 dark:bg-zinc-800 border-0 rounded-lg text-sm font-medium pr-8 text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 font-bold text-xs">T</span>
                         </div>
+                    </div>
 
-                        {/* Description Input */}
-                        <div className="px-4 pb-2">
-                            <div className="relative">
-                                <Input
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Transferir saldo"
-                                    className="h-9 bg-zinc-100 dark:bg-zinc-800 border-0 rounded-lg text-sm font-medium pr-8 text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
-                                />
-                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 font-bold text-xs">T</span>
+                    {/* Date & Time Row */}
+                    <div className="px-4 pb-2 flex items-center justify-between">
+                        <button
+                            type="button"
+                            onClick={() => setActiveSubModal('date')}
+                            className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
+                        >
+                            <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <CalendarIcon className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                             </div>
+                            <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                                {isToday ? "Hoy" : format(selectedDate, "d MMM", { locale: es })}
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveSubModal('time')}
+                            className="text-sm font-mono text-zinc-400 dark:text-zinc-500 tracking-wider cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                        >
+                            {selectedHour.toString().padStart(2, '0')}:{selectedMinute.toString().padStart(2, '0')}
+                        </button>
+                    </div>
+
+                    {/* Account Selection */}
+                    <div className="px-4 pb-2 flex items-center justify-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setActiveSubModal('fromAccount')}
+                            className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg border-2 border-zinc-200 dark:border-zinc-700 font-bold text-xs cursor-pointer hover:border-purple-400 dark:hover:border-purple-500 transition-colors text-zinc-700 dark:text-zinc-200 min-w-[90px] text-center"
+                        >
+                            {fromAccount?.name || "Seleccionar"}
+                            <br />
+                            <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium">{fromAccount?.currencyCode || "---"}</span>
+                        </button>
+
+                        <div className="w-7 h-7 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center flex-shrink-0">
+                            <ArrowRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
                         </div>
 
-                        {/* Date & Time Row */}
-                        <div className="px-4 pb-2 flex items-center justify-between">
-                            <button
-                                type="button"
-                                onClick={() => setActiveSubModal('date')}
-                                className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
-                            >
-                                <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                    <CalendarIcon className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-                                </div>
-                                <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
-                                    {isToday ? "Hoy" : format(selectedDate, "d MMM", { locale: es })}
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveSubModal('time')}
-                                className="text-sm font-mono text-zinc-400 dark:text-zinc-500 tracking-wider cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-                            >
-                                {selectedHour.toString().padStart(2, '0')}:{selectedMinute.toString().padStart(2, '0')}
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setActiveSubModal('toAccount')}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg border-2 font-bold text-xs cursor-pointer transition-colors min-w-[90px] text-center",
+                                toAccount
+                                    ? "bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400"
+                                    : "bg-zinc-50 dark:bg-zinc-800/50 border-dashed border-zinc-300 dark:border-zinc-600 text-zinc-400 dark:text-zinc-500 hover:border-blue-400 dark:hover:border-blue-500"
+                            )}
+                        >
+                            {toAccount?.name || "Seleccionar"}
+                            {toAccount ? (
+                                <>
+                                    <br />
+                                    <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium">{toAccount?.currencyCode}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <br />
+                                    <span className="text-[9px] font-medium">cuenta</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
 
-                        {/* Account Selection */}
-                        <div className="px-4 pb-2 flex items-center justify-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setActiveSubModal('fromAccount')}
-                                className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg border-2 border-zinc-200 dark:border-zinc-700 font-bold text-xs cursor-pointer hover:border-purple-400 dark:hover:border-purple-500 transition-colors text-zinc-700 dark:text-zinc-200 min-w-[90px] text-center"
-                            >
-                                {fromAccount?.name || "Seleccionar"}
-                                <br />
-                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium">{fromAccount?.currencyCode || "---"}</span>
-                            </button>
-
-                            <div className="w-7 h-7 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center flex-shrink-0">
-                                <ArrowRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => setActiveSubModal('toAccount')}
-                                className={cn(
-                                    "px-3 py-1.5 rounded-lg border-2 font-bold text-xs cursor-pointer transition-colors min-w-[90px] text-center",
-                                    toAccount
-                                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400"
-                                        : "bg-zinc-50 dark:bg-zinc-800/50 border-dashed border-zinc-300 dark:border-zinc-600 text-zinc-400 dark:text-zinc-500 hover:border-blue-400 dark:hover:border-blue-500"
-                                )}
-                            >
-                                {toAccount?.name || "Seleccionar"}
-                                {toAccount ? (
-                                    <>
-                                        <br />
-                                        <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium">{toAccount?.currencyCode}</span>
-                                    </>
+                    {/* Exchange Rate Info */}
+                    {needsCurrencyConversion && (
+                        <div className="px-4 pb-1">
+                            <div className="flex items-center justify-center gap-2 text-[10px]">
+                                {isLoadingRate ? (
+                                    <span className="text-zinc-400 flex items-center gap-1">
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                        Cargando...
+                                    </span>
+                                ) : exchangeRate ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded">
+                                        1 {fromAccount?.currencyCode} = {exchangeRate.toFixed(4)} {toAccount?.currencyCode}
+                                    </span>
                                 ) : (
-                                    <>
-                                        <br />
-                                        <span className="text-[9px] font-medium">cuenta</span>
-                                    </>
+                                    <span className="text-red-500">Sin tasa disponible</span>
                                 )}
-                            </button>
+                            </div>
                         </div>
+                    )}
 
-                        {/* Exchange Rate Info */}
-                        {needsCurrencyConversion && (
-                            <div className="px-4 pb-1">
-                                <div className="flex items-center justify-center gap-2 text-[10px]">
-                                    {isLoadingRate ? (
-                                        <span className="text-zinc-400 flex items-center gap-1">
-                                            <RefreshCw className="w-3 h-3 animate-spin" />
-                                            Cargando...
-                                        </span>
-                                    ) : exchangeRate ? (
-                                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded">
-                                            1 {fromAccount?.currencyCode} = {exchangeRate.toFixed(4)} {toAccount?.currencyCode}
-                                        </span>
-                                    ) : (
-                                        <span className="text-red-500">Sin tasa disponible</span>
-                                    )}
-                                </div>
+                    {/* Amount Display */}
+                    <div className="px-4 py-1 text-center">
+                        <button
+                            type="button"
+                            onClick={() => setActiveSubModal('currency')}
+                            className="cursor-pointer hover:opacity-70 transition-opacity"
+                        >
+                            <span className="text-2xl font-black text-zinc-800 dark:text-zinc-100">
+                                {getCurrencySymbol(fromAccount?.currencyCode || currency)}{displayValue}{" "}
+                                <span className="text-sm text-zinc-400 dark:text-zinc-500 font-semibold">{fromAccount?.currencyCode || currency}</span>
+                            </span>
+                        </button>
+                        {/* Converted Amount Display - inline */}
+                        {needsCurrencyConversion && convertedAmount !== null && (
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                = {getCurrencySymbol(toAccount?.currencyCode)}{convertedAmount.toFixed(2).replace('.', ',')} {toAccount?.currencyCode}
                             </div>
                         )}
 
-                        {/* Amount Display */}
-                        <div className="px-4 py-1 text-center">
-                            <button
-                                type="button"
-                                onClick={() => setActiveSubModal('currency')}
-                                className="cursor-pointer hover:opacity-70 transition-opacity"
-                            >
-                                <span className="text-2xl font-black text-zinc-800 dark:text-zinc-100">
-                                    {getCurrencySymbol(fromAccount?.currencyCode || currency)}{displayValue}{" "}
-                                    <span className="text-sm text-zinc-400 dark:text-zinc-500 font-semibold">{fromAccount?.currencyCode || currency}</span>
-                                </span>
-                            </button>
-                            {/* Converted Amount Display - inline */}
-                            {needsCurrencyConversion && convertedAmount !== null && (
-                                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                                    = {getCurrencySymbol(toAccount?.currencyCode)}{convertedAmount.toFixed(2).replace('.', ',')} {toAccount?.currencyCode}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Number Pad */}
-                        <div className="px-4 pb-3">
-                            <div className="grid grid-cols-4 gap-1.5">
-                                <button type="button" onClick={() => handleNumberClick("1")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">1</button>
-                                <button type="button" onClick={() => handleNumberClick("2")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">2</button>
-                                <button type="button" onClick={() => handleNumberClick("3")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">3</button>
-                                <button type="button" onClick={() => handleOperator("/")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">÷</button>
-
-                                <button type="button" onClick={() => handleNumberClick("4")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">4</button>
-                                <button type="button" onClick={() => handleNumberClick("5")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">5</button>
-                                <button type="button" onClick={() => handleNumberClick("6")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">6</button>
-                                <button type="button" onClick={() => handleOperator("*")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">×</button>
-
-                                <button type="button" onClick={() => handleNumberClick("7")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">7</button>
-                                <button type="button" onClick={() => handleNumberClick("8")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">8</button>
-                                <button type="button" onClick={() => handleNumberClick("9")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">9</button>
-                                <button type="button" onClick={() => handleOperator("-")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">-</button>
-
-                                <button type="button" onClick={() => handleNumberClick(",")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">,</button>
-                                <button type="button" onClick={() => handleNumberClick("0")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">0</button>
-                                <button type="button" onClick={handleDelete} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex items-center justify-center active:scale-95">
-                                    <Delete className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-                                </button>
-                                <button type="button" onClick={() => handleOperator("+")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">+</button>
+                        {/* Overdraft Warning */}
+                        {isOverdraft && (
+                            <div className="mt-2 flex items-center justify-center gap-1.5 text-red-500 animate-pulse">
+                                <ArrowRight className="w-3 h-3 rotate-90" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Saldo Insuficiente</span>
                             </div>
-                        </div>
+                        )}
                     </div>
 
-                    {/* Submit Button - Fixed at bottom outside scroll area */}
-                    <div className="px-4 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-shrink-0">
-                        <Button
-                            onClick={handleSubmit}
-                            disabled={isSubmitting || !toAccountId || evaluateExpression(expression) <= 0 || (needsCurrencyConversion && !exchangeRate)}
-                            className="w-full h-11 rounded-xl bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-sm cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSubmitting ? "Transferiendo..." : "Transferir"}
-                        </Button>
+                    {/* Number Pad */}
+                    <div className="px-4 pb-3">
+                        <div className="grid grid-cols-4 gap-1.5">
+                            <button type="button" onClick={() => handleNumberClick("1")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">1</button>
+                            <button type="button" onClick={() => handleNumberClick("2")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">2</button>
+                            <button type="button" onClick={() => handleNumberClick("3")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">3</button>
+                            <button type="button" onClick={() => handleOperator("/")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">÷</button>
+
+                            <button type="button" onClick={() => handleNumberClick("4")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">4</button>
+                            <button type="button" onClick={() => handleNumberClick("5")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">5</button>
+                            <button type="button" onClick={() => handleNumberClick("6")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">6</button>
+                            <button type="button" onClick={() => handleOperator("*")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">×</button>
+
+                            <button type="button" onClick={() => handleNumberClick("7")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">7</button>
+                            <button type="button" onClick={() => handleNumberClick("8")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">8</button>
+                            <button type="button" onClick={() => handleNumberClick("9")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">9</button>
+                            <button type="button" onClick={() => handleOperator("-")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">-</button>
+
+                            <button type="button" onClick={() => handleNumberClick(",")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">,</button>
+                            <button type="button" onClick={() => handleNumberClick("0")} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-800 dark:text-zinc-100 active:scale-95">0</button>
+                            <button type="button" onClick={handleDelete} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-base cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex items-center justify-center active:scale-95">
+                                <Delete className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                            </button>
+                            <button type="button" onClick={() => handleOperator("+")} className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-700 font-bold text-lg text-zinc-500 dark:text-zinc-400 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors active:scale-95">+</button>
+                        </div>
                     </div>
-                </DialogContent>
-            </Dialog>
+                </div>
+
+                {/* Submit Button - Fixed at bottom outside scroll area */}
+                <div className="px-4 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-shrink-0">
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || !toAccountId || amount <= 0 || (needsCurrencyConversion && !exchangeRate) || isOverdraft}
+                        className="w-full h-11 rounded-xl bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-sm cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSubmitting ? "Transferiendo..." : "Transferir"}
+                    </Button>
+                </div>
+            </DialogContent >
 
             {/* FROM Account Selection Dialog */}
-            <Dialog open={activeSubModal === 'fromAccount'} onOpenChange={(open) => !open && closeSubModal()}>
+            < Dialog open={(activeSubModal as string) === 'fromAccount'} onOpenChange={(open) => !open && closeSubModal()}>
                 <DialogContent className="w-[95vw] max-w-[400px] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[20px] overflow-hidden" showCloseButton={false}>
                     <DialogTitle className="sr-only">Seleccionar Cuenta Origen</DialogTitle>
                     <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
@@ -488,10 +528,10 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
                         ))}
                     </div>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* TO Account Selection Dialog */}
-            <Dialog open={activeSubModal === 'toAccount'} onOpenChange={(open) => !open && closeSubModal()}>
+            < Dialog open={(activeSubModal as string) === 'toAccount'} onOpenChange={(open) => !open && closeSubModal()}>
                 <DialogContent className="w-[95vw] max-w-[400px] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[20px] overflow-hidden" showCloseButton={false}>
                     <DialogTitle className="sr-only">Seleccionar Cuenta Destino</DialogTitle>
                     <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
@@ -542,10 +582,10 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
                         ))}
                     </div>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Currency Selection Dialog */}
-            <Dialog open={activeSubModal === 'currency'} onOpenChange={(open) => !open && closeSubModal()}>
+            < Dialog open={(activeSubModal as string) === 'currency'} onOpenChange={(open) => !open && closeSubModal()}>
                 <DialogContent className="w-[95vw] max-w-[350px] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[20px] overflow-hidden" showCloseButton={false}>
                     <DialogTitle className="sr-only">Seleccionar Moneda</DialogTitle>
                     <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
@@ -584,10 +624,10 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
                         ))}
                     </div>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Date Picker Dialog */}
-            <Dialog open={activeSubModal === 'date'} onOpenChange={(open) => !open && closeSubModal()}>
+            < Dialog open={(activeSubModal as string) === 'date'} onOpenChange={(open) => !open && closeSubModal()}>
                 <DialogContent className="w-[95vw] max-w-[350px] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[20px] overflow-hidden" showCloseButton={false}>
                     <DialogTitle className="sr-only">Seleccionar Fecha</DialogTitle>
                     <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
@@ -616,10 +656,10 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
                         </Button>
                     </div>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Time Picker Dialog */}
-            <Dialog open={activeSubModal === 'time'} onOpenChange={(open) => !open && closeSubModal()}>
+            < Dialog open={(activeSubModal as string) === 'time'} onOpenChange={(open) => !open && closeSubModal()}>
                 <DialogContent className="w-[95vw] max-w-[300px] p-0 gap-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-[20px] overflow-hidden" showCloseButton={false}>
                     <DialogTitle className="sr-only">Seleccionar Hora</DialogTitle>
                     <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
@@ -709,7 +749,7 @@ export function TransferModal({ open, onOpenChange, onSuccess }: TransferModalPr
                         </Button>
                     </div>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
         </>
     )
 }

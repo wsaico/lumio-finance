@@ -38,12 +38,6 @@ export async function imageToPdf(
     const image = sharp(imageBuffer)
     const metadata = await image.metadata()
 
-    console.log('[IMAGE_TO_PDF] Image metadata:', {
-        width: metadata.width,
-        height: metadata.height,
-        format: metadata.format
-    })
-
     // Calculate dimensions
     let width = metadata.width || 800
     let height = metadata.height || 600

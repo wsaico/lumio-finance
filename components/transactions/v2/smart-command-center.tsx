@@ -76,7 +76,7 @@ export function SmartCommandCenter({ onConfirm, initialData, initialType }: Smar
 
     // Monthly Summary & Budget for the Pulse
     const now = new Date()
-    const { budget: monthlyBudgets } = useBudget(now.getFullYear(), now.getMonth() + 1)
+    const { budgets: monthlyBudgets } = useBudget(now.getFullYear(), now.getMonth() + 1)
 
     // Calculate current spending and income for TODAY (Timezone robust)
     const { currentSpending, currentIncome } = useMemo(() => {
@@ -206,9 +206,15 @@ export function SmartCommandCenter({ onConfirm, initialData, initialType }: Smar
     const currentType = form.watch("type")
 
     const isOverdraft = useMemo(() => {
-        if (!currentAccount || !currentAmount || currentType !== 'EXPENSE') return false
+        if (!currentAccount || !currentAmount || (currentType !== 'EXPENSE' && currentType !== 'TRANSFER')) return false
         const amt = parseFloat(currentAmount)
         if (isNaN(amt)) return false
+
+        if (currentAccount.accountType === 'CREDIT_CARD') {
+            const available = Number(currentAccount.creditLimit || 0) - Number(currentAccount.usedBalance || 0)
+            return (available - amt) < 0
+        }
+
         return (currentAccount.currentBalance || 0) - amt < 0
     }, [currentAccount, currentAmount, currentType])
 
@@ -453,17 +459,20 @@ export function SmartCommandCenter({ onConfirm, initialData, initialType }: Smar
                                             Saldo Actual: <span className="text-foreground font-mono">{getCurrencySymbol(currentAccount.currencyCode)}{currentAccount.currentBalance?.toFixed(2) || "0.00"}</span>
                                         </div>
 
-                                        {currentAmount && !isNaN(parseFloat(currentAmount)) && currentType === 'EXPENSE' && (
+                                        {currentAmount && !isNaN(parseFloat(currentAmount)) && (currentType === 'EXPENSE' || currentType === 'TRANSFER') && (
                                             (() => {
                                                 const amt = parseFloat(currentAmount)
-                                                const remaining = (currentAccount.currentBalance || 0) - amt
+                                                const currentAvailable = currentAccount.accountType === 'CREDIT_CARD'
+                                                    ? Number(currentAccount.creditLimit || 0) - Number(currentAccount.usedBalance || 0)
+                                                    : Number(currentAccount.currentBalance || 0)
+                                                const remaining = currentAvailable - amt
 
                                                 return (
                                                     <div className={cn(
                                                         "text-xs font-bold flex items-center gap-1.5 transition-colors duration-300",
                                                         isOverdraft ? "text-red-500" : "text-emerald-500"
                                                     )}>
-                                                        <span>Queda:</span>
+                                                        <span>{currentAccount.accountType === 'CREDIT_CARD' ? 'Límite Restante:' : 'Queda:'}</span>
                                                         <span className="font-mono text-sm">{getCurrencySymbol(currentAccount.currencyCode)}{remaining.toFixed(2)}</span>
                                                         {isOverdraft && (
                                                             <span className="inline-flex items-center gap-1 bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider ml-1">

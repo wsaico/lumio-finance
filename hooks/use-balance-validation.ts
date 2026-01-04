@@ -3,7 +3,10 @@ import { useMemo } from 'react'
 export interface Account {
     id: string
     name: string
-    balance: number
+    currentBalance: number
+    accountType: string
+    creditLimit?: number
+    usedBalance?: number
     currencyCode: string
 }
 
@@ -15,6 +18,7 @@ export interface BalanceValidationResult {
     message?: string
     details: {
         currentBalance: number
+        availableFunds: number
         requestedAmount: number
         balanceAfter: number
         shortage?: number
@@ -66,6 +70,7 @@ export function useBalanceValidation(
                 message: 'Cuenta no encontrada',
                 details: {
                     currentBalance: 0,
+                    availableFunds: 0,
                     requestedAmount: amount,
                     balanceAfter: 0,
                     shortage: amount
@@ -73,8 +78,17 @@ export function useBalanceValidation(
             }
         }
 
-        const currentBalance = Number(account.balance)
-        const balanceAfter = currentBalance - amount
+        const currentBalance = Number(account.currentBalance || 0)
+        let availableFunds = currentBalance
+
+        // Handle Credit Cards differently
+        if (account.accountType === 'CREDIT_CARD') {
+            const creditLimit = Number(account.creditLimit || 0)
+            const usedBalance = Number(account.usedBalance || 0)
+            availableFunds = creditLimit - usedBalance
+        }
+
+        const balanceAfter = availableFunds - amount
 
         // CRITICAL: Negative balance (insufficient funds)
         if (balanceAfter < 0 && !allowNegative) {
@@ -84,6 +98,7 @@ export function useBalanceValidation(
                 message: 'Saldo insuficiente',
                 details: {
                     currentBalance,
+                    availableFunds,
                     requestedAmount: amount,
                     balanceAfter,
                     shortage: Math.abs(balanceAfter)
@@ -92,7 +107,7 @@ export function useBalanceValidation(
         }
 
         // WARNING: Low balance (will leave account with < threshold%)
-        const threshold = currentBalance * lowBalanceThreshold
+        const threshold = availableFunds * lowBalanceThreshold
         if (balanceAfter < threshold && balanceAfter >= 0) {
             return {
                 valid: true,
@@ -100,6 +115,7 @@ export function useBalanceValidation(
                 message: 'Esta operación dejará tu saldo muy bajo',
                 details: {
                     currentBalance,
+                    availableFunds,
                     requestedAmount: amount,
                     balanceAfter,
                     threshold
@@ -113,6 +129,7 @@ export function useBalanceValidation(
             severity: 'success',
             details: {
                 currentBalance,
+                availableFunds,
                 requestedAmount: amount,
                 balanceAfter
             }

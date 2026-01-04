@@ -1,12 +1,15 @@
 "use client"
 
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { useSettingsStore } from "@/hooks/use-settings-store"
 
 interface CashFlowAreaChartProps {
     data: { name: string, income: number, expense: number }[]
 }
 
 export function CashFlowAreaChart({ data = [] }: CashFlowAreaChartProps) {
+    const { currencyCode } = useSettingsStore()
+    const symbol = currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : 'S/'
     if (!data || data.length === 0) {
         return (
             <div className="flex items-center justify-center h-[300px] text-muted-foreground text-xs font-semibold uppercase tracking-widest border border-dashed border-muted-foreground/20 rounded-2xl bg-muted/5">
@@ -45,7 +48,7 @@ export function CashFlowAreaChart({ data = [] }: CashFlowAreaChartProps) {
                     fontSize={10}
                     fontWeight="bold"
                     tick={{ fill: '#888' }}
-                    tickFormatter={(value) => `S/ ${value}`}
+                    tickFormatter={(value) => `${symbol} ${value}`}
                 />
                 <Tooltip
                     contentStyle={{

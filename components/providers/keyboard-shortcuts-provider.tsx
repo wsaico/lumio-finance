@@ -13,11 +13,9 @@ export function KeyboardShortcutsProvider({ children }: { children: React.ReactN
         () => router.push("/dashboard/transactions/new"),
         () => {
             // TODO: Implement global search
-            console.log("Search triggered")
         },
         () => {
             // TODO: Toggle sidebar
-            console.log("Toggle sidebar")
         },
         () => router.push("/dashboard"),
         () => router.push("/dashboard/transactions"),

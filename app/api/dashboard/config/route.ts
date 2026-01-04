@@ -11,13 +11,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: profile, error: fetchError } = await supabase
+    const { data: profile, error } = await supabase
       .from('profiles')
       .select('dashboard_config')
       .eq('id', user.id)
       .single();
 
-    if (fetchError || !profile?.dashboard_config) {
+    if (error) throw error;
+
+    if (!profile?.dashboard_config) {
       return NextResponse.json({ config: null }, { status: 200 });
     }
 
@@ -46,15 +48,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid dashboard configuration' }, { status: 400 });
     }
 
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ dashboard_config: config })
       .eq('id', user.id);
 
-    if (updateError) {
-      console.error('Failed to update dashboard config:', updateError);
-      return NextResponse.json({ error: 'Failed to update configuration' }, { status: 500 });
-    }
+    if (error) throw error;
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

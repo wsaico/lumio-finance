@@ -78,9 +78,6 @@ export function useLearnCategory() {
       categoryId: string;
       subcategoryId?: string;
     }) => learnCategoryAssociation(description, categoryId, subcategoryId),
-    onSuccess: (data) => {
-      console.log(`Learned ${data.learned} keywords for category`);
-    },
     onError: (error) => {
       console.error('Failed to learn category:', error);
     },

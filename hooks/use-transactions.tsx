@@ -56,14 +56,11 @@ export function useTransactions(filters: Filters) {
 
     const createTransaction = useMutation({
         mutationFn: async (newTransaction: any) => {
-            console.log('[CREATE_TRANSACTION] Sending data:', JSON.stringify(newTransaction, null, 2))
             const res = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newTransaction),
             })
-            console.log('[CREATE_TRANSACTION] Sending payload:', newTransaction)
-            console.log('[CREATE_TRANSACTION] Response status:', res.status, res.statusText)
             if (!res.ok) {
                 const text = await res.text()
                 console.error('[CREATE_TRANSACTION] Error response text:', text)
@@ -82,7 +79,6 @@ export function useTransactions(filters: Filters) {
             return res.json()
         },
         onSuccess: (data: any) => {
-            console.log('[USE_TRANSACTIONS] Success callback triggered with data:', data)
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] }) // Balance changes!
             notifyTransactionChange('created') // Notify budgets to refresh
@@ -91,12 +87,6 @@ export function useTransactions(filters: Filters) {
             toast.success('Transacción guardada exitosamente')
 
             // Budget warnings are now handled by the centralized alert system in budgets/page.tsx
-            // This prevents duplicate notifications
-            if (data.budgetWarnings && Array.isArray(data.budgetWarnings) && data.budgetWarnings.length > 0) {
-                console.warn('[USE_TRANSACTIONS] Budget warnings detected (alerts shown in budgets page):', data.budgetWarnings)
-            } else {
-                console.log('[USE_TRANSACTIONS] No budget warnings found.')
-            }
         },
         onError: (error: any) => {
             console.error('[CREATE_TRANSACTION] Full error:', error)

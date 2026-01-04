@@ -14,6 +14,7 @@ import {
 import { AccountFormModal } from "./account-form-modal"
 import { EditInitialBalanceModal } from "./edit-initial-balance-modal"
 import { useAccounts } from "@/hooks/use-accounts"
+import { useFormat } from "@/hooks/use-format"
 import { useRouter } from "next/navigation"
 import {
     AlertDialog,
@@ -51,6 +52,7 @@ interface CompactAccountCardProps {
 export function CompactAccountCard({ account, isSelected, onClick }: CompactAccountCardProps) {
     const router = useRouter()
     const { deleteAccount } = useAccounts()
+    const { formatMoney } = useFormat()
     const [showEditModal, setShowEditModal] = useState(false)
     const [showEditBalance, setShowEditBalance] = useState(false)
     const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -191,7 +193,7 @@ export function CompactAccountCard({ account, isSelected, onClick }: CompactAcco
                                     {account.accountType === 'CREDIT_CARD' ? 'DISPONIBLE' : 'SALDO'}
                                 </div>
                                 <div className="text-xl font-bold">
-                                    {account.currencyCode === 'PEN' ? 'S/' : '$'}{availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {formatMoney(availableBalance, account.currencyCode)}
                                 </div>
                             </div>
 
@@ -214,9 +216,11 @@ export function CompactAccountCard({ account, isSelected, onClick }: CompactAcco
                     {/* Info Lateral - Compacta */}
                     <div className="flex-1 space-y-2 text-sm">
                         <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">Saldo</span>
+                            <span className="text-muted-foreground">
+                                {account.accountType === 'CREDIT_CARD' ? 'Disponible' : 'Saldo'}
+                            </span>
                             <span className="font-semibold">
-                                {account.currencyCode === 'PEN' ? 'S/' : '$'}{availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {formatMoney(availableBalance, account.currencyCode)}
                             </span>
                         </div>
                         {cardNumber && (

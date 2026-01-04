@@ -14,6 +14,7 @@ import {
 import { useSavingsGoal, useGoalContributions, useDeleteSavingsGoal, useUpdateContribution, useDeleteContribution, useSyncSavingsGoal } from "@/hooks/use-savings-goals"
 import { ContributeModal } from "@/components/savings-goals/contribute-modal"
 import { EditContributionModal } from "@/components/savings-goals/edit-contribution-modal"
+import { WithdrawModal } from "@/components/savings-goals/withdraw-modal"
 import { cn } from "@/lib/utils"
 import confetti from "canvas-confetti"
 
@@ -23,6 +24,7 @@ export default function GoalDetailsPage() {
     const goalId = params.id as string
 
     const [showContributeModal, setShowContributeModal] = useState(false)
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false)
     const [hasShownConfetti, setHasShownConfetti] = useState(false)
     const [editingContribution, setEditingContribution] = useState<any>(null)
 
@@ -33,15 +35,10 @@ export default function GoalDetailsPage() {
     const { mutate: deleteContribution, isPending: isDeletingContribution } = useDeleteContribution()
     const { mutate: syncGoal, isPending: isSyncing } = useSyncSavingsGoal()
 
-    console.log('[GOAL_DETAILS_PAGE] Contributions data:', contributionsData)
     // ... rest of the code ...
-
-    console.log('[GOAL_DETAILS_PAGE] Loading:', loadingContributions)
 
     const goal = goalData?.goal
     const contributions = contributionsData?.contributions || []
-
-    console.log('[GOAL_DETAILS_PAGE] Parsed contributions:', contributions)
 
     const isCompleted = goal?.status === 'COMPLETED'
     const progress = goal?.progress || 0
@@ -132,15 +129,17 @@ export default function GoalDetailsPage() {
                     )}
                 </div>
                 <div className="flex gap-2">
+                    {/* Sync button removed as per user request (updates are automatic now) */}
                     <Button
                         variant="outline"
-                        size="icon"
-                        onClick={() => syncGoal(goalId)}
-                        disabled={isSyncing}
-                        title="Sincronizar progreso"
+                        onClick={() => setShowWithdrawModal(true)}
+                        disabled={Number(goal.current_amount) <= 0}
+                        className="gap-2 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:hover:bg-orange-950/20 text-orange-600 dark:text-orange-400"
                     >
-                        <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+                        <TrendingDown className="h-4 w-4 rotate-180" />
+                        Retirar
                     </Button>
+
                     {!isCompleted && (
                         <>
                             <Button
@@ -161,6 +160,7 @@ export default function GoalDetailsPage() {
                             >
                                 <Trash2 className="h-4 w-4" />
                             </Button>
+
                             <Button
                                 onClick={() => setShowContributeModal(true)}
                                 className="gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
@@ -203,10 +203,15 @@ export default function GoalDetailsPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center p-3 rounded-lg bg-muted/50">
                         <Calendar className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-                        <div className="text-sm font-medium">
-                            {goal.daysRemaining > 0 ? `${goal.daysRemaining} días` : 'Vencida'}
+                        <div className="text-xs text-muted-foreground mb-1">
+                            {isCompleted ? 'Completada' : 'Restantes'}
                         </div>
-                        <div className="text-xs text-muted-foreground">Restantes</div>
+                        <div className="text-sm font-medium">
+                            {isCompleted
+                                ? new Date(goal.completed_date || goal.target_date).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
+                                : goal.daysRemaining > 0 ? `${goal.daysRemaining} días` : 'Vencida'
+                            }
+                        </div>
                     </div>
 
                     <div className="text-center p-3 rounded-lg bg-muted/50">
@@ -226,13 +231,15 @@ export default function GoalDetailsPage() {
                     </div>
 
                     <div className="text-center p-3 rounded-lg bg-muted/50">
-                        {goal.isOnTrack ? (
+                        {isCompleted ? (
+                            <CheckCircle2 className="w-5 h-5 mx-auto mb-1 text-emerald-600" />
+                        ) : goal.isOnTrack ? (
                             <TrendingUp className="w-5 h-5 mx-auto mb-1 text-emerald-600" />
                         ) : (
                             <TrendingDown className="w-5 h-5 mx-auto mb-1 text-amber-600" />
                         )}
                         <div className="text-sm font-medium">
-                            {goal.isOnTrack ? 'En camino' : 'Retrasada'}
+                            {isCompleted ? 'Completada' : goal.isOnTrack ? 'En camino' : 'Retrasada'}
                         </div>
                         <div className="text-xs text-muted-foreground">Estado</div>
                     </div>
@@ -337,6 +344,13 @@ export default function GoalDetailsPage() {
                 goal={goal}
                 open={showContributeModal}
                 onOpenChange={setShowContributeModal}
+            />
+
+            {/* Withdraw Modal */}
+            <WithdrawModal
+                goal={goal}
+                open={showWithdrawModal}
+                onOpenChange={setShowWithdrawModal}
             />
 
             {/* Edit Contribution Modal */}

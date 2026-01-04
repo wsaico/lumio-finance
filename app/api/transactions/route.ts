@@ -38,8 +38,11 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url)
         const month = searchParams.get('month')
         const year = searchParams.get('year')
+        const day = searchParams.get('day')
         const accountId = searchParams.get('accountId')
         const id = searchParams.get('id')
+        const type = searchParams.get('type') // 'INCOME' | 'EXPENSE'
+        const search = searchParams.get('search') // Text search
         const page = Number(searchParams.get('page')) || 1
         const limit = Number(searchParams.get('limit')) || 20
 
@@ -51,6 +54,7 @@ export async function GET(req: Request) {
         }
 
         if (id) {
+            // ... (single fetch logic remains same)
             const { data: transaction, error } = await supabase
                 .from('transactions')
                 .select(`
@@ -82,13 +86,21 @@ export async function GET(req: Request) {
                 income_category:income_categories(name, icon, color),
                 subcategory:subcategories(name),
                 credit_card:credit_cards(name, last_four_digits, color)
-            `, { count: 'estimated' }) // Request count estimation
+            `, { count: 'estimated' })
             .eq('user_id', user.id)
             .order('transaction_date', { ascending: false })
 
         if (month && year) {
-            const startDate = new Date(Number(year), Number(month) - 1, 1).toISOString()
-            const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59).toISOString()
+            let startDay = 1
+            let endDay = new Date(Number(year), Number(month), 0).getDate()
+
+            if (day) {
+                startDay = Number(day)
+                endDay = Number(day)
+            }
+
+            const startDate = new Date(Number(year), Number(month) - 1, startDay).toISOString()
+            const endDate = new Date(Number(year), Number(month) - 1, endDay, 23, 59, 59).toISOString()
             query = query.gte('transaction_date', startDate).lte('transaction_date', endDate)
         }
 
@@ -96,7 +108,36 @@ export async function GET(req: Request) {
             query = query.eq('account_id', accountId)
         }
 
-        // Apply Pagination
+        if (type) {
+            query = query.eq('transaction_type', type)
+        }
+
+        if (search) {
+            // Fetch matching categories first to enable searching by category name
+            const { data: expenseCats } = await supabase
+                .from('expense_categories')
+                .select('id')
+                .ilike('name', `%${search}%`)
+
+            const { data: incomeCats } = await supabase
+                .from('income_categories')
+                .select('id')
+                .ilike('name', `%${search}%`)
+
+            const expenseIds = expenseCats?.map(c => c.id) || []
+            const incomeIds = incomeCats?.map(c => c.id) || []
+
+            let orConditions = [`description.ilike.%${search}%`, `notes.ilike.%${search}%`]
+
+            if (expenseIds.length > 0) {
+                orConditions.push(`expense_category_id.in.(${expenseIds.join(',')})`)
+            }
+            if (incomeIds.length > 0) {
+                orConditions.push(`income_category_id.in.(${incomeIds.join(',')})`)
+            }
+
+            query = query.or(orConditions.join(','))
+        }
         const from = (page - 1) * limit
         const to = from + limit - 1
         query = query.range(from, to)

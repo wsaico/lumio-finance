@@ -9,44 +9,46 @@ export async function GET() {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
+            // Even if unauthorized, we could return system categories, but for now let's strict
             return new NextResponse('Unauthorized', { status: 401 })
         }
 
-        // Check if user has ANY personal categories (to decide Template vs Property)
-        const { count: userCategoriesCount } = await supabase
-            .from('expense_categories')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-
-        const hasPersonalCategories = (userCategoriesCount || 0) > 0
-
+        // FETCH ALL: System (user_id is null) OR Personal (user_id = user.id)
         const [expenseResult, incomeResult] = await Promise.all([
             supabase
                 .from('expense_categories')
                 .select('*, subcategories:subcategories(*)')
-                .filter('user_id', hasPersonalCategories ? 'eq' : 'is', hasPersonalCategories ? user.id : null)
+                .or(`user_id.is.null,user_id.eq.${user.id}`)
                 .eq('is_active', true)
-                .order('sort_order', { ascending: true }),
+                .order('is_system', { ascending: false }) // Postgres boolean sort: true first? No, actually we want user_id null first usually. 
+                // Better: sort_order asc.
+                .order('sort_order', { ascending: true })
+                .order('name', { ascending: true }),
             supabase
                 .from('income_categories')
                 .select('*, subcategories:subcategories(*)')
-                .filter('user_id', hasPersonalCategories ? 'eq' : 'is', hasPersonalCategories ? user.id : null)
+                .or(`user_id.is.null,user_id.eq.${user.id}`)
                 .eq('is_active', true)
-                .order('sort_order', { ascending: true }),
+                .order('sort_order', { ascending: true })
+                .order('name', { ascending: true }),
         ])
 
-        const expenseCategories = (expenseResult.data || []).map((c: any) => ({
-            ...c,
-            type: 'EXPENSE' as const,
-            isSystem: !c.user_id,
-            is_system: !c.user_id
-        }))
-        const incomeCategories = (incomeResult.data || []).map((c: any) => ({
-            ...c,
-            type: 'INCOME' as const,
-            isSystem: !c.user_id,
-            is_system: !c.user_id
-        }))
+        const processCategories = (list: any[], type: 'EXPENSE' | 'INCOME') => {
+            return (list || []).map(c => ({
+                ...c,
+                type,
+                isSystem: !c.user_id, // Virtual flag for UI
+                is_system: !c.user_id, // DB flag often used
+                // Ensure subcategories are sorted too if needed
+                subcategories: c.subcategories?.sort((a: any, b: any) => a.name.localeCompare(b.name)) || []
+            }))
+        }
+
+        const expenseCategories = processCategories(expenseResult.data, 'EXPENSE')
+        const incomeCategories = processCategories(incomeResult.data, 'INCOME')
+
+        // OPTIONAL: Filter duplicates if shadowing is a problem. 
+        // For now, we return all satisfy "System + User" request.
 
         return NextResponse.json({
             expense: expenseCategories,
@@ -143,7 +145,6 @@ export async function PUT(req: Request) {
         let targetId = id
 
         if (sysCat) {
-            console.log(`[CATEGORIES_PUT] System category detected. Seeding...`)
             await CategoryService.seedUserCategories(supabase, user.id)
 
             const repo = sysCat.id.startsWith('e') ? 'expense_categories' : 'income_categories'
@@ -230,7 +231,6 @@ export async function DELETE(req: Request) {
         let targetId = id
 
         if (sysCat) {
-            console.log(`[CATEGORIES_DELETE] System category detected. Seeding before delete...`)
             await CategoryService.seedUserCategories(supabase, user.id)
 
             const repo = sysCat.id.startsWith('e') ? 'expense_categories' : 'income_categories'
@@ -309,7 +309,6 @@ export async function PATCH(req: Request) {
         const sysCat = [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].find(c => c.id === id)
 
         if (sysCat) {
-            console.log(`[CATEGORIES_PATCH] System category detected (${sysCat.name}). Triggering seeding...`)
             await CategoryService.seedUserCategories(supabase, user.id)
 
             // Find the new ID of the cloned category

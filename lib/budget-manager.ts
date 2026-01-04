@@ -18,7 +18,6 @@ export async function updateBudgetsForTransactions(userId: string): Promise<Budg
     const warnings: BudgetWarning[] = []
     try {
         const supabase = await createClient()
-        console.log(`[BUDGET_MANAGER] Updating budgets for user ${userId}...`)
 
         // 1. Fetch all active budgets for the user
         const { data: budgets, error } = await supabase
@@ -32,11 +31,8 @@ export async function updateBudgetsForTransactions(userId: string): Promise<Budg
         }
 
         if (!budgets || budgets.length === 0) {
-            console.log(`[BUDGET_MANAGER] No budgets found for user.`)
             return []
         }
-
-        console.log(`[BUDGET_MANAGER] Found ${budgets.length} budgets to update.`)
 
         // 2. Recalculate each budget
         const updatePromises = budgets.map(async (budget) => {

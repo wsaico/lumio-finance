@@ -74,6 +74,16 @@ export default function CategoriesSettingsPage() {
                                         Sistema
                                     </span>
                                 )}
+                                {cat.budget_rule && (
+                                    <span className={cn(
+                                        "text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ml-1",
+                                        cat.budget_rule === 'NEED' && "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
+                                        cat.budget_rule === 'WANT' && "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800",
+                                        cat.budget_rule === 'SAVINGS' && "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800",
+                                    )}>
+                                        {cat.budget_rule === 'NEED' ? 'Necesidad' : cat.budget_rule === 'WANT' ? 'Deseo' : 'Ahorro'}
+                                    </span>
+                                )}
                                 <span className="text-xs text-muted-foreground ml-2 px-2 py-0.5 rounded-full bg-muted/50 border">
                                     {cat.subcategories?.length || 0} sub
                                 </span>

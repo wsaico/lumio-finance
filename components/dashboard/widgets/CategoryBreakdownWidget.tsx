@@ -80,7 +80,7 @@ export function CategoryBreakdownWidget({ config }: WidgetProps) {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm h-[400px]">
+      <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm h-[300px]">
         <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
         <p className="text-sm text-neutral-500 animate-pulse">Cargando datos...</p>
       </div>
@@ -89,7 +89,7 @@ export function CategoryBreakdownWidget({ config }: WidgetProps) {
 
   if (error || categories.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm h-[400px]">
+      <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm h-[300px]">
         <PieChartIcon className="w-12 h-12 text-neutral-300 mb-2" />
         <p className="text-sm text-neutral-500">No hay gastos registrados este mes</p>
       </div>

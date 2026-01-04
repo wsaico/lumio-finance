@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { TransferModal } from "@/components/transactions/transfer-modal"
+import dynamic from "next/dynamic"
+
+const TransferModal = dynamic(() => import("@/components/transactions/transfer-modal").then(mod => mod.TransferModal), {
+    ssr: false
+})
 
 export function GlobalSmartFab() {
     const pathname = usePathname()
@@ -35,53 +39,48 @@ export function GlobalSmartFab() {
             icon: Sparkles,
             label: "Gasto Caja Chica",
             href: "/dashboard/petty-cash/new-expense",
-            color: "bg-orange-500",
-            shadow: "shadow-orange-500/40"
+            className: "bg-orange-500 hover:bg-orange-600 shadow-orange-500/20"
         },
         {
             icon: ArrowRightLeft,
             label: "Liquidación",
             href: "/dashboard/petty-cash/new-settlement",
-            color: "bg-amber-500",
-            shadow: "shadow-amber-500/40"
+            className: "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
         }
     ] : [
         {
             icon: TrendingDown,
             label: "Gasto",
             href: "/dashboard/transactions/new?type=EXPENSE",
-            color: "var(--expense)",
-            shadow: "shadow-rose-500/20"
+            className: "bg-rose-500 hover:bg-rose-600 shadow-rose-500/20"
         },
         {
             icon: TrendingUp,
             label: "Ingreso",
             href: "/dashboard/transactions/new?type=INCOME",
-            color: "var(--income)",
-            shadow: "shadow-emerald-500/20"
+            className: "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
         },
         {
             icon: ArrowRightLeft,
             label: "Transferencia",
             onClick: () => setIsTransferModalOpen(true),
-            color: "var(--savings)",
-            shadow: "shadow-blue-500/20"
+            className: "bg-blue-500 hover:bg-blue-600 shadow-blue-500/20"
         }
     ]
 
     return (
-        <div className="fixed bottom-8 right-8 z-[60] flex flex-col-reverse items-end gap-3 lg:block hidden">
+        <div className="fixed bottom-8 right-8 z-[60] flex flex-col-reverse items-end gap-4 lg:block hidden">
             {/* Action Buttons List */}
             <AnimatePresence>
                 {isOpen && (
-                    <div className="flex flex-col-reverse items-end gap-3 mb-3">
+                    <div className="flex flex-col-reverse items-end gap-3 mb-4">
                         {actions.map((action, idx) => (
                             <motion.div
                                 key={action.label}
-                                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                initial={{ opacity: 0, scale: 0.9, y: 10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.8, y: 20 }}
-                                transition={{ delay: idx * 0.05, type: "spring", stiffness: 300, damping: 25 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                                transition={{ delay: idx * 0.03, duration: 0.2 }}
                             >
                                 <Button
                                     asChild={!!action.href}
@@ -91,22 +90,20 @@ export function GlobalSmartFab() {
                                             setIsOpen(false)
                                         }
                                     }}
-                                    size="lg"
                                     className={cn(
-                                        "h-14 px-6 rounded-2xl shadow-xl flex items-center gap-3 backdrop-blur-xl border border-white/10 group transition-all duration-300",
-                                        action.shadow
+                                        "h-12 px-5 rounded-xl shadow-lg flex items-center gap-3 border-none text-white font-bold transition-all hover:scale-105 active:scale-95",
+                                        action.className
                                     )}
-                                    style={{ backgroundColor: action.color.startsWith('var') ? `oklch(from ${action.color} l c h / 0.9)` : action.color }}
                                 >
                                     {action.href ? (
                                         <Link href={action.href}>
-                                            <action.icon className="h-5 w-5 text-white" />
-                                            <span className="font-bold text-white tracking-tight">{action.label}</span>
+                                            <action.icon className="h-4.5 w-4.5" />
+                                            <span className="text-xs uppercase tracking-wider">{action.label}</span>
                                         </Link>
                                     ) : (
                                         <div className="flex items-center gap-3">
-                                            <action.icon className="h-5 w-5 text-white" />
-                                            <span className="font-bold text-white tracking-tight">{action.label}</span>
+                                            <action.icon className="h-4.5 w-4.5" />
+                                            <span className="text-xs uppercase tracking-wider">{action.label}</span>
                                         </div>
                                     )}
                                 </Button>
@@ -116,27 +113,27 @@ export function GlobalSmartFab() {
                 )}
             </AnimatePresence>
 
-            {/* main trigger button */}
+            {/* main trigger button - GMAIL STYLE */}
             <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
             >
                 <Button
                     onClick={() => setIsOpen(!isOpen)}
                     size="lg"
                     className={cn(
-                        "h-16 w-16 rounded-full shadow-2xl transition-all duration-500 flex items-center justify-center p-0",
-                        isOpen
-                            ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rotate-90"
-                            : isPettyCashPage
-                                ? "bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/50"
-                                : "bg-gradient-to-r from-blue-500 to-indigo-500 shadow-blue-500/50"
+                        "h-14 px-6 rounded-2xl shadow-2xl transition-all duration-300 flex items-center gap-3 border-none",
+                        "bg-primary text-primary-foreground hover:bg-primary/90",
+                        isOpen && "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
                     )}
                 >
-                    {isOpen ? (
-                        <X className="h-7 w-7" />
-                    ) : (
-                        isPettyCashPage ? <Sparkles className="h-7 w-7" /> : <Plus className="h-7 w-7" />
+                    <div className={cn("transition-transform duration-300", isOpen && "rotate-90")}>
+                        {isOpen ? <X className="h-6 w-6" /> : (isPettyCashPage ? <Sparkles className="h-6 w-6" /> : <Plus className="h-6 w-6" />)}
+                    </div>
+                    {!isOpen && (
+                        <span className="font-bold text-sm tracking-tight uppercase">
+                            {isPettyCashPage ? "Operación Caja" : "Nueva Operación"}
+                        </span>
                     )}
                 </Button>
             </motion.div>

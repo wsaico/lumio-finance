@@ -27,9 +27,12 @@ export async function POST(req: NextRequest) {
     const date = new Date(data.date || Date.now());
 
     // Get all currencies from database
-    const { data: currencies, error: currenciesError } = await supabase.from('currencies').select('code');
-    if (currenciesError) throw currenciesError;
-    const currencyCodes = currencies.map((c: any) => c.code);
+    const { data: currencies, error: curError } = await supabase
+      .from('currencies')
+      .select('code');
+
+    if (curError) throw curError;
+    const currencyCodes = (currencies || []).map((c) => c.code);
 
     // Prepare exchange rate records
     const exchangeRateRecords = [];
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Batch upsert exchange rates using Supabase
+    // Batch upsert exchange rates
     if (exchangeRateRecords.length > 0) {
       const { error: upsertError } = await supabase
         .from('exchange_rates')
@@ -54,10 +57,7 @@ export async function POST(req: NextRequest) {
           onConflict: 'from_currency,to_currency,date'
         });
 
-      if (upsertError) {
-        console.error('Failed to upsert exchange rates:', upsertError);
-        throw upsertError;
-      }
+      if (upsertError) throw upsertError;
     }
 
     return NextResponse.json(

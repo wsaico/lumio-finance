@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SavingsRateGauge } from "./savings-rate-gauge"
+import { useFormat } from "@/hooks/use-format"
 import { InsightsAdvisor } from "./insights-advisor"
 import { ExpensesPieChart } from "./expenses-pie-chart"
 import { CashFlowAreaChart } from "./cash-flow-area-chart"
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useCategories } from "@/hooks/use-categories"
 import { useAccounts } from "@/hooks/use-accounts"
+import { useSettingsStore } from "@/hooks/use-settings-store"
 import { DateRangePicker } from "./date-range-picker"
 import { DateRange } from "react-day-picker"
 import { Button } from "@/components/ui/button"
@@ -58,20 +60,24 @@ import { DebtMonitor } from "./debt-monitor"
 export function ExpertFinancialDashboard() {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([])
     const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
+    // Force rebuild trigger
     const [selectedType, setSelectedType] = useState<string>('ALL')
     const [period, setPeriod] = useState<string>('6m')
     const [dateRange, setDateRange] = useState<DateRange | undefined>()
     const [focusedCategoryId, setFocusedCategoryId] = useState<string | null>(null)
-
+    // ZBB Native: We no longer check for budget mode. Everything is ZBB, and 50/30/20 is a passive report.
     const { categories: categoriesData } = useCategories()
     const { accounts: accountsData } = useAccounts()
+    const { currencyCode } = useSettingsStore()
+    const { formatMoney, formatCompactMoney } = useFormat()
 
     const { data, isLoading } = useQuery({
-        queryKey: ['financial-health', selectedCategories, selectedAccounts, selectedType, period, dateRange],
+        queryKey: ['financial-health', selectedCategories, selectedAccounts, selectedType, period, dateRange, currencyCode],
         queryFn: async () => {
             const params = new URLSearchParams({
-                type: selectedType,
-                period
+                type: selectedType, // Keep this as filter if needed
+                period,
+                currency: currencyCode || 'PEN' // Pass the proper currency
             })
             if (selectedCategories.length > 0) params.append('categories', selectedCategories.join(','))
             if (selectedAccounts.length > 0) params.append('accounts', selectedAccounts.join(','))
@@ -132,6 +138,8 @@ export function ExpertFinancialDashboard() {
             </div>
         )
     }
+
+
 
     const { kpis, insights, comparison, categories, trend, budgetRule, forecast, annualizedImpact, budgets, loans } = data || {}
 
@@ -266,7 +274,7 @@ export function ExpertFinancialDashboard() {
                                 <div className="pt-4 border-t border-white/5">
                                     <div className="flex justify-between items-center text-[10px] font-bold">
                                         <span className="text-muted-foreground">TOTAL DISPONIBLE</span>
-                                        <span>S/ {kpis?.totalLiquidity?.toLocaleString()}</span>
+                                        <span>{formatMoney(kpis?.totalLiquidity)}</span>
                                     </div>
                                     <div className="mt-2 h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                                         <div
@@ -297,7 +305,7 @@ export function ExpertFinancialDashboard() {
                                             </Tooltip>
                                         </TooltipProvider>
                                     </div>
-                                    <h4 className="text-2xl font-black tabular-nums">S/ {Math.round(forecast?.predictedMonthEndExpense || 0).toLocaleString()}</h4>
+                                    <h4 className="text-2xl font-black tabular-nums">{formatMoney(forecast?.predictedMonthEndExpense || 0)}</h4>
                                     <p className="text-[10px] font-bold text-amber-500 uppercase">Gasto Estimado a Fin de Mes</p>
                                 </div>
                                 <div className="pt-4 border-t border-white/5 flex items-center justify-between">
@@ -319,7 +327,7 @@ export function ExpertFinancialDashboard() {
                                             "text-sm font-black",
                                             forecast?.estimatedYearlySavings >= 0 ? "text-emerald-500" : "text-rose-500"
                                         )}>
-                                            {forecast?.estimatedYearlySavings >= 0 ? '+' : ''}S/ {Math.round(forecast?.estimatedYearlySavings || 0).toLocaleString()}
+                                            {forecast?.estimatedYearlySavings >= 0 ? '+' : ''}{formatMoney(Math.round(forecast?.estimatedYearlySavings || 0))}
                                         </span>
                                     </div>
                                     <TrendingUp className="h-5 w-5 text-muted-foreground/20" />
@@ -368,7 +376,7 @@ export function ExpertFinancialDashboard() {
                                                 </Tooltip>
                                             </TooltipProvider>
                                         </div>
-                                        <h4 className="text-xl font-black">S/ {kpis?.burnRate}</h4>
+                                        <h4 className="text-xl font-black">{formatMoney(kpis?.burnRate)}</h4>
                                     </div>
                                     <Zap className="h-6 w-6 text-amber-500/20" />
                                 </div>
@@ -419,7 +427,7 @@ export function ExpertFinancialDashboard() {
                                             </TooltipProvider>
                                         </div>
                                         <h4 className={cn("text-xl font-black", (kpis?.netCashFlow || 0) >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                                            {(kpis?.netCashFlow || 0) >= 0 ? '+' : ''} S/ {Math.abs(kpis?.netCashFlow || 0).toLocaleString()}
+                                            {(kpis?.netCashFlow || 0) >= 0 ? '+' : ''} {formatMoney(Math.abs(kpis?.netCashFlow || 0))}
                                         </h4>
                                     </div>
                                     <Wallet className={cn("h-6 w-6 opacity-20", (kpis?.netCashFlow || 0) >= 0 ? "text-emerald-500" : "text-rose-500")} />
@@ -441,7 +449,10 @@ export function ExpertFinancialDashboard() {
                     </div>
                 </div>
 
-                <BudgetRuleEducation data={budgetRule} />
+                {/* ZBB Native: Always show 50/30/20 as passive intelligence */}
+                <div className="animate-in fade-in slide-in-from-bottom-8 duration-500">
+                    <BudgetRuleEducation data={budgetRule} />
+                </div>
             </div>
 
             {/* 4. Expense Intelligence (Breakdown & Leaks) */}
@@ -534,7 +545,7 @@ export function ExpertFinancialDashboard() {
                                 <span className={cn(
                                     "ml-1 opacity-40 group-hover:opacity-100 transition-opacity",
                                     focusedCategoryId === cat.id ? "opacity-100" : ""
-                                )}>S/ {Math.round(cat.amount).toLocaleString()}</span>
+                                )}>{formatCompactMoney(cat.amount)}</span>
                             </button>
                         ))}
                     </div>
@@ -552,7 +563,7 @@ export function ExpertFinancialDashboard() {
                             <div className="text-right">
                                 <span className="text-[10px] font-bold uppercase text-muted-foreground/50">Gasto Total</span>
                                 <div className="text-lg font-black tabular-nums text-primary">
-                                    S/ {Math.round(categories?.find((c: any) => c.id === focusedCategoryId)?.amount || 0).toLocaleString()}
+                                    {formatMoney(categories?.find((c: any) => c.id === focusedCategoryId)?.amount || 0)}
                                 </div>
                             </div>
                         </div>

@@ -4,8 +4,10 @@ import { useMemo, useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from "recharts"
 import { Loader2, Info, PieChart as PieChartIcon } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, cn } from "@/lib/utils"
+import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSettingsStore } from "@/hooks/use-settings-store"
 import {
     Popover,
     PopoverContent,
@@ -36,7 +38,6 @@ const COLORS = [
 const renderActiveShape = (props: any) => {
     const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value, percent } = props;
 
-    // Outer glow ring for active item
     return (
         <g>
             <Sector
@@ -63,28 +64,38 @@ const renderActiveShape = (props: any) => {
 };
 
 export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
+    const { currencyCode } = useSettingsStore()
     const [data, setData] = useState<ExpenseCategory[]>([])
+    // ... rest of component ...
     const [total, setTotal] = useState(0)
     const [isLoading, setIsLoading] = useState(true)
     const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
 
     // Derived state for dependency stability
     const targetMonth = month || new Date()
-    const monthStr = targetMonth.toISOString().slice(0, 7) // YYYY-MM
+    const monthStr = format(targetMonth, 'yyyy-MM') // Use format instead of toISOString to avoid timezone shifts
 
     useEffect(() => {
+        const controller = new AbortController()
+
         async function fetchExpenseBreakdown() {
-            // Check if already loading/fetched to prevent extra calls (optional but good)
             setIsLoading(true)
             try {
-                const res = await fetch(`/api/analytics/expense-breakdown?month=${monthStr}`)
+                // Add timeout to prevent hanging
+                const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+                const res = await fetch(`/api/analytics/expense-breakdown?month=${monthStr}`, {
+                    signal: controller.signal
+                })
+                clearTimeout(timeoutId)
 
                 if (res.ok) {
                     const result = await res.json()
                     setData(result.categories || [])
                     setTotal(result.total || 0)
                 }
-            } catch (error) {
+            } catch (error: any) {
+                if (error.name === 'AbortError') return
                 console.error('Error fetching expense breakdown:', error)
             } finally {
                 setIsLoading(false)
@@ -92,6 +103,8 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
         }
 
         fetchExpenseBreakdown()
+
+        return () => controller.abort()
     }, [monthStr])
 
     const onPieEnter = (_: any, index: number) => {
@@ -121,7 +134,7 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
 
     if (isLoading) {
         return (
-            <Card className="glass border-none shadow-premium-md h-[400px] flex items-center justify-center">
+            <Card className="widget-surface h-[300px] flex items-center justify-center">
                 <div className="flex flex-col items-center">
                     <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
                     <p className="text-sm text-neutral-500 animate-pulse">Cargando datos...</p>
@@ -132,7 +145,7 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
 
     if (data.length === 0) {
         return (
-            <Card className="glass border-none shadow-premium-md h-[400px] flex items-center justify-center">
+            <Card className="widget-surface h-[300px] flex items-center justify-center">
                 <div className="flex flex-col items-center">
                     <PieChartIcon className="w-12 h-12 text-neutral-300 mb-2" />
                     <p className="text-sm text-muted-foreground">No hay gastos registrados este mes</p>
@@ -142,7 +155,7 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
     }
 
     return (
-        <Card className="glass border-none shadow-premium-md h-full flex flex-col">
+        <Card className="widget-surface h-full flex flex-col">
             <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                     <div>
@@ -171,9 +184,9 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col md:flex-row items-center justify-between gap-6 pt-0">
+            <CardContent className="flex-1 flex flex-col md:flex-row items-center justify-between gap-4 pt-0 overflow-hidden">
                 {/* Chart Section */}
-                <div className="relative w-full h-[250px] md:w-1/2 flex items-center justify-center">
+                <div className="relative w-full h-[220px] md:w-[45%] flex items-center justify-center shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             {/* @ts-ignore */}
@@ -208,7 +221,7 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
                             {centerLabel.label}
                         </span>
                         <span className="text-xl font-black text-foreground">
-                            {formatCurrency(centerLabel.amount, 'PEN').replace('PEN', '').trim()}
+                            {formatCurrency(centerLabel.amount, currencyCode).replace(currencyCode, '').trim()}
                         </span>
                         <span className="text-xs font-bold" style={{ color: activeIndex !== undefined && data[activeIndex] ? data[activeIndex].color : '#94a3b8' }}>
                             {centerLabel.subtext}
@@ -217,7 +230,7 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
                 </div>
 
                 {/* Legend Section */}
-                <div className="w-full md:w-1/2 space-y-3 pr-2 overflow-y-auto max-h-[240px] custom-scrollbar">
+                <div className="w-full md:w-[55%] space-y-2.5 overflow-y-auto max-h-[220px] custom-scrollbar pr-1">
                     {data.map((category, index) => (
                         <motion.div
                             key={category.name}
@@ -237,11 +250,11 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
                                     {category.name}
                                 </span>
                             </div>
-                            <div className="text-right">
-                                <div className="text-sm font-bold">
-                                    {formatCurrency(category.value, 'PEN')}
+                            <div className="text-right shrink-0 min-w-[70px]">
+                                <div className="text-[13px] font-black tracking-tight leading-none mb-0.5">
+                                    {formatCurrency(category.value, currencyCode)}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-[10px] font-bold text-muted-foreground/60">
                                     {category.percentage.toFixed(1)}%
                                 </div>
                             </div>
@@ -252,3 +265,4 @@ export function ExpenseStructureWidget({ month }: ExpenseStructureWidgetProps) {
         </Card>
     )
 }
+

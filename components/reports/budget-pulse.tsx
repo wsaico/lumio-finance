@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertTriangle, PieChart } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useFormat } from "@/hooks/use-format"
 
 interface Budget {
     id: string
@@ -13,11 +14,16 @@ interface Budget {
     color: string
 }
 
+import { useSettingsStore } from "@/hooks/use-settings-store"
+
 interface BudgetPulseProps {
     budgets: Budget[]
 }
 
 export function BudgetPulse({ budgets = [] }: BudgetPulseProps) {
+    const { formatMoney } = useFormat()
+    const { budgetTotalType } = useSettingsStore()
+
     if (!budgets || budgets.length === 0) {
         return (
             <Card className="border-none bg-background/40 backdrop-blur-md shadow-sm border border-white/5 h-full">
@@ -73,10 +79,13 @@ export function BudgetPulse({ budgets = [] }: BudgetPulseProps) {
                                         <span className={cn(
                                             isOver ? "text-rose-500" : "text-foreground"
                                         )}>
-                                            S/ {Math.round(budget.spent).toLocaleString()}
+                                            {budgetTotalType === 'remaining'
+                                                ? formatMoney(Math.max(0, budget.amount - budget.spent))
+                                                : formatMoney(Math.round(budget.spent))
+                                            }
                                         </span>
                                         <span className="text-[10px] text-muted-foreground/40 font-bold">
-                                            / {Math.round(budget.amount).toLocaleString()}
+                                            {budgetTotalType === 'remaining' ? ' restante' : ` / ${Math.round(budget.amount).toLocaleString()}`}
                                         </span>
                                     </div>
                                 </div>

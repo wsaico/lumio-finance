@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 
     } catch (error: any) {
         console.error('[EXCHANGE_RATES_GET]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }
 
@@ -80,6 +80,6 @@ export async function POST(req: Request) {
 
     } catch (error: any) {
         console.error('[EXCHANGE_RATES_POST]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }

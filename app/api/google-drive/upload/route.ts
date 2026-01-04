@@ -48,16 +48,9 @@ export async function POST(req: NextRequest) {
 
             // Check if we should convert image to PDF
             if (convertToPdf && isConvertibleImage(file.type)) {
-                console.log('[UPLOAD] Converting image to PDF...', {
-                    fileType: file.type,
-                    fileSize: file.size,
-                    fileName: file.name
-                });
-
                 // Read file as buffer
                 const arrayBuffer = await file.arrayBuffer();
                 const buffer = Buffer.from(arrayBuffer);
-                console.log('[UPLOAD] Buffer created, size:', buffer.length);
 
                 try {
                     // Convert to PDF
@@ -66,8 +59,6 @@ export async function POST(req: NextRequest) {
                         quality: 85,
                         maxWidth: 1200
                     });
-
-                    console.log('[UPLOAD] PDF created:', pdfResult.filename, pdfResult.size, 'bytes');
 
                     fileToUpload = {
                         buffer: pdfResult.buffer,
@@ -83,7 +74,6 @@ export async function POST(req: NextRequest) {
                     // Fallback: upload original image without conversion
                     fileToUpload = file;
                     finalFilename = `${Date.now()}_${file.name}`;
-                    console.log('[UPLOAD] Falling back to original image upload');
                 }
             } else if (isPdf(file.type)) {
                 // Already a PDF, upload as-is

@@ -10,18 +10,18 @@ import { motion } from "framer-motion"
 export function CriticalBudgetsWidget() {
     const { budgets, isLoading } = useBudget()
     const { formatMoney } = useFormat()
-    const { currencyCode } = useSettingsStore()
+    const { currencyCode, budgetTotalType } = useSettingsStore()
 
     if (isLoading) {
         return (
-            <Card className="relative overflow-hidden border-none h-full">
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-amber-950 to-slate-900" />
+            <Card className="widget-surface h-full">
+                <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-amber-400/20 blur-3xl" />
                 <div className="relative p-6 h-full flex items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
                         <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}>
-                            <AlertCircle className="h-8 w-8 text-amber-400" />
+                            <AlertCircle className="h-8 w-8 text-primary" />
                         </motion.div>
-                        <span className="text-white/60 text-sm">Analizando presupuestos...</span>
+                        <span className="text-muted-foreground text-sm">Analizando presupuestos...</span>
                     </div>
                 </div>
             </Card>
@@ -32,7 +32,7 @@ export function CriticalBudgetsWidget() {
     const criticalBudgets = (budgets || [])
         .map((budget: any) => {
             const spent = budget.spent || 0
-            const percentage = budget.percent || 0
+            const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0
 
             // Calculate Burn Rate
             const now = new Date()
@@ -64,13 +64,9 @@ export function CriticalBudgetsWidget() {
     if (criticalBudgets.length === 0) {
         return (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-                <Card className="relative overflow-hidden border-none h-full shadow-2xl">
-                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" />
-                    <motion.div
-                        className="absolute top-10 right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"
-                        animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }}
-                        transition={{ duration: 4, repeat: Infinity }}
-                    />
+                <Card className="widget-surface h-full">
+                    <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-emerald-400/15 blur-3xl" />
+                    <div className="absolute -bottom-24 left-0 h-32 w-32 rounded-full bg-amber-400/10 blur-3xl" />
                     <div className="relative h-full flex flex-col items-center justify-center text-center p-6 gap-4">
                         <motion.div
                             className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/20"
@@ -96,32 +92,17 @@ export function CriticalBudgetsWidget() {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-            <Card className="relative overflow-hidden border-none h-full shadow-2xl">
-                {/* Premium Background */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-amber-950 to-slate-900" />
-
-                {/* Animated Orbs */}
-                <div className="absolute inset-0 overflow-hidden">
-                    <motion.div
-                        className="absolute -top-20 right-10 w-40 h-40 bg-amber-500/15 rounded-full blur-3xl"
-                        animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
-                        transition={{ duration: 5, repeat: Infinity }}
-                    />
-                    <motion.div
-                        className="absolute bottom-0 left-1/4 w-32 h-32 bg-rose-500/15 rounded-full blur-3xl"
-                        animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.4, 0.2] }}
-                        transition={{ duration: 6, repeat: Infinity }}
-                    />
-                </div>
-
-                <div className="relative h-full flex flex-col">
+            <Card className="widget-surface h-full">
+                    <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-emerald-400/15 blur-3xl" />
+                    <div className="absolute -bottom-24 left-0 h-32 w-32 rounded-full bg-amber-400/10 blur-3xl" />
+                    <div className="relative h-full flex flex-col">
                     {/* Header */}
-                    <div className="p-4 flex items-center justify-between border-b border-white/5">
+                    <div className="widget-header">
                         <div className="flex items-center gap-2">
                             <div className="p-1.5 rounded-lg bg-amber-500/20">
                                 <AlertCircle className="h-4 w-4 text-amber-400" />
                             </div>
-                            <h3 className="font-bold text-sm text-white/90 uppercase tracking-wider">Alertas</h3>
+                            <div><p className="widget-kicker">Presupuestos</p><h3 className="widget-title">Alertas criticas</h3></div>
                             <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-bold">
                                 {criticalBudgets.length}
                             </span>
@@ -158,7 +139,10 @@ export function CriticalBudgetsWidget() {
                                                 {budget.name || 'Categoría'}
                                             </div>
                                             <div className="text-xs text-white/50">
-                                                {formatMoney(budget.spent, budget.currency)} de {formatMoney(budget.amount, budget.currency)}
+                                                {budgetTotalType === 'remaining'
+                                                    ? `${formatMoney(Math.max(0, budget.amount - budget.spent), budget.currency)} restante`
+                                                    : `${formatMoney(budget.spent, budget.currency)} de ${formatMoney(budget.amount, budget.currency)}`
+                                                }
                                             </div>
                                         </div>
                                         <div className="text-right">
@@ -172,10 +156,10 @@ export function CriticalBudgetsWidget() {
                                     <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
                                         <motion.div
                                             className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${isOverBudget
-                                                    ? 'from-rose-500 to-red-500'
-                                                    : isCritical
-                                                        ? 'from-amber-500 to-orange-500'
-                                                        : 'from-orange-400 to-amber-400'
+                                                ? 'from-rose-500 to-red-500'
+                                                : isCritical
+                                                    ? 'from-amber-500 to-orange-500'
+                                                    : 'from-orange-400 to-amber-400'
                                                 }`}
                                             initial={{ width: 0 }}
                                             animate={{ width: `${Math.min(budget.percentage, 100)}%` }}
@@ -210,3 +194,9 @@ export function CriticalBudgetsWidget() {
         </motion.div>
     )
 }
+
+
+
+
+
+

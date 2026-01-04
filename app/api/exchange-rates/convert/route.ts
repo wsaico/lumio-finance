@@ -90,6 +90,6 @@ export async function POST(req: Request) {
 
     } catch (error: any) {
         console.error('[EXCHANGE_RATES_CONVERT]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }

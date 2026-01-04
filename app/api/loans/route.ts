@@ -8,8 +8,11 @@ const loanSchema = z.object({
     contactName: z.string().min(1),
     principalAmount: z.number().positive(),
     interestRate: z.number().min(0).default(0),
+    interestType: z.enum(['SIMPLE', 'COMPOUND']).default('SIMPLE'),
+    paymentFrequency: z.enum(['MONTHLY', 'WEEKLY', 'BIWEEKLY', 'SINGLE']).default('MONTHLY'),
+    totalInstallments: z.number().int().positive().default(1),
     currency: z.string().length(3),
-    loanDate: z.string().datetime(), // ISO Date
+    loanDate: z.string().datetime(),
     dueDate: z.string().datetime().optional(),
     accountId: z.string().uuid().optional(),
     description: z.string().optional(),
@@ -20,11 +23,15 @@ function mapLoan(row: any) {
         id: row.id,
         userId: row.user_id,
         loanType: row.loan_type,
-        personName: row.person_name, // Map DB person_name to Frontend personName matches Prisma
+        personName: row.person_name,
         amount: row.amount,
         amountPaid: row.amount_paid,
         currencyCode: row.currency_code,
         dueDate: row.due_date,
+        interestRate: row.interest_rate,
+        interestType: row.interest_type,
+        paymentFrequency: row.payment_frequency,
+        totalInstallments: row.total_installments,
         status: row.status,
         notes: row.notes,
         createdAt: row.created_at,
@@ -75,7 +82,7 @@ export async function GET(req: Request) {
         return NextResponse.json(loans.map(mapLoan))
     } catch (error) {
         console.error('[LOANS_GET]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }
 
@@ -89,8 +96,7 @@ export async function POST(req: Request) {
         const body = await req.json()
         const validData = loanSchema.parse(body)
 
-        // 1. Create Loan
-        // Note: Ignoring `loanDate` for Loan table as per schema, but using it for Transaction.
+        // 1. Create Loan with Expert Fields
         const { data: loan, error: loanError } = await supabase
             .from('loans')
             .insert({
@@ -99,22 +105,53 @@ export async function POST(req: Request) {
                 person_name: validData.contactName,
                 amount: validData.principalAmount,
                 amount_paid: 0,
-                // remainingBalance? Schema doesn't satisfy 'remainingBalance'. Derived from amount - amountPaid?
-                // Old code tried `remainingBalance: ...`. Schema view didn't show it.
-                // Schema shows: amount, amountPaid.
                 currency_code: validData.currency,
                 due_date: validData.dueDate ? validData.dueDate : null,
-                description: validData.description, // Schema doesn't show description. It shows `notes`.
                 notes: validData.description,
-                status: 'PENDING' // Default
+                status: 'PENDING',
+                interest_rate: validData.interestRate,
+                interest_type: validData.interestType,
+                payment_frequency: validData.paymentFrequency,
+                total_installments: validData.totalInstallments,
+                start_date: validData.loanDate
             })
             .select()
             .single()
 
         if (loanError) {
-            // Handle case where column might not exist if schema is drifted
             console.error('[LOANS_POST_SUPABASE] Error creating loan:', loanError)
             throw loanError
+        }
+
+        // 2. Generate Installments (Automatic Payment Scheduling)
+        if (validData.totalInstallments > 1) {
+            const installments = []
+            const principalPerInstallment = validData.principalAmount / validData.totalInstallments
+            // Simple interest calculation for the whole period (total interest = principal * rate) 
+            // This is a basic expert approach, can be more complex (Amortization)
+            const totalInterest = (validData.principalAmount * (validData.interestRate / 100))
+            const interestPerInstallment = totalInterest / validData.totalInstallments
+
+            let currentDate = new Date(validData.loanDate)
+
+            for (let i = 1; i <= validData.totalInstallments; i++) {
+                // Advance date based on frequency
+                if (validData.paymentFrequency === 'MONTHLY') currentDate.setMonth(currentDate.getMonth() + 1)
+                else if (validData.paymentFrequency === 'WEEKLY') currentDate.setDate(currentDate.getDate() + 7)
+                else if (validData.paymentFrequency === 'BIWEEKLY') currentDate.setDate(currentDate.getDate() + 14)
+
+                installments.push({
+                    loan_id: loan.id,
+                    installment_number: i,
+                    due_date: currentDate.toISOString(),
+                    principal_amount: principalPerInstallment,
+                    interest_amount: interestPerInstallment,
+                    status: 'PENDING'
+                })
+            }
+
+            const { error: instError } = await supabase.from('loan_installments').insert(installments)
+            if (instError) console.error('Error creating installments:', instError)
         }
 
         // 2. Create Transaction & Update Account (if accountId)
@@ -216,6 +253,6 @@ export async function POST(req: Request) {
     } catch (error) {
         if (error instanceof z.ZodError) return new NextResponse('Invalid data', { status: 400 })
         console.error('[LOANS_POST]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }

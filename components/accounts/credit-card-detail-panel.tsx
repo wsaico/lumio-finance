@@ -9,6 +9,7 @@ import { AccountFormModal } from "./account-form-modal"
 import { EditInitialBalanceModal } from "./edit-initial-balance-modal"
 import { cn } from "@/lib/utils"
 import { useAccounts } from "@/hooks/use-accounts"
+import { useFormat } from "@/hooks/use-format"
 import { useRouter } from "next/navigation"
 import {
     AlertDialog,
@@ -32,6 +33,8 @@ interface Account {
     lastFourDigits?: string
     cardNetwork?: string
     expiryDate?: Date | string
+    closingDay?: string | number
+    paymentDueDay?: string | number
     isActive: boolean
     currencyCode: string
 }
@@ -43,6 +46,7 @@ interface CreditCardDetailPanelProps {
 export function CreditCardDetailPanel({ card }: CreditCardDetailPanelProps) {
     const router = useRouter()
     const { deleteAccount } = useAccounts()
+    const { formatMoney } = useFormat()
     const [copied, setCopied] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
     const [showEditBalance, setShowEditBalance] = useState(false)
@@ -51,10 +55,38 @@ export function CreditCardDetailPanel({ card }: CreditCardDetailPanelProps) {
 
     if (!card) {
         return (
-            <Card className="p-6 h-full flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                    <CreditCardIcon className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                    <p className="text-sm">Selecciona una cuenta para ver detalles</p>
+            <Card className="p-8 h-full flex flex-col items-center justify-center bg-gradient-to-b from-white to-neutral-50/50 dark:from-neutral-900 dark:to-neutral-950/50 border-dashed border-2 overflow-hidden relative group">
+                {/* Decorative Elements */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+                <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-1000" />
+
+                <div className="relative z-10 text-center max-w-[240px] space-y-4">
+                    <div className="relative mx-auto w-20 h-20">
+                        <div className="absolute inset-0 bg-primary/10 rounded-3xl rotate-12 group-hover:rotate-45 transition-transform duration-700" />
+                        <div className="absolute inset-0 bg-primary/5 rounded-3xl -rotate-12 group-hover:-rotate-45 transition-transform duration-700" />
+                        <div className="relative bg-white dark:bg-neutral-800 shadow-xl rounded-2xl w-full h-full flex items-center justify-center border border-neutral-100 dark:border-neutral-700">
+                            <CreditCardIcon className="h-10 w-10 text-primary animate-pulse" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-black tracking-tighter text-neutral-900 dark:text-white uppercase">
+                            Vista Detallada
+                        </h3>
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                            Selecciona una de tus cuentas para gestionar movimientos, ver límites y ajustar saldos en tiempo real.
+                        </p>
+                    </div>
+
+                    <div className="pt-4">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-[10px] font-bold text-neutral-400 uppercase tracking-widest border border-neutral-200 dark:border-neutral-700">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                            </span>
+                            Esperando Selección
+                        </div>
+                    </div>
                 </div>
             </Card>
         )
@@ -100,14 +132,42 @@ export function CreditCardDetailPanel({ card }: CreditCardDetailPanelProps) {
                     <CreditCardIcon className="h-5 w-5 text-muted-foreground" />
                 </div>
 
-                {/* Current Balance - Destacado */}
-                <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                        {card.accountType === 'CREDIT_CARD' ? 'Saldo Disponible' : 'Saldo Actual'}
-                    </p>
-                    <p className="text-4xl font-bold tracking-tight">
-                        {card.currencyCode === 'PEN' ? 'S/' : '$'}{availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
+                {/* Resumen de Línea - Transparente y Matemático */}
+                <div className="space-y-4 p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-100 dark:border-neutral-800/50">
+                    <div className="flex items-center justify-between text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                        <span>Resumen de Crédito</span>
+                        <Badge variant="outline" className="text-[10px] font-black uppercase tracking-tighter">
+                            {card.cardNetwork || 'VISA'}
+                        </Badge>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                        {/* 1. Límite Total */}
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground font-medium">Línea de Crédito</span>
+                            <span className="text-lg font-bold font-mono">
+                                {formatMoney(Number(card.creditLimit || 0), card.currencyCode)}
+                            </span>
+                        </div>
+
+                        {/* 2. Deuda / Consolidado */}
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-rose-600 font-bold">(-) Pago a Fecha (Deuda)</span>
+                            <span className="text-lg font-bold font-mono text-rose-600">
+                                {formatMoney(Math.abs(Number(card.usedBalance || 0)), card.currencyCode)}
+                            </span>
+                        </div>
+
+                        <div className="h-px bg-neutral-200 dark:bg-neutral-800" />
+
+                        {/* 3. Saldo Disponible (Resultado) */}
+                        <div className="flex justify-between items-end pt-1">
+                            <span className="text-sm text-emerald-600 font-black uppercase">(=) Saldo Disponible</span>
+                            <span className="text-3xl font-black font-mono text-emerald-600 tracking-tighter">
+                                {formatMoney(availableBalance, card.currencyCode)}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="h-px bg-border" />

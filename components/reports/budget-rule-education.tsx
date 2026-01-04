@@ -10,6 +10,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { useFormat } from "@/hooks/use-format"
 
 interface BudgetRuleEducationProps {
     data?: {
@@ -20,16 +21,8 @@ interface BudgetRuleEducationProps {
 }
 
 export function BudgetRuleEducation({ data }: BudgetRuleEducationProps) {
+    const { formatMoney, formatCompactMoney } = useFormat()
     if (!data) return null
-
-    const formatCurrency = (amount: number, compact = false) => {
-        return new Intl.NumberFormat('es-PE', {
-            style: 'currency',
-            currency: 'PEN',
-            notation: compact && amount > 1000000 ? 'compact' : 'standard',
-            maximumFractionDigits: compact ? 1 : 2
-        }).format(amount)
-    }
 
     const rules = [
         {
@@ -91,15 +84,15 @@ export function BudgetRuleEducation({ data }: BudgetRuleEducationProps) {
         const needsExcess = data.needs.amount - (approximateTotalIncome * 0.50)
         const wantsExcess = data.wants.amount - (approximateTotalIncome * 0.30)
 
-        if (data.savings.percent < 5) return `Crítico: Tu 'Futuro' está en riesgo. La prioridad #1 debe ser crear un mini-fondo de emergencia de ${formatCurrency(recommendedFund)}. Vende cosas que no uses o recorta 'Deseos' drásticamente este mes.`
+        if (data.savings.percent < 5) return `Crítico: Tu 'Futuro' está en riesgo. La prioridad #1 debe ser crear un mini-fondo de emergencia de ${formatMoney(recommendedFund)}. Vende cosas que no uses o recorta 'Deseos' drásticamente este mes.`
 
-        if (data.needs.percent > 65) return `Tus Gastos Fijos (Necesidades) están consumiendo demasiado. Excedes el límite ideal por aprox. ${formatCurrency(Math.max(0, needsExcess))}. Revisa alquiler, servicios y suscripciones para recuperar ese flujo de caja.`
+        if (data.needs.percent > 65) return `Tus Gastos Fijos (Necesidades) están consumiendo demasiado. Excedes el límite ideal por aprox. ${formatMoney(Math.max(0, needsExcess))}. Revisa alquiler, servicios y suscripciones para recuperar ese flujo de caja.`
 
-        if (data.wants.percent > 40) return `Cuidado con el estilo de vida. Estás gastando aprox. ${formatCurrency(Math.max(0, wantsExcess))} de más en cosas opcionales. Aplica la 'Regla de las 24 horas' antes de cualquier compra no esencial.`
+        if (data.wants.percent > 40) return `Cuidado con el estilo de vida. Estás gastando aprox. ${formatMoney(Math.max(0, wantsExcess))} de más en cosas opcionales. Aplica la 'Regla de las 24 horas' antes de cualquier compra no esencial.`
 
         if (data.savings.percent >= 20) return "¡Excelente! Estás en el camino rápido a la libertad financiera. Si ya tienes tu fondo de emergencia, considera invertir el excedente en SP500 o Bitcoin."
 
-        return `El equilibrio no es exacto, pero la tendencia importa. Si tu 'Futuro' (Ahorro/Deuda) está bajo, prioriza pagar tus deudas más caras o empezar tu fondo de emergencia con ${formatCurrency(100)}.`
+        return `El equilibrio no es exacto, pero la tendencia importa. Si tu 'Futuro' (Ahorro/Deuda) está bajo, prioriza pagar tus deudas más caras o empezar tu fondo de emergencia con ${formatMoney(100)}.`
     }
 
     return (
@@ -152,8 +145,8 @@ export function BudgetRuleEducation({ data }: BudgetRuleEducationProps) {
                             {/* Main Numbers */}
                             <div className="mb-6 space-y-3">
                                 <div className="flex items-end justify-between">
-                                    <span className="text-3xl font-black tracking-tighter tabular-nums text-foreground" title={formatCurrency(rule.amount)}>
-                                        {formatCurrency(rule.amount, true)}
+                                    <span className="text-3xl font-black tracking-tighter tabular-nums text-foreground" title={formatMoney(rule.amount)}>
+                                        {formatCompactMoney(rule.amount)}
                                     </span>
                                     <div className="flex flex-col items-end">
                                         <span className={cn("text-xs font-black", rule.textColor)}>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -35,12 +35,83 @@ import { useTransactionFilters } from "@/hooks/use-transaction-filters"
 import { useAccounts } from "@/hooks/use-accounts"
 import { useCategories } from "@/hooks/use-categories"
 import { cn } from "@/lib/utils"
+import { useSearchParams, useRouter } from "next/navigation"
 
 export function TransactionFilterBar() {
     const { filters, setFilters, activeFiltersCount, clearFilters } = useTransactionFilters()
     const { accounts } = useAccounts()
     const { categories } = useCategories()
     const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
+    const searchParams = useSearchParams()
+    const router = useRouter()
+
+    // Sync from URL to State on Mount/Update
+    useEffect(() => {
+        const newFilters = { ...filters }
+        let hasChanges = false
+
+        // Search Query
+        const paramQ = searchParams.get('q') || ''
+        if (paramQ !== filters.search) {
+            newFilters.search = paramQ
+            hasChanges = true
+        }
+
+        // Type
+        const paramType = searchParams.get('type') || ''
+        if (paramType !== filters.type) {
+            newFilters.type = paramType
+            hasChanges = true
+        }
+
+        // Category
+        const paramCategory = searchParams.get('categoryId') || ''
+        if (paramCategory !== filters.categoryId) {
+            newFilters.categoryId = paramCategory
+            hasChanges = true
+        }
+
+        // Account
+        const paramAccount = searchParams.get('accountId') || ''
+        if (paramAccount !== filters.accountId) {
+            newFilters.accountId = paramAccount
+            hasChanges = true
+        }
+
+        // Min Amount
+        const paramMin = searchParams.get('min') || ''
+        if (paramMin !== filters.minAmount) {
+            newFilters.minAmount = paramMin
+            hasChanges = true
+        }
+
+        // Max Amount
+        const paramMax = searchParams.get('max') || ''
+        if (paramMax !== filters.maxAmount) {
+            newFilters.maxAmount = paramMax
+            hasChanges = true
+        }
+
+        // Currency
+        const paramCurrency = searchParams.get('currency') || ''
+        if (paramCurrency !== filters.currency) {
+            newFilters.currency = paramCurrency
+            hasChanges = true
+        }
+
+        // Mode
+        const paramMode = searchParams.get('mode') || ''
+        if (paramMode !== filters.mode) {
+            newFilters.mode = paramMode
+            hasChanges = true
+        }
+
+        if (hasChanges) {
+            setFilters(newFilters)
+        }
+    }, [searchParams])
+
+
 
     const allCategories = categories || []
 
@@ -152,7 +223,10 @@ export function TransactionFilterBar() {
                             <h4 className="font-bold text-sm">Filtros Avanzados</h4>
                             {activeFiltersCount > 0 && (
                                 <button
-                                    onClick={clearFilters}
+                                    onClick={() => {
+                                        clearFilters()
+                                        router.push('/dashboard/transactions')
+                                    }}
                                     className="text-[10px] font-bold text-primary hover:underline"
                                 >
                                     Limpiar
@@ -211,6 +285,30 @@ export function TransactionFilterBar() {
                                 </Select>
                             </div>
 
+                            {/* Currency Filter */}
+                            <div className="space-y-2">
+                                <Label className="text-[11px] font-bold uppercase text-muted-foreground flex items-center gap-2">
+                                    <DollarSign className="h-3 w-3" />
+                                    Moneda
+                                </Label>
+                                <Select
+                                    value={filters.currency || 'all'}
+                                    onValueChange={(value) => setFilters({ ...filters, currency: value === 'all' ? '' : value })}
+                                >
+                                    <SelectTrigger className="h-9 rounded-lg">
+                                        <SelectValue placeholder="Todas" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todas</SelectItem>
+                                        {currencies.map((currency: string) => (
+                                            <SelectItem key={currency} value={currency}>
+                                                {currency}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                             {/* Amount Range */}
                             <div className="space-y-2">
                                 <Label className="text-[11px] font-bold uppercase text-muted-foreground flex items-center gap-2">
@@ -261,6 +359,15 @@ export function TransactionFilterBar() {
                             </button>
                         </Badge>
                     )}
+                    {filters.currency && (
+                        <Badge variant="secondary" className="pl-1 bg-primary/5 text-primary border-primary/20 rounded-lg text-[10px] font-medium h-6 flex items-center gap-1">
+                            <DollarSign className="h-2.5 w-2.5" />
+                            {filters.currency}
+                            <button onClick={() => setFilters({ ...filters, currency: '' })} className="hover:text-foreground">
+                                <X className="h-2.5 w-2.5" />
+                            </button>
+                        </Badge>
+                    )}
                     {(filters.minAmount || filters.maxAmount) && (
                         <Badge variant="secondary" className="pl-1 bg-primary/5 text-primary border-primary/20 rounded-lg text-[10px] font-medium h-6 flex items-center gap-1">
                             <DollarSign className="h-2.5 w-2.5" />
@@ -271,7 +378,10 @@ export function TransactionFilterBar() {
                         </Badge>
                     )}
                     <button
-                        onClick={clearFilters}
+                        onClick={() => {
+                            clearFilters()
+                            router.push('/dashboard/transactions')
+                        }}
                         className="text-[10px] font-bold text-muted-foreground hover:text-rose-500 transition-colors ml-1"
                     >
                         Limpiar todo

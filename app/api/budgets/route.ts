@@ -59,18 +59,21 @@ export async function GET(request: Request) {
         }
 
         // 1. Fetch Categories explicitly (Split queries to avoid OR syntax issues)
-        const [userExp, sysExp, userInc, sysInc] = await Promise.all([
+        // 1. Fetch Categories explicitly (Split queries to avoid OR syntax issues)
+        const [userExp, sysExp, userInc, sysInc, subcats] = await Promise.all([
             supabase.from('expense_categories').select('*').eq('user_id', user.id),
             supabase.from('expense_categories').select('*').is('user_id', null),
             supabase.from('income_categories').select('*').eq('user_id', user.id),
-            supabase.from('income_categories').select('*').is('user_id', null)
+            supabase.from('income_categories').select('*').is('user_id', null),
+            supabase.from('subcategories').select('*') // Fetch all subcategories
         ])
 
         const allCategories = [
             ...(userExp.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
             ...(sysExp.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
             ...(userInc.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
-            ...(sysInc.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id }))
+            ...(sysInc.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
+            ...(subcats.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id }))
         ]
 
         // Robust Matching: Map Names to Multiple IDs (User Version + System Version)
@@ -259,23 +262,31 @@ export async function POST(request: Request) {
         }
 
         // Prepare Base Payload (Guaranteed columns based on Schema Discovery)
-        const basePayload = {
-            user_id: user.id,
+        const payload = {
             name: body.name,
             amount: body.amount,
             period: body.period || 'MONTHLY',
-            // category_id: resolvedCategoryId, // REMOVED: Verified missing.
-            budget_month: month,
+            // CRITICAL FIX: Explicitly take type from body, default to EXPENSE only if missing
+            type: body.type || 'EXPENSE',
+            category_id: body.categoryId || null, // Allow direct category link if passed
+            user_id: user.id,
+            is_active: true,
+            // Smart Planning Fields
+            is_fixed: body.isFixed === true, // Ensure boolean
+            due_day: body.dueDay ? parseInt(body.dueDay) : null,
+            auto_suggest: body.autoSuggest !== false,
+            // Legacy/Advanced fields
+            includeCategories: body.includeCategories || [],
+            budgetScope: body.budgetScope || 'GLOBAL',
+            start_date: body.startDate || new Date().toISOString(),
+            budget_month: month, // Added back month and year
             budget_year: year,
             currency_code: body.currencyCode || 'USD',
-            include_categories: finalIncludeCategories, // Core column (Verified existence)
-            // spent: 0 // REMOVED: Column does not exist
-            // is_active: true
+            include_categories: finalIncludeCategories,
         }
 
         const advancedPayload = {
-            ...basePayload,
-            type: body.type || 'EXPENSE',
+            ...payload, // Use the new 'payload' as base
             color: body.color || '#3b82f6',
             account_ids: body.accountIds || [],
             // include_categories already in base
@@ -288,6 +299,10 @@ export async function POST(request: Request) {
             include_balance_corrections: body.includeBalanceCorrections || false,
             include_from_other_budgets: body.includeFromOtherBudgets || false,
             excluded_budget_ids: body.excludedBudgetIds || [],
+            // Smart Planning Fields
+            is_fixed: body.isFixed || false,
+            due_day: body.dueDay || null, // 1-31
+            auto_suggest: body.autoSuggest || true,
             is_active: true
         }
 
@@ -304,12 +319,23 @@ export async function POST(request: Request) {
             if (error) throw error
             newBudget = data
         } catch (advancedError: any) {
-            console.warn('[BUDGETS_POST] Advanced insert failed, retrying with basic schema. Error:', advancedError.message)
+            // Retry with Safe Backup Payload (stripping potentially missing columns)
+            const safePayload = {
+                user_id: payload.user_id,
+                name: payload.name,
+                amount: payload.amount,
+                period: payload.period,
+                budget_month: payload.budget_month,
+                budget_year: payload.budget_year,
+                currency_code: payload.currency_code,
+                include_categories: payload.include_categories,
+                type: payload.type, // CRITICAL FIX: Use the actual type (INCOME/EXPENSE)
+                is_active: true
+            }
 
-            // Retry with Basic Payload
             const { data: basicData, error: basicError } = await supabase
                 .from('budgets')
-                .insert(basePayload)
+                .insert(safePayload)
                 .select()
                 .single()
 

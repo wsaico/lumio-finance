@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { TrendingDown, AlertCircle, CalendarRange } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useFormat } from "@/hooks/use-format"
 
 interface AnnualizedCategory {
     name: string
@@ -16,6 +17,7 @@ interface ExecutiveAnnualizedImpactProps {
 }
 
 export function ExecutiveAnnualizedImpact({ data }: ExecutiveAnnualizedImpactProps) {
+    const { formatMoney } = useFormat()
     if (!data || data.length === 0) return null
 
     return (
@@ -38,7 +40,7 @@ export function ExecutiveAnnualizedImpact({ data }: ExecutiveAnnualizedImpactPro
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-bold text-muted-foreground uppercase trancate">{cat.name}</p>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-xl font-black tabular-nums">S/ {Math.round(cat.yearly).toLocaleString()}</span>
+                                        <span className="text-xl font-black tabular-nums">{formatMoney(Math.round(cat.yearly))}</span>
                                         <span className="text-[10px] font-bold text-muted-foreground/30 uppercase">/ año</span>
                                     </div>
                                 </div>
@@ -46,7 +48,7 @@ export function ExecutiveAnnualizedImpact({ data }: ExecutiveAnnualizedImpactPro
                                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-medium text-muted-foreground/50 uppercase">Mensual</span>
-                                        <span className="text-xs font-bold tabular-nums text-muted-foreground">S/ {Math.round(cat.monthly).toLocaleString()}</span>
+                                        <span className="text-xs font-bold tabular-nums text-muted-foreground">{formatMoney(Math.round(cat.monthly))}</span>
                                     </div>
                                     <div className="p-1.5 bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
                                         <TrendingDown className="h-3 w-3 text-rose-500" />

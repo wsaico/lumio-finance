@@ -52,18 +52,8 @@ export default function AccountsPage() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">
-                        {activeTab === 'CREDIT_CARD' ? 'Tus Tarjetas' : 'Cuentas'}
-                    </h2>
-                    <p className="text-muted-foreground">
-                        {activeTab === 'CREDIT_CARD'
-                            ? 'Administra tus tarjetas de pago y saldos'
-                            : 'Administra tus cuentas bancarias, efectivo y tarjetas.'}
-                    </p>
-                </div>
+            {/* Header Toolbar - Only Action Buttons */}
+            <div className="flex items-center justify-end">
                 <AccountFormModal />
             </div>
 

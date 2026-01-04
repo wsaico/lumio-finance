@@ -44,7 +44,7 @@ export function useCreateSavingsGoal() {
         },
         onSuccess: (data) => {
             toast.success('Meta creada exitosamente', {
-                description: `${data.goal.name} - S/ ${data.goal.target_amount}`
+                description: `${data.goal.name} - ${data.goal.currency || 'S/'} ${data.goal.target_amount}`
             })
             queryClient.invalidateQueries({ queryKey: ['savings-goals'] })
         },
@@ -134,8 +134,13 @@ export function useAddContribution() {
             toast.success('Contribución agregada', {
                 description: `S/ ${data.contribution.amount} - ${data.milestoneAchieved ? '🎉 ¡Hito alcanzado!' : ''}`
             })
+            // Invalidate all savings goals queries (list and individual goals)
             queryClient.invalidateQueries({ queryKey: ['savings-goals'] })
+            queryClient.invalidateQueries({ queryKey: ['savings-goal'] })
             queryClient.invalidateQueries({ queryKey: ['goal-contributions'] })
+            // Also invalidate accounts and transactions in case the contribution affected them
+            queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['transactions'] })
         },
         onError: (error: any) => {
             toast.error('Error al agregar contribución', {
@@ -164,6 +169,7 @@ export function useTransferAndContribute() {
                 description: `S/ ${data.contribution.amount} transferidos a tu meta`
             })
             queryClient.invalidateQueries({ queryKey: ['savings-goals'] })
+            queryClient.invalidateQueries({ queryKey: ['savings-goal'] })
             queryClient.invalidateQueries({ queryKey: ['goal-contributions'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
@@ -224,6 +230,40 @@ export function useDeleteContribution() {
         },
         onError: (error: any) => {
             toast.error('Error al eliminar contribución', {
+                description: error.message
+            })
+        }
+    })
+}
+
+export function useWithdrawSavings() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async (withdrawData: any) => {
+            const res = await fetch('/api/savings-goals/withdraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(withdrawData)
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Error al realizar el retiro')
+            return data
+        },
+        onSuccess: (data) => {
+            toast.success('Retiro exitoso', {
+                description: `S/ ${Math.abs(data.contribution.amount)} retirados de la meta`
+            })
+            // Invalidate EVERYTHING related to money
+            queryClient.invalidateQueries({ queryKey: ['savings-goals'] })
+            queryClient.invalidateQueries({ queryKey: ['savings-goal'] })
+            queryClient.invalidateQueries({ queryKey: ['goal-contributions'] })
+            queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['account-goals-summary'] })
+        },
+        onError: (error: any) => {
+            toast.error('Error al retirar fondos', {
                 description: error.message
             })
         }

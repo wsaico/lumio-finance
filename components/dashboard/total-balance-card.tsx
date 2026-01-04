@@ -47,14 +47,20 @@ export function TotalBalanceCard() {
 
     // Fetch monthly income/expense data
     useEffect(() => {
+        const controller = new AbortController()
+
         async function fetchMonthlyData() {
             try {
                 const now = new Date()
                 const month = now.getMonth() + 1
                 const year = now.getFullYear()
 
-                // Current month
-                const res = await fetch(`/api/analytics/monthly-summary?month=${month}&year=${year}`)
+                // Current month with timeout
+                const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+                const res = await fetch(`/api/analytics/monthly-summary?month=${month}&year=${year}`, {
+                    signal: controller.signal
+                })
                 if (res.ok) {
                     const data = await res.json()
                     setMonthlyData(data)
@@ -63,16 +69,23 @@ export function TotalBalanceCard() {
                 // Previous month for trend calculation
                 const prevMonth = month === 1 ? 12 : month - 1
                 const prevYear = month === 1 ? year - 1 : year
-                const prevRes = await fetch(`/api/analytics/monthly-summary?month=${prevMonth}&year=${prevYear}`)
+                const prevRes = await fetch(`/api/analytics/monthly-summary?month=${prevMonth}&year=${prevYear}`, {
+                    signal: controller.signal
+                })
+                clearTimeout(timeoutId)
+
                 if (prevRes.ok) {
                     const prevData = await prevRes.json()
                     setPreviousMonthData(prevData)
                 }
-            } catch (err) {
+            } catch (err: any) {
+                if (err.name === 'AbortError') return
                 console.error('Error fetching monthly data:', err)
             }
         }
         fetchMonthlyData()
+
+        return () => controller.abort()
     }, [])
 
     // Calculate real trend based on balance change
@@ -102,72 +115,21 @@ export function TotalBalanceCard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
         >
-            <Card className="relative overflow-hidden border-none shadow-2xl hover:shadow-[0_20px_70px_-15px_rgba(139,92,246,0.5)] transition-all duration-500 group">
-                {/* Sophisticated Multi-Layer Background */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" />
-
-                {/* Animated Mesh Gradient Overlay */}
-                <div
-                    className="absolute inset-0 opacity-40"
-                    style={{
-                        background: `
-                            radial-gradient(circle at 20% 50%, rgba(139, 92, 246, 0.4) 0%, transparent 50%),
-                            radial-gradient(circle at 80% 80%, rgba(217, 70, 239, 0.4) 0%, transparent 50%),
-                            radial-gradient(circle at 40% 20%, rgba(59, 130, 246, 0.3) 0%, transparent 50%)
-                        `
-                    }}
-                />
-
-                {/* Animated Gradient Border Effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    <div className="absolute inset-[1px] rounded-[inherit] bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" />
-                </div>
-
-                {/* Floating Particles */}
-                <div className="absolute inset-0 overflow-hidden">
-                    <motion.div
-                        className="absolute top-1/4 left-1/4 w-2 h-2 bg-purple-400/30 rounded-full blur-sm"
-                        animate={{
-                            y: [0, -20, 0],
-                            x: [0, 10, 0],
-                            opacity: [0.3, 0.6, 0.3]
-                        }}
-                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    <motion.div
-                        className="absolute top-1/2 right-1/3 w-3 h-3 bg-fuchsia-400/20 rounded-full blur-sm"
-                        animate={{
-                            y: [0, 15, 0],
-                            x: [0, -15, 0],
-                            opacity: [0.2, 0.5, 0.2]
-                        }}
-                        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                    />
-                    <motion.div
-                        className="absolute bottom-1/3 right-1/4 w-2 h-2 bg-blue-400/25 rounded-full blur-sm"
-                        animate={{
-                            y: [0, -10, 0],
-                            x: [0, 20, 0],
-                            opacity: [0.25, 0.5, 0.25]
-                        }}
-                        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-                    />
-                </div>
-
-                {/* Glass Morphism Overlay */}
-                <div className="absolute inset-0 backdrop-blur-[1px]" />
+            <Card className="widget-surface border-none h-full">
+                <div className="absolute -top-24 right-0 h-36 w-36 rounded-full bg-fuchsia-400/20 blur-3xl" />
+                <div className="absolute -bottom-24 left-0 h-32 w-32 rounded-full bg-indigo-400/15 blur-3xl" />
 
                 <div className="relative">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-6 px-6">
+                    <CardHeader className="widget-header">
                         <div className="flex items-center gap-2">
                             <motion.div
-                                className="p-2 rounded-xl bg-white/10 backdrop-blur-sm"
+                                className="p-2 rounded-xl bg-white/5 border border-white/10"
                                 whileHover={{ scale: 1.1, rotate: 5 }}
                                 transition={{ type: "spring", stiffness: 400 }}
                             >
-                                <Sparkles className="h-4 w-4 text-purple-300" />
+                                <Sparkles className="h-4 w-4 text-primary" />
                             </motion.div>
-                            <CardTitle className="text-sm font-semibold text-white/90 tracking-wide uppercase">
+                            <CardTitle className="text-xs font-semibold text-muted-foreground tracking-[0.25em] uppercase">
                                 Balance Total
                             </CardTitle>
                         </div>
@@ -175,7 +137,7 @@ export function TotalBalanceCard() {
                         <div className="flex items-center gap-2">
                             <motion.button
                                 onClick={() => setViewMode(viewMode === 'consolidated' ? 'separated' : 'consolidated')}
-                                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 backdrop-blur-sm transition-colors text-xs font-medium text-white/70 hover:text-white/90"
+                                className="px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                             >
@@ -183,14 +145,14 @@ export function TotalBalanceCard() {
                             </motion.button>
                             <motion.button
                                 onClick={() => setIsBalanceVisible(!isBalanceVisible)}
-                                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 backdrop-blur-sm transition-colors"
+                                className="p-2 rounded-full border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground transition-colors"
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                             >
                                 {isBalanceVisible ? (
-                                    <Eye className="h-4 w-4 text-white/70" />
+                                    <Eye className="h-4 w-4" />
                                 ) : (
-                                    <EyeOff className="h-4 w-4 text-white/70" />
+                                    <EyeOff className="h-4 w-4" />
                                 )}
                             </motion.button>
                         </div>
@@ -211,14 +173,14 @@ export function TotalBalanceCard() {
                                     {viewMode === 'consolidated' ? (
                                         <>
                                             <motion.div
-                                                className="text-5xl md:text-6xl font-bold tracking-tight text-white"
+                                                className="text-4xl md:text-5xl font-bold tracking-tight text-foreground"
                                                 initial={{ scale: 0.5 }}
                                                 animate={{ scale: 1 }}
                                                 transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
                                             >
                                                 {formatMoney(displayBalance, baseCurrency)}
                                             </motion.div>
-                                            <div className="flex items-center gap-2 text-xs text-white/50">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                 <Wallet className="h-3 w-3" />
                                                 <span>Consolidado en {baseCurrency}</span>
                                             </div>
@@ -227,13 +189,13 @@ export function TotalBalanceCard() {
                                         <div className="space-y-2">
                                             {Object.entries(balancesByCurrency || {}).map(([currency, amount]) => (
                                                 <div key={currency} className="flex items-baseline justify-between gap-4">
-                                                    <span className="text-sm text-white/60 font-medium">{currency}</span>
-                                                    <span className="text-2xl md:text-3xl font-bold text-white tabular-nums">
+                                                    <span className="text-sm text-muted-foreground font-medium">{currency}</span>
+                                                    <span className="text-2xl md:text-3xl font-bold text-foreground tabular-nums">
                                                         {formatMoney(amount, currency)}
                                                     </span>
                                                 </div>
                                             ))}
-                                            <div className="text-xs text-white/50 pt-1 border-t border-white/10">
+                                            <div className="text-xs text-muted-foreground pt-1 border-t border-white/10">
                                                 {Object.keys(balancesByCurrency || {}).length} moneda(s)
                                             </div>
                                         </div>
@@ -248,10 +210,8 @@ export function TotalBalanceCard() {
                                     transition={{ duration: 0.2 }}
                                     className="space-y-1"
                                 >
-                                    <div className="text-5xl md:text-6xl font-bold tracking-tight text-white">
-                                        ••••••
-                                    </div>
-                                    <div className="text-xs text-white/50">
+                                    <div className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">******</div>
+                                    <div className="text-xs text-muted-foreground">
                                         Balance oculto
                                     </div>
                                 </motion.div>
@@ -275,7 +235,7 @@ export function TotalBalanceCard() {
                                 )}
                                 <span className={`font-bold text-sm ${trend > 0 ? 'text-emerald-200' : 'text-rose-200'
                                     }`}>
-                                    {trend > 0 ? '+' : ''}{trend}%
+                                    {trend > 0 ? '+' : ''}{trend.toFixed(1)}%
                                 </span>
                             </motion.div>
                             <span className="text-xs text-white/60 font-medium">vs mes anterior</span>
@@ -305,3 +265,5 @@ export function TotalBalanceCard() {
         </motion.div>
     )
 }
+
+

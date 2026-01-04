@@ -5,18 +5,17 @@ import {
     SettingsRow,
 } from "@/components/settings/settings-components"
 import { useSettingsStore } from "@/hooks/use-settings-store"
-import { RefreshCw, ArrowRight } from "lucide-react"
+import { useExchangeRates } from "@/hooks/use-exchange-rates"
+import { RefreshCw, ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-// Mock Rates - In real app, fetch from API
-const MOCK_RATES = [
-    { from: "USD", to: "PEN", rate: 3.75 },
-    { from: "EUR", to: "PEN", rate: 4.05 },
-    { from: "PEN", to: "USD", rate: 0.27 },
-]
 
 export default function ExchangeRatesPage() {
     const { currencyCode } = useSettingsStore()
+    const { rates, isLoading, syncRates } = useExchangeRates()
+
+    const handleSync = () => {
+        syncRates.mutate(currencyCode || 'USD')
+    }
 
     return (
         <div className="container mx-auto max-w-2xl py-8 px-4 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -26,29 +25,49 @@ export default function ExchangeRatesPage() {
             </div>
 
             <div className="flex justify-end mb-4">
-                <Button variant="outline" size="sm" className="gap-2">
-                    <RefreshCw className="h-4 w-4" />
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleSync}
+                    disabled={syncRates.isPending}
+                >
+                    {syncRates.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                        <RefreshCw className="h-4 w-4" />
+                    )}
                     Actualizar Tasas
                 </Button>
             </div>
 
-            <SettingsSection title={`Tasas frente a ${currencyCode}`}>
-                {MOCK_RATES.map((rate, idx) => (
-                    <SettingsRow
-                        key={idx}
-                        title={`1 ${rate.from}`}
-                        description={`vale`}
-                        action={
-                            <div className="flex items-center gap-2 font-mono font-bold text-lg">
-                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                                {rate.rate.toFixed(4)} {rate.to}
-                            </div>
-                        }
-                    />
-                ))}
+            <SettingsSection title={`Tasas Registradas`}>
+                {isLoading ? (
+                    <div className="p-8 flex justify-center text-muted-foreground">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                ) : rates && rates.length > 0 ? (
+                    rates.map((rate: any) => (
+                        <SettingsRow
+                            key={rate.id}
+                            title={`1 ${rate.from_currency}`}
+                            description={`Última act: ${new Date(rate.effective_date).toLocaleDateString()}`}
+                            action={
+                                <div className="flex items-center gap-2 font-mono font-bold text-lg">
+                                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                                    {Number(rate.rate).toFixed(4)} {rate.to_currency}
+                                </div>
+                            }
+                        />
+                    ))
+                ) : (
+                    <div className="p-8 text-center text-muted-foreground text-sm">
+                        No hay tasas registradas. Pulsa "Actualizar Tasas".
+                    </div>
+                )}
             </SettingsSection>
             <p className="text-xs text-center text-muted-foreground">
-                * Las tasas se actualizan diariamente desde fuentes abiertas.
+                * Las tasas se actualizan desde fuentes externas confiables.
             </p>
         </div>
     )

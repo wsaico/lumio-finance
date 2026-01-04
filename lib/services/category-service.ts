@@ -8,8 +8,6 @@ export class CategoryService {
      * Esta es una operación atómica.
      */
     static async seedUserCategories(supabase: SupabaseClient, userId: string) {
-        console.log(`[CATEGORY_SERVICE] Iniciando seeding para usuario ${userId}...`)
-
         // 1. Verificar si ya tiene categorías (seguridad)
         const { count } = await supabase
             .from('expense_categories')
@@ -17,7 +15,6 @@ export class CategoryService {
             .eq('user_id', userId)
 
         if ((count || 0) > 0) {
-            console.log(`[CATEGORY_SERVICE] El usuario ya tiene categorías personalizadas. Abortando seeding.`)
             return
         }
 
@@ -122,6 +119,5 @@ export class CategoryService {
             }
         }
 
-        console.log(`[CATEGORY_SERVICE] Seeding completado exitosamente para el usuario ${userId}.`)
     }
 }

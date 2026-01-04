@@ -86,7 +86,7 @@ export async function PATCH(req: Request) {
 
     } catch (error) {
         console.error('[PROFILE_UPDATE]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }
 
@@ -113,6 +113,6 @@ export async function GET(req: Request) {
         return NextResponse.json(data)
     } catch (error) {
         console.error('[PROFILE_GET]', error)
-        return new NextResponse('Internal Error', { status: 500 })
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }

@@ -57,7 +57,6 @@ export function SmartCategorySelector({
       const topSuggestion = data.suggestions[0];
       // If confidence is high enough, auto-select
       if (topSuggestion.confidence > 0.79) {
-        console.log('🤖 Smart Category: Auto-selecting', topSuggestion.categoryName, topSuggestion.subcategoryName);
         onSelectCategory(topSuggestion.categoryId, topSuggestion.subcategoryId || undefined);
       }
     }

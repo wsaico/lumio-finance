@@ -267,12 +267,9 @@ export function usePettyCashExpenseForm(defaultFundId?: string, onSuccess?: () =
             // Include vendor for PDF metadata
             formData.append('vendor', currentVendor)
             // Include fund code for folder structure (Año/Mes/CódigoFondo)
-            console.log('[UPLOAD_HOOK] selectedFund:', selectedFund)
             if (selectedFund?.fundCode) {
                 formData.append('fundCode', selectedFund.fundCode)
-                console.log('[UPLOAD_HOOK] Sending fundCode:', selectedFund.fundCode)
             } else {
-                console.log('[UPLOAD_HOOK] No fundCode available, selectedFund:', selectedFund)
             }
             // IMPORTANT: Set document type to PETTY_CASH
             formData.append('documentType', 'PETTY_CASH')
