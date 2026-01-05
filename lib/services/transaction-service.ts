@@ -32,7 +32,7 @@ export class TransactionService {
 
     public static async resolveCategory(supabase: SupabaseClient, table: string, id: string | undefined | null, userId: string, defaults: any[]) {
         if (!id) return null
-        if (!id.match(/^[eisu]100/)) return id
+        if (!id.match(/^[ebaf]100/)) return id
 
         const def = defaults.find(d => d.id === id)
         if (!def) return null
@@ -72,9 +72,9 @@ export class TransactionService {
         let incomeCategoryId: string | null = null
 
         if (type === 'EXPENSE' && params.categoryId) {
-            expenseCategoryId = params.categoryId
+            expenseCategoryId = await this.resolveCategory(supabase, 'expense_categories', params.categoryId, userId, DEFAULT_EXPENSE_CATEGORIES)
         } else if (type === 'INCOME' && params.categoryId) {
-            incomeCategoryId = params.categoryId
+            incomeCategoryId = await this.resolveCategory(supabase, 'income_categories', params.categoryId, userId, DEFAULT_INCOME_CATEGORIES)
         }
 
         // 2. Create Transaction Record
