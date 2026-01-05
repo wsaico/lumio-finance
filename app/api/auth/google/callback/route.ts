@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createOAuth2Client } from '@/lib/google-drive';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
@@ -67,6 +68,11 @@ export async function GET(req: Request) {
             headers: { 'Content-Type': 'text/html' },
         });
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[GOOGLE_OAUTH_CALLBACK_ERROR]', error);
         return NextResponse.json({ error: 'Error en la autenticación', details: error.message }, { status: 500 });
     }

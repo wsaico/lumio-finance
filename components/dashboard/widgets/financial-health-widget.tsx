@@ -3,9 +3,9 @@
 import { Card } from "@/components/ui/card"
 import { useAccounts } from "@/hooks/use-accounts"
 import { useFormat } from "@/hooks/use-format"
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts"
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts"
 import { useEffect, useState } from "react"
-import { Activity, ShieldCheck, AlertTriangle, Wallet, TrendingUp, Sparkles } from "lucide-react"
+import { Activity, ShieldCheck, Wallet, Sparkles } from "lucide-react"
 import { motion } from "framer-motion"
 
 interface HealthData {
@@ -39,7 +39,6 @@ export function FinancialHealthWidget() {
 
                 const { kpis, budgetRule } = data
 
-                // Map API response to widget format
                 setHealthData({
                     score: kpis.healthScore,
                     metrics: [
@@ -70,9 +69,9 @@ export function FinancialHealthWidget() {
     }, [])
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return { text: "text-emerald-400", bg: "from-emerald-500/20 to-emerald-600/10", glow: "shadow-emerald-500/20" }
-        if (score >= 50) return { text: "text-amber-400", bg: "from-amber-500/20 to-amber-600/10", glow: "shadow-amber-500/20" }
-        return { text: "text-rose-400", bg: "from-rose-500/20 to-rose-600/10", glow: "shadow-rose-500/20" }
+        if (score >= 80) return { text: "text-emerald-600 dark:text-emerald-400", bg: "from-emerald-500/10 to-emerald-600/5", glow: "shadow-emerald-500/10", border: "border-emerald-500/20" }
+        if (score >= 50) return { text: "text-amber-600 dark:text-amber-400", bg: "from-amber-500/10 to-amber-600/5", glow: "shadow-amber-500/10", border: "border-amber-500/20" }
+        return { text: "text-rose-600 dark:text-rose-400", bg: "from-rose-500/10 to-rose-600/5", glow: "shadow-rose-500/10", border: "border-rose-500/20" }
     }
 
     const getScoreLabel = (score: number) => {
@@ -85,7 +84,6 @@ export function FinancialHealthWidget() {
     if (loading) {
         return (
             <Card className="widget-surface h-full">
-                <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-indigo-400/15 blur-3xl" />
                 <div className="relative p-6 h-full flex items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
                         <motion.div
@@ -94,7 +92,7 @@ export function FinancialHealthWidget() {
                         >
                             <Activity className="h-8 w-8 text-primary" />
                         </motion.div>
-                        <span className="text-muted-foreground text-sm">Analizando salud financiera...</span>
+                        <span className="text-muted-foreground text-sm font-bold">Analizando salud...</span>
                     </div>
                 </div>
             </Card>
@@ -109,25 +107,21 @@ export function FinancialHealthWidget() {
             animate={{ opacity: 1, y: 0 }}
             className="h-full"
         >
-            <Card className="widget-surface border-none h-full">
-                <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-indigo-400/15 blur-3xl" />
-                <div className="absolute -bottom-24 left-0 h-32 w-32 rounded-full bg-fuchsia-400/10 blur-3xl" />
-
+            <Card className="widget-surface border-none h-full overflow-hidden">
                 <div className="relative h-full flex flex-col z-10">
                     {/* Header */}
                     <div className="widget-header">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-primary/10 border border-primary/15 shadow-lg shadow-primary/10">
+                            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 shadow-lg shadow-primary/5">
                                 <Activity className="h-4 w-4 text-primary" />
                             </div>
                             <div>
                                 <p className="widget-kicker">Salud</p>
                                 <h3 className="widget-title">Pulso financiero</h3>
-                                <p className="widget-subtitle">Analisis de salud en tiempo real</p>
                             </div>
                         </div>
                         <motion.div
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r ${scoreStyle.bg} border border-white/10 shadow-lg ${scoreStyle.glow}`}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r ${scoreStyle.bg} border ${scoreStyle.border} shadow-sm`}
                             whileHover={{ scale: 1.05 }}
                         >
                             <Sparkles className={`h-3 w-3 ${scoreStyle.text}`} />
@@ -139,23 +133,23 @@ export function FinancialHealthWidget() {
 
                     {/* Main Content Area */}
                     <div className="flex-1 flex flex-col lg:flex-row p-5 gap-6 items-center">
-                        {/* Radar Chart Section (Prevention of label overlap) */}
+                        {/* Radar Chart Section */}
                         <div className="relative w-full lg:w-[240px] aspect-square flex items-center justify-center">
                             <div className="w-full h-full p-2">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RadarChart cx="50%" cy="50%" outerRadius="62%" data={healthData?.metrics}>
-                                        <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                                        <PolarGrid stroke="oklch(var(--border) / 0.15)" />
                                         <PolarAngleAxis
                                             dataKey="subject"
-                                            tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 700 }}
+                                            tick={{ fill: 'oklch(var(--muted-foreground))', fontSize: 10, fontWeight: 800 }}
                                         />
                                         <Radar
                                             name="Salud"
                                             dataKey="A"
-                                            stroke="#818cf8"
-                                            strokeWidth={2}
-                                            fill="#818cf8"
-                                            fillOpacity={0.25}
+                                            stroke="oklch(var(--primary))"
+                                            strokeWidth={3}
+                                            fill="oklch(var(--primary))"
+                                            fillOpacity={0.3}
                                             animationDuration={1500}
                                         />
                                     </RadarChart>
@@ -165,16 +159,16 @@ export function FinancialHealthWidget() {
                             {/* Floating Score Display */}
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <motion.div
-                                    className="flex flex-col items-center justify-center w-[84px] h-[84px] rounded-full bg-slate-950 border-[3px] border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.25)] relative overflow-hidden"
+                                    className="flex flex-col items-center justify-center w-[84px] h-[84px] rounded-full bg-background border-[4px] border-primary/20 shadow-2xl relative overflow-hidden"
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    transition={{ type: "spring", damping: 15 }}
+                                    transition={{ type: "spring", stiffness: 200 }}
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-transparent" />
+                                    <div className="absolute inset-0 bg-primary/5" />
                                     <span className={`text-3xl font-black leading-none tracking-tighter ${scoreStyle.text}`}>
                                         {healthData?.score}
                                     </span>
-                                    <span className="text-[10px] font-black text-white/30 uppercase tracking-widest mt-1">Score</span>
+                                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mt-1">Score</span>
                                 </motion.div>
                             </div>
                         </div>
@@ -182,10 +176,10 @@ export function FinancialHealthWidget() {
                         {/* Metrics Panel */}
                         <div className="flex-1 w-full space-y-3">
                             {/* Compliance Bar Section */}
-                            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 backdrop-blur-md space-y-4">
+                            <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-[10px] font-black text-white/40 uppercase tracking-widest">Regla 50/30/20</h4>
-                                    <ShieldCheck className="w-3 h-3 text-emerald-400/50" />
+                                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Regla 50/30/20</h4>
+                                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
                                 </div>
 
                                 <div className="space-y-4">
@@ -196,14 +190,14 @@ export function FinancialHealthWidget() {
                                     ].map((m, i) => {
                                         const isBad = m.label === 'Ahorro' ? (m.val ?? 0) < m.target * 0.75 : (m.val ?? 0) > m.target * 1.25;
                                         return (
-                                            <div key={m.label} className="space-y-1.5">
-                                                <div className="flex items-center justify-between text-[11px] font-bold">
-                                                    <span className="text-white/60">{m.label}</span>
-                                                    <span className={isBad ? 'text-rose-400' : 'text-emerald-400'}>
+                                            <div key={m.label} className="space-y-2">
+                                                <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider">
+                                                    <span className="text-muted-foreground">{m.label}</span>
+                                                    <span className={isBad ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>
                                                         {Math.round(m.val ?? 0)}%
                                                     </span>
                                                 </div>
-                                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="h-2 bg-muted rounded-full overflow-hidden border border-border/50">
                                                     <motion.div
                                                         className={`h-full rounded-full ${isBad ? 'bg-rose-500' : 'bg-emerald-500'}`}
                                                         initial={{ width: 0 }}
@@ -218,19 +212,19 @@ export function FinancialHealthWidget() {
                             </div>
 
                             {/* Liquidity Highlight */}
-                            <div className="px-4 py-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 flex items-center justify-between">
+                            <div className="px-4 py-3 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-indigo-400/10">
-                                        <Wallet className="w-4 h-4 text-indigo-400" />
+                                    <div className="p-2 rounded-lg bg-primary/10">
+                                        <Wallet className="w-4 h-4 text-primary" />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Liquidez (Meses)</p>
-                                        <p className="text-xl font-black text-white tracking-tight">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Liquidez (Meses)</p>
+                                        <p className="text-xl font-black text-foreground tracking-tight">
                                             {healthData?.liquidity.ratio.toFixed(1)}x
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`text-[10px] font-bold px-2 py-1 rounded-md ${(healthData?.liquidity.ratio ?? 0) < 3 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                <div className={`text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider ${(healthData?.liquidity.ratio ?? 0) < 3 ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'}`}>
                                     {(healthData?.liquidity.ratio ?? 0) < 3 ? 'Riesgo' : 'Sólido'}
                                 </div>
                             </div>
@@ -241,13 +235,3 @@ export function FinancialHealthWidget() {
         </motion.div>
     )
 }
-
-
-
-
-
-
-
-
-
-

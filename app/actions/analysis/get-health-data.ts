@@ -149,6 +149,19 @@ export async function getFinancialHealthData() {
         };
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        const errorString = String(error);
+        const isDynamicError =
+            error?.digest === 'DYNAMIC_SERVER_USAGE' ||
+            error?.message?.includes('Dynamic server usage') ||
+            error?.description?.includes('Dynamic server usage') ||
+            errorString.includes('Dynamic server usage') ||
+            errorString.includes('cookies') ||
+            errorString.includes('next/headers');
+
+        if (isDynamicError) {
+            throw error;
+        }
         console.error('Error fetching health data:', error);
         throw error;
     }

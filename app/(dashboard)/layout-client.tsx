@@ -35,7 +35,7 @@ export default function DashboardLayoutClient({
 
     return (
         <KeyboardShortcutsProvider>
-            <div className="min-h-screen bg-muted/20">
+            <div className="min-h-screen bg-neutral-50/50 dark:bg-neutral-950/20">
                 {/* Wizard injected at Layout level */}
                 <BudgetMethodologyWizard shouldShow={shouldShowWizard} />
 

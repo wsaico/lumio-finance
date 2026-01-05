@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
@@ -122,6 +123,11 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({ goals: goalsWithMetrics })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('Error in GET /api/savings-goals:', error)
         return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 })
     }
@@ -190,6 +196,11 @@ export async function POST(request: NextRequest) {
             goal: goalWithMetrics
         }, { status: 201 })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
         }
@@ -263,6 +274,11 @@ export async function PATCH(request: NextRequest) {
             goal: goalWithMetrics
         })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
         }
@@ -311,6 +327,11 @@ export async function DELETE(request: NextRequest) {
             goal
         })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('Error in DELETE /api/savings-goals:', error)
         return NextResponse.json({ error: error.message || 'Error interno del servidor' }, { status: 500 })
     }

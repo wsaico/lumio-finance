@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
@@ -225,6 +226,11 @@ export async function POST(
             } : null
         })
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return new NextResponse(JSON.stringify({
                 error: 'Datos inválidos',

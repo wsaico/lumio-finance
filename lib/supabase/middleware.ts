@@ -7,9 +7,22 @@ export async function updateSession(request: NextRequest) {
         request,
     })
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+    const isMissing = !supabaseUrl || supabaseUrl === 'undefined' || supabaseUrl.length < 5 ||
+        !supabaseAnonKey || supabaseAnonKey === 'undefined' || supabaseAnonKey.length < 10;
+
+    const url = isMissing ? null : supabaseUrl;
+    const key = isMissing ? null : supabaseAnonKey;
+
+    if (!url || !key) {
+        return supabaseResponse; // Skip session update during build if config is missing
+    }
+
     const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        url,
+        key,
         {
             cookies: {
                 getAll() {

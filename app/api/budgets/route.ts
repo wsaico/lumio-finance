@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { resolveCategory, getCategoryDefaults, expandCategoryIds } from '@/lib/category-utils'
@@ -201,6 +202,11 @@ export async function GET(request: Request) {
         return NextResponse.json(budgetsWithSpent)
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         return NextResponse.json(
             { error: error.message || 'Internal Server Error' },
             { status: 500 }
@@ -352,6 +358,11 @@ export async function POST(request: Request) {
 
         return NextResponse.json(mapBudget(newBudget))
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[BUDGETS_POST_GLOBAL]', error)
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 })
     }

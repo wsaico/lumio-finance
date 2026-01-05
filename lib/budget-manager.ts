@@ -120,6 +120,17 @@ export async function updateBudgetsForTransactions(userId: string): Promise<Budg
                 }
 
             } catch (err) {
+        // Next.js dynamic usage err detection - MUST re-throw immediately and silently
+        if (err && (
+            err.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (err.message && err.message.includes('Dynamic server usage')) ||
+            (String(err).includes('Dynamic server usage')) ||
+            (String(err).includes('cookies')) ||
+            (String(err).includes('next/headers'))
+        )) {
+            throw err;
+        }
+
                 console.error(`[BUDGET_MANAGER] Failed to update budget ${budget.id}:`, err)
             }
         })
@@ -128,6 +139,17 @@ export async function updateBudgetsForTransactions(userId: string): Promise<Budg
         return warnings
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (
+            error.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (error.message && error.message.includes('Dynamic server usage')) ||
+            (String(error).includes('Dynamic server usage')) ||
+            (String(error).includes('cookies')) ||
+            (String(error).includes('next/headers'))
+        )) {
+            throw error;
+        }
+
         console.error('[BUDGET_MANAGER] Critical error updating budgets:', error)
         return []
     }

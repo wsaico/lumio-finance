@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
@@ -121,6 +122,11 @@ export async function PATCH(
 
         return NextResponse.json(mappedAccount)
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return new NextResponse('Invalid data', { status: 400 })
         }
@@ -261,6 +267,11 @@ export async function DELETE(
         return new NextResponse(null, { status: 204 })
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[ACCOUNT_DELETE]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
@@ -159,6 +160,11 @@ export async function GET(req: Request) {
             }
         })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[TRANSACTIONS_GET]', error)
         return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
     }
@@ -296,6 +302,11 @@ export async function POST(req: Request) {
         return NextResponse.json(transaction)
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[TRANSACTION_POST]', error)
         return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message || error }), { status: 500 })
     }
@@ -319,6 +330,11 @@ export async function PATCH(req: Request) {
 
         return NextResponse.json(updatedTransaction)
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[TRANSACTION_PATCH]', error)
         return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message || error }), { status: 500 })
     }
@@ -341,6 +357,11 @@ export async function DELETE(req: Request) {
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[TRANSACTION_DELETE]', error)
         return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message || error }), { status: 500 })
     }

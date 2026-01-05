@@ -67,6 +67,17 @@ export async function GET() {
         }
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (
+            error.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (error.message && error.message.includes('Dynamic server usage')) ||
+            (String(error).includes('Dynamic server usage')) ||
+            (String(error).includes('cookies')) ||
+            (String(error).includes('next/headers'))
+        )) {
+            throw error;
+        }
+
         return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
     }
 }

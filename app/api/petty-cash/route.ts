@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
@@ -22,6 +23,11 @@ export async function GET(req: Request) {
         return NextResponse.json(MOCK_PETTY_CASH)
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[PETTY_CASH_GET]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }

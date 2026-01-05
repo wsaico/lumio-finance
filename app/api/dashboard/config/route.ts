@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { DashboardConfig } from '@/types/dashboard';
@@ -25,6 +26,11 @@ export async function GET() {
 
     return NextResponse.json({ config: profile.dashboard_config }, { status: 200 });
   } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
     console.error('Failed to fetch dashboard config:', error);
     return NextResponse.json(
       { error: 'Failed to fetch dashboard configuration' },
@@ -57,6 +63,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
     console.error('Failed to save dashboard config:', error);
     return NextResponse.json(
       { error: 'Failed to save dashboard configuration' },

@@ -294,7 +294,20 @@ export async function getDashboardData(): Promise<DashboardData> {
             activityDaily
         };
 
-    } catch (error) {
+    } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        const errorString = String(error);
+        const isDynamicError =
+            error?.digest === 'DYNAMIC_SERVER_USAGE' ||
+            error?.message?.includes('Dynamic server usage') ||
+            error?.description?.includes('Dynamic server usage') ||
+            errorString.includes('Dynamic server usage') ||
+            errorString.includes('cookies') ||
+            errorString.includes('next/headers');
+
+        if (isDynamicError) {
+            throw error;
+        }
         console.error("Failed to fetch dashboard data:", error);
         return {
             metrics: { availableMoney: 0, totalIncome: 0, totalExpense: 0, netFlow: 0, savingsRate: 0, transactionsCount: 0, dailyIncomeAvg: 0, dailyExpenseAvg: 0 },

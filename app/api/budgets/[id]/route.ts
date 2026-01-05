@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -60,6 +61,11 @@ export async function GET(
 
         return NextResponse.json(mapBudget(budget))
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 }
@@ -146,6 +152,11 @@ export async function PUT(
 
         return NextResponse.json(mapBudget(budget))
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 }
@@ -189,6 +200,11 @@ export async function PATCH(
 
         return NextResponse.json(mapBudget(budget))
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 }
@@ -220,6 +236,11 @@ export async function DELETE(
 
         return NextResponse.json({ success: true })
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 }

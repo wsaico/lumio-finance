@@ -129,7 +129,7 @@ export function TotalBalanceCard() {
                             >
                                 <Sparkles className="h-4 w-4 text-primary" />
                             </motion.div>
-                            <CardTitle className="text-xs font-semibold text-muted-foreground tracking-[0.25em] uppercase">
+                            <CardTitle className="text-xs font-bold text-muted-foreground tracking-[0.25em] uppercase">
                                 Balance Total
                             </CardTitle>
                         </div>
@@ -189,13 +189,13 @@ export function TotalBalanceCard() {
                                         <div className="space-y-2">
                                             {Object.entries(balancesByCurrency || {}).map(([currency, amount]) => (
                                                 <div key={currency} className="flex items-baseline justify-between gap-4">
-                                                    <span className="text-sm text-muted-foreground font-medium">{currency}</span>
-                                                    <span className="text-2xl md:text-3xl font-bold text-foreground tabular-nums">
-                                                        {formatMoney(amount, currency)}
+                                                    <span className="text-sm text-muted-foreground font-bold">{currency}</span>
+                                                    <span className="text-2xl md:text-3xl font-black text-foreground tabular-nums">
+                                                        {formatMoney(amount as number, currency)}
                                                     </span>
                                                 </div>
                                             ))}
-                                            <div className="text-xs text-muted-foreground pt-1 border-t border-white/10">
+                                            <div className="text-[10px] text-muted-foreground font-black uppercase tracking-widest pt-2 border-t border-border">
                                                 {Object.keys(balancesByCurrency || {}).length} moneda(s)
                                             </div>
                                         </div>
@@ -221,40 +221,40 @@ export function TotalBalanceCard() {
                         {/* Trend Indicator with Premium Design */}
                         <div className="flex items-center gap-3">
                             <motion.div
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md ${trend > 0
-                                    ? 'bg-emerald-500/20 border border-emerald-400/30'
-                                    : 'bg-rose-500/20 border border-rose-400/30'
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${trend > 0
+                                    ? 'bg-emerald-500/10 border border-emerald-500/20'
+                                    : 'bg-rose-500/10 border border-rose-500/20'
                                     }`}
                                 whileHover={{ scale: 1.05 }}
                                 transition={{ type: "spring", stiffness: 400 }}
                             >
                                 {trend > 0 ? (
-                                    <TrendingUp className="h-3.5 w-3.5 text-emerald-300" />
+                                    <TrendingUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                 ) : (
-                                    <TrendingDown className="h-3.5 w-3.5 text-rose-300" />
+                                    <TrendingDown className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
                                 )}
-                                <span className={`font-bold text-sm ${trend > 0 ? 'text-emerald-200' : 'text-rose-200'
+                                <span className={`font-black text-sm ${trend > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                                     }`}>
                                     {trend > 0 ? '+' : ''}{trend.toFixed(1)}%
                                 </span>
                             </motion.div>
-                            <span className="text-xs text-white/60 font-medium">vs mes anterior</span>
+                            <span className="text-xs text-muted-foreground font-bold italic">vs mes anterior</span>
                         </div>
 
                         {/* Subtle Divider */}
-                        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                        <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
                         {/* Quick Stats Row */}
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
-                                <div className="text-xs text-white/60 mb-1">Ingresos</div>
-                                <div className="text-lg font-bold text-emerald-300">
+                            <div className="p-3 rounded-xl bg-muted/50 border border-border/50">
+                                <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Ingresos</div>
+                                <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
                                     {monthlyData ? `+${formatCompactMoney(monthlyData.totalIncome)}` : '...'}
                                 </div>
                             </div>
-                            <div className="p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
-                                <div className="text-xs text-white/60 mb-1">Gastos</div>
-                                <div className="text-lg font-bold text-rose-300">
+                            <div className="p-3 rounded-xl bg-muted/50 border border-border/50">
+                                <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Gastos</div>
+                                <div className="text-lg font-black text-rose-600 dark:text-rose-400">
                                     {monthlyData ? `-${formatCompactMoney(monthlyData.totalExpense)}` : '...'}
                                 </div>
                             </div>

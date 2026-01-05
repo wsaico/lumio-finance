@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { getGoogleDriveService } from '@/lib/google-drive';
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
@@ -114,6 +115,11 @@ export async function POST(req: NextRequest) {
                 documentType // Include in response
             });
         } catch (e: any) {
+        // Next.js dynamic usage e detection - MUST re-throw immediately and silently
+        if (e && (e.digest === 'DYNAMIC_SERVER_USAGE' || String(e).includes('Dynamic server usage'))) {
+            throw e;
+        }
+
             if (e.message === 'Google Drive no conectado') {
                 return NextResponse.json({
                     error: 'Drive not connected',
@@ -124,6 +130,11 @@ export async function POST(req: NextRequest) {
             throw e;
         }
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[GOOGLE_DRIVE_UPLOAD_FATAL]', {
             message: error.message,
             stack: error.stack

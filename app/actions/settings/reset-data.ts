@@ -76,6 +76,17 @@ export async function resetUserData() {
         return { success: true }
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (
+            error.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (error.message && error.message.includes('Dynamic server usage')) ||
+            (String(error).includes('Dynamic server usage')) ||
+            (String(error).includes('cookies')) ||
+            (String(error).includes('next/headers'))
+        )) {
+            throw error;
+        }
+
         console.error("[Reset Data] Failed to delete data:", error)
         return { success: false, error: "Database error during reset" }
     }

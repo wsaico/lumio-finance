@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
@@ -171,6 +172,11 @@ export async function GET(request: Request) {
 
         return NextResponse.json(enriched.map(mapAccountReceivable))
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[ACCOUNTS_RECEIVABLE_GET] Error:', error)
         return NextResponse.json(
             { error: 'Error al obtener cuentas por cobrar', details: error.message },
@@ -376,6 +382,11 @@ export async function POST(request: Request) {
 
         return NextResponse.json(mapAccountReceivable(receivable), { status: 201 })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[ACCOUNTS_RECEIVABLE_POST] Error:', error)
 
         if (error instanceof z.ZodError) {
@@ -516,6 +527,11 @@ export async function DELETE(request: Request) {
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[ACCOUNTS_RECEIVABLE_DELETE] Error:', error)
         return NextResponse.json(
             { error: 'Error al eliminar el préstamo', details: error.message },
@@ -795,6 +811,11 @@ export async function PATCH(request: Request) {
 
         return NextResponse.json(mapAccountReceivable(data))
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[ACCOUNTS_RECEIVABLE_PATCH] Error:', error)
 
         if (error instanceof z.ZodError) {

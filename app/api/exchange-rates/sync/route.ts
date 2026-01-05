@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
@@ -70,6 +71,11 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
     console.error('Failed to sync exchange rates:', error);
     return NextResponse.json({ error: 'Failed to sync exchange rates' }, { status: 500 });
   }

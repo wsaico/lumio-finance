@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '@/lib/constants/default-categories'
@@ -56,6 +57,11 @@ export async function GET() {
             all: [...expenseCategories, ...incomeCategories]
         })
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[CATEGORIES_GET]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }
@@ -122,6 +128,11 @@ export async function POST(req: Request) {
         return NextResponse.json(category)
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[CATEGORIES_POST]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }
@@ -210,6 +221,11 @@ export async function PUT(req: Request) {
         return NextResponse.json(updatedCategory)
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[CATEGORIES_PUT]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }
@@ -287,6 +303,11 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ success: true })
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[CATEGORIES_DELETE]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }
@@ -350,6 +371,11 @@ export async function PATCH(req: Request) {
         return NextResponse.json(data)
 
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[CATEGORIES_PATCH]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
@@ -125,6 +126,11 @@ export async function POST(request: NextRequest) {
             goal: updatedGoal
         }, { status: 201 })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
         }

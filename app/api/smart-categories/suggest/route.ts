@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
@@ -198,6 +199,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ suggestions });
   } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
     console.error('Error generating suggestions:', error);
     return NextResponse.json(
       { suggestions: [] },

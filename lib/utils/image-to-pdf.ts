@@ -81,6 +81,17 @@ export async function imageToPdf(
 
                 img.src = e.target?.result as string
             } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (
+            error.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (error.message && error.message.includes('Dynamic server usage')) ||
+            (String(error).includes('Dynamic server usage')) ||
+            (String(error).includes('cookies')) ||
+            (String(error).includes('next/headers'))
+        )) {
+            throw error;
+        }
+
                 reject(error)
             }
         }

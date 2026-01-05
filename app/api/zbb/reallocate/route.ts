@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
@@ -106,6 +107,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, message: "Fondos reasignados correctamente" })
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error("Reallocation Error:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }

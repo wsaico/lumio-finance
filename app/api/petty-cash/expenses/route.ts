@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
@@ -99,6 +100,11 @@ export async function GET(request: Request) {
 
         return NextResponse.json(expenses?.map(mapPettyCashExpense) || [])
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[PETTY_CASH_EXPENSES_GET]', error)
         return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
     }
@@ -216,6 +222,11 @@ export async function POST(request: Request) {
             message: thresholdReached ? 'Gasto registrado. Se alcanzó el umbral de liquidación.' : 'Gasto registrado exitosamente'
         })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return new NextResponse(JSON.stringify({ error: 'Datos inválidos', details: error.issues }), { status: 400 })
         }
@@ -289,6 +300,11 @@ export async function PATCH(request: Request) {
 
         return NextResponse.json(mapPettyCashExpense(expense))
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         if (error instanceof z.ZodError) {
             return new NextResponse(JSON.stringify({ error: 'Datos inválidos', details: error.issues }), { status: 400 })
         }
@@ -350,6 +366,11 @@ export async function DELETE(request: Request) {
 
         return NextResponse.json({ success: true, message: 'Gasto eliminado exitosamente' })
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[PETTY_CASH_EXPENSE_DELETE]', error)
         return new NextResponse(JSON.stringify({ error: 'Internal Error', details: error.message }), { status: 500 })
     }

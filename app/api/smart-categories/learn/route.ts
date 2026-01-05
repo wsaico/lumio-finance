@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_EXPENSE_CATEGORIES } from '@/lib/constants/default-categories';
@@ -184,6 +185,11 @@ export async function POST(req: NextRequest) {
       keywords,
     });
   } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
     console.error('[LEARN_API] Fatal Error:', error);
     // Even on fatal error, we return 200 with an error flag to avoid blocking UI
     return NextResponse.json(

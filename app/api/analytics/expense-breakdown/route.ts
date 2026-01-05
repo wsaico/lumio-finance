@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getExchangeRatesMap, convertAmount } from '@/lib/currency'
@@ -136,6 +137,11 @@ export async function GET(req: Request) {
             month
         })
     } catch (error) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error('[EXPENSE_BREAKDOWN]', error)
         return new NextResponse('Internal Error', { status: 500 })
     }

@@ -79,6 +79,17 @@ export async function POST(req: Request) {
         try {
             data = JSON.parse(cleanText);
         } catch (e) {
+        // Next.js dynamic usage e detection - MUST re-throw immediately and silently
+        if (e && (
+            e.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (e.message && e.message.includes('Dynamic server usage')) ||
+            (String(e).includes('Dynamic server usage')) ||
+            (String(e).includes('cookies')) ||
+            (String(e).includes('next/headers'))
+        )) {
+            throw e;
+        }
+
             console.error("Error parsing Gemini response:", text);
             return NextResponse.json(
                 { error: "No se pudo interpretar la respuesta de la IA" },
@@ -89,6 +100,17 @@ export async function POST(req: Request) {
         return NextResponse.json(data);
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (
+            error.digest === 'DYNAMIC_SERVER_USAGE' || 
+            (error.message && error.message.includes('Dynamic server usage')) ||
+            (String(error).includes('Dynamic server usage')) ||
+            (String(error).includes('cookies')) ||
+            (String(error).includes('next/headers'))
+        )) {
+            throw error;
+        }
+
         console.error("Error processing receipt with AI:", error);
 
         // Extract inner error message if possible

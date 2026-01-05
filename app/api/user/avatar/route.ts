@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createClient as createServerSupabase } from '@/lib/supabase/server'
@@ -88,6 +89,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, avatar_url: publicUrl })
 
     } catch (error: any) {
+        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error;
+        }
+
         console.error("API Error:", error)
         return NextResponse.json({ error: error.message || "Error interno del servidor" }, { status: 500 })
     }

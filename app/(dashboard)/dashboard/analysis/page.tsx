@@ -1,4 +1,5 @@
-﻿import { AnalysisBoard } from '@/components/analysis/analysis-board';
+﻿export const dynamic = 'force-dynamic';
+import { AnalysisBoard } from '@/components/analysis/analysis-board';
 import { Metadata } from 'next';
 import { getDashboardData } from '@/app/actions/analysis/get-kpis';
 import { DashboardProvider } from '@/components/analysis/dashboard-context';
