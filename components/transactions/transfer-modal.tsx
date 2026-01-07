@@ -109,6 +109,28 @@ function TransferModalContent({ onOpenChange, onSuccess }: Omit<TransferModalPro
         fetchExchangeRate()
     }, [fetchExchangeRate])
 
+    // Evaluate mathematical expression safely
+    const evaluateExpression = (expr: string): number => {
+        try {
+            // Replace display operators with JS operators
+            let sanitized = expr
+                .replace(/×/g, '*')
+                .replace(/÷/g, '/')
+                .replace(/,/g, '.')
+
+            // Only allow numbers, operators, and decimal points
+            if (!/^[\d+\-*/.()\s]+$/.test(sanitized)) {
+                return parseFloat(sanitized) || 0
+            }
+
+            // Use Function constructor for safe evaluation
+            const result = new Function(`return ${sanitized}`)()
+            return typeof result === 'number' && isFinite(result) ? result : 0
+        } catch {
+            return 0
+        }
+    }
+
     // Calculate converted amount when expression or rate changes
     useEffect(() => {
         if (exchangeRate && needsCurrencyConversion) {
@@ -150,27 +172,7 @@ function TransferModalContent({ onOpenChange, onSuccess }: Omit<TransferModalPro
         return balance < 0 ? `-${symbol}${formatted}` : `${symbol}${formatted}`
     }
 
-    // Evaluate mathematical expression safely
-    const evaluateExpression = (expr: string): number => {
-        try {
-            // Replace display operators with JS operators
-            let sanitized = expr
-                .replace(/×/g, '*')
-                .replace(/÷/g, '/')
-                .replace(/,/g, '.')
 
-            // Only allow numbers, operators, and decimal points
-            if (!/^[\d+\-*/.()\s]+$/.test(sanitized)) {
-                return parseFloat(sanitized) || 0
-            }
-
-            // Use Function constructor for safe evaluation
-            const result = new Function(`return ${sanitized}`)()
-            return typeof result === 'number' && isFinite(result) ? result : 0
-        } catch {
-            return 0
-        }
-    }
 
     // Update display value whenever expression changes
     useEffect(() => {
