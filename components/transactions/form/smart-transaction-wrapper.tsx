@@ -145,7 +145,7 @@ export function SmartTransactionWrapper({ initialData, onSuccess, defaultOpenWiz
 
                     {/* 2. Full-Width Bottom Action Bar (Image Reference Style) */}
                     <div
-                        className="w-full border-t border-slate-200/60 dark:border-white/5 backdrop-blur-md px-10 py-5 flex justify-center items-center transition-colors duration-500"
+                        className="w-full border-t border-slate-200/60 dark:border-white/5 backdrop-blur-md px-10 py-5 flex justify-center items-center transition-colors duration-500 z-[60] relative pb-safe"
                         style={{ backgroundColor: `oklch(from var(${activeTab === 'EXPENSE' ? '--expense' : activeTab === 'INCOME' ? '--income' : '--savings'}) l c h / 0.08)` }}
                     >
                         <Button

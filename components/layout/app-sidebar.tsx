@@ -101,14 +101,16 @@ export function Sidebar({ className, variant = "default" }: SidebarProps) {
                                     <img src="/logo-dark.png" alt="Lumio" className="h-10 w-auto brightness-0 invert relative z-10" />
                                 </div>
                             </Link>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setSidebarCollapsed(true)}
-                                className="h-8 w-8 rounded-full hover:bg-white/20 text-primary-foreground/70 hover:text-white transition-all"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
+                            {variant !== 'flat' && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setSidebarCollapsed(true)}
+                                    className="h-8 w-8 rounded-full hover:bg-white/20 text-primary-foreground/70 hover:text-white transition-all"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                            )}
                         </motion.div>
                     ) : (
                         <motion.div

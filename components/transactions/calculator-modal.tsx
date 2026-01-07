@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { X, Delete } from "lucide-react"
@@ -25,6 +25,24 @@ export function CalculatorModal({ open, onOpenChange, onConfirm, initialValue = 
             setDisplay(display + num)
         }
     }
+
+    // Support Enter key to confirm
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault()
+                // Use the latest display value
+                const value = display === "0" ? "" : display
+                onConfirm(value)
+                onOpenChange(false)
+            }
+        }
+
+        if (open) {
+            window.addEventListener('keydown', handleKeyDown)
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [open, display, onConfirm, onOpenChange])
 
     const handleDecimal = () => {
         if (!display.includes(".")) {

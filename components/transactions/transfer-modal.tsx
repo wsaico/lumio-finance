@@ -61,6 +61,9 @@ function TransferModalContent({ onOpenChange, onSuccess }: Omit<TransferModalPro
         }
     }, [accounts, fromAccountId])
 
+    // Safety check: if accounts are loading or error, don't crash
+    if (!accounts) return null
+
     const fromAccount = accounts?.find((a: any) => a.id === fromAccountId)
     const toAccount = accounts?.find((a: any) => a.id === toAccountId)
 

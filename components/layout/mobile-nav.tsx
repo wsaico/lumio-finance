@@ -54,8 +54,12 @@ export function MobileNav() {
                     )
                 })}
 
-                {/* FAB Spacer */}
-                <div className="w-16 h-10 flex-shrink-0" />
+                {/* FAB Spacer - Only visible when FAB is visible */}
+                {!pathname?.includes('/transactions/') &&
+                    !pathname?.includes('/petty-cash/new-') &&
+                    !pathname?.includes('/petty-cash/edit-') && (
+                        <div className="w-16 h-10 flex-shrink-0" />
+                    )}
 
                 {/* Last 2 items */}
                 {routes.slice(2).map((route) => {

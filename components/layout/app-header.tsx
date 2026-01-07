@@ -54,6 +54,12 @@ export function Header() {
     const router = useRouter()
     const { sidebarCollapsed } = useSettingsStore()
     const [date, setDate] = useState<Date | undefined>(new Date())
+    const [isOpen, setIsOpen] = useState(false)
+
+    // Auto-close sidebar on route change
+    useEffect(() => {
+        setIsOpen(false)
+    }, [pathname])
 
     // Data hooks
     const { accounts } = useAccounts()
@@ -86,7 +92,7 @@ export function Header() {
 
             {/* --- LEFT: Mobile Menu & Page Title --- */}
             <div className="flex items-center gap-4 z-20">
-                <Sheet>
+                <Sheet open={isOpen} onOpenChange={setIsOpen}>
                     <SheetTrigger asChild>
                         <Button variant="ghost" size="icon" className="lg:hidden rounded-xl h-10 w-10">
                             <Menu className="h-5 w-5" />

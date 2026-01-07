@@ -855,29 +855,23 @@ export function TransactionBaseLayer({
                 <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[55vh] p-0 border-0 bg-white dark:bg-zinc-950 shadow-2xl overflow-hidden">
                     <div className="h-full flex flex-col relative">
                         <div className="absolute top-0 left-0 right-0 py-2 flex justify-center pointer-events-none z-50">
-                            <div className="w-10 h-1 bg-slate-300 dark:bg-zinc-700 rounded-full" />
+                            {/* Drag Handle */}
+                            <div className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full shadow-sm" />
                         </div>
-                        <SheetHeader className="px-6 pt-6 pb-3">
-                            <SheetTitle className="text-xl font-bold text-slate-800 dark:text-white">Seleccionar Categoría</SheetTitle>
-                        </SheetHeader>
-                        <div className="flex-1 overflow-hidden h-full bg-white dark:bg-black">
-                            {/* Force white/black background to ensure visibility */}
+                        <div className="flex-1 overflow-hidden pt-8 pb-0 h-full">
                             <CategoryGrid
                                 categories={categories}
-                                categoryId={currentCategoryId}
-                                subcategoryId={currentSubcategoryId}
-                                onSelect={(catId, subId) => {
-                                    form.setValue("categoryId", catId, { shouldDirty: true, shouldValidate: true })
-                                    form.setValue("subcategoryId", subId || "", { shouldDirty: true, shouldValidate: true })
+                                categoryId={form.watch("categoryId")}
+                                onSelect={(id) => {
+                                    form.setValue("categoryId", id)
                                     setIsCategorySheetOpen(false)
                                 }}
-                                enableTabs={activeTab === 'EXPENSE'}
+                                enableTabs={true}
                             />
                         </div>
                     </div>
                 </SheetContent>
             </Sheet>
-
 
             {/* Date Selection Sheet */}
             < Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen} >
