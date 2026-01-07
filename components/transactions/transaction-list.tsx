@@ -253,7 +253,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                     return (
                         <div key={key} className="space-y-2">
                             {/* Hide date header if limited? Maybe keep it for context. User asked for "Latest Movements". */}
-                            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 backdrop-blur-sm rounded-lg sticky top-[80px] z-10 border border-transparent shadow-sm">
+                            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 backdrop-blur-sm rounded-lg sticky top-[150px] md:top-[166px] z-10 border border-transparent shadow-sm">
                                 <h3 className="text-sm font-semibold capitalize text-foreground">{headerLabel}</h3>
                                 <div className="flex gap-4 text-xs font-medium">
                                     {dailyIncome > 0 && <span className="text-emerald-500">▲ {dailyIncome.toFixed(2)}</span>}
@@ -321,7 +321,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                                                         {account && (
                                                             <Badge
                                                                 variant="secondary"
-                                                                className="text-[9px] px-1.5 py-0.5 h-5 shrink-0 font-medium border"
+                                                                className="text-xs px-1.5 py-0.5 h-5 shrink-0 font-medium border"
                                                                 style={{
                                                                     backgroundColor: `${account.color}15`,
                                                                     borderColor: `${account.color}40`,
@@ -335,7 +335,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                                                         {metadata?.isBalanceAdjustment && (
                                                             <Badge
                                                                 variant="secondary"
-                                                                className="text-[9px] px-1.5 py-0.5 h-5 shrink-0 font-medium bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
+                                                                className="text-xs px-1.5 py-0.5 h-5 shrink-0 font-medium bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
                                                             >
                                                                 <Calculator className="h-2.5 w-2.5 mr-0.5" />
                                                                 Ajuste Contable
@@ -343,7 +343,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                                                         )}
                                                         {showModeBadge && (
                                                             <Badge variant="outline" className={cn(
-                                                                "text-[9px] px-1.5 py-0 h-4 shrink-0 flex items-center gap-1",
+                                                                "text-xs px-1.5 py-0 h-4 shrink-0 flex items-center gap-1",
                                                                 isFuture ? "border-amber-500/50 bg-amber-500/5 text-amber-600" : ""
                                                             )}>
                                                                 {mode === 'RECURRING' && <><Repeat className="h-2.5 w-2.5" />Repetitivo</>}

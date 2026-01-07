@@ -34,9 +34,11 @@ import { useUser } from "@/hooks/use-user"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
+interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
+    variant?: "default" | "flat"
+}
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, variant = "default" }: SidebarProps) {
     const pathname = usePathname()
     const { sidebarCollapsed, setSidebarCollapsed } = useSettingsStore()
     const { profile } = useUser()
@@ -72,8 +74,8 @@ export function Sidebar({ className }: SidebarProps) {
             className={cn(
                 // Premium Color Block Style
                 "bg-primary text-primary-foreground dark:bg-[#09090b] dark:text-foreground dark:border-r dark:border-white/10",
-                "rounded-r-[2.5rem] shadow-2xl",
-                !sidebarCollapsed ? "w-72" : "w-[90px]",
+                variant === "default" && "rounded-r-[2.5rem] shadow-2xl",
+                !sidebarCollapsed || variant === "flat" ? "w-72" : "w-[90px]",
                 className
             )}
         >

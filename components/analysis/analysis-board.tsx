@@ -88,7 +88,7 @@ export function AnalysisBoard() {
                 onDragEnd={handleDragEnd}
             >
                 <SortableContext items={widgets.map((w) => w.id)} strategy={rectSortingStrategy}>
-                    <div className="grid grid-cols-12 gap-4 auto-rows-[150px] sm:auto-rows-[160px] lg:auto-rows-[170px] grid-flow-dense pb-16">
+                    <div className="grid grid-cols-12 gap-4 auto-rows-[180px] sm:auto-rows-[160px] lg:auto-rows-[170px] grid-flow-dense pb-16">
                         {widgets.filter((w) => w.isVisible).map((widget) => {
                             const Component = WidgetRegistry[widget.type];
 

@@ -19,7 +19,7 @@ function ChartWidgetWrapper({ title, subtitle, children }: { title: string; subt
             <div className="absolute -top-24 left-0 h-32 w-32 rounded-full bg-blue-400/10 blur-3xl" />
             <div className="relative z-10 flex h-full flex-col">
                 <div className="mb-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tendencias</p>
+                    <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80">Tendencias</p>
                     <h3 className="text-base font-semibold text-foreground truncate">{title}</h3>
                     {subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
                 </div>

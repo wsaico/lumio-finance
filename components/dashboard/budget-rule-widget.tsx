@@ -6,11 +6,14 @@ import { useFormat } from "@/hooks/use-format"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { motion } from "framer-motion"
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react"
+import { useWindowSize } from "@/hooks/use-window-size"
 
 export function BudgetRuleWidget() {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const { formatMoney, formatPercentage } = useFormat()
+    const { width } = useWindowSize()
+    const isMobile = width > 0 && width < 640
 
     // Fetch Data
     useEffect(() => {
@@ -137,7 +140,7 @@ export function BudgetRuleWidget() {
                 <CardContent className="space-y-4">
                     {/* Donut Chart */}
                     <div className="relative">
-                        <ResponsiveContainer width="100%" height={180}>
+                        <ResponsiveContainer width="100%" height={isMobile ? 140 : 180}>
                             <PieChart>
                                 <Pie
                                     data={chartData}

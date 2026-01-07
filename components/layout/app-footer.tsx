@@ -24,10 +24,10 @@ export function AppFooter() {
 
                 {/* Copyright Section */}
                 <div className="flex flex-col items-center md:items-end gap-1">
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-400">
+                    <p className="text-[12px] font-black uppercase tracking-[0.2em] text-neutral-400">
                         © 2026 Lumio Finance
                     </p>
-                    <p className="text-[10px] font-medium text-muted-foreground/60 leading-none">
+                    <p className="text-[11px] font-medium text-muted-foreground/60 leading-none">
                         Todos los derechos reservados
                     </p>
                 </div>

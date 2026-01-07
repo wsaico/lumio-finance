@@ -45,8 +45,9 @@ const formatMoney = (value: number) => {
 };
 
 const CustomizedContent = (props: any) => {
-    const { x, y, width, height, payload, name } = props;
-    const value = payload?.value || 0;
+    const { x, y, width, height, payload, name, value, fill } = props;
+    const displayValue = value || payload?.value || 0;
+    const displayFill = fill || payload?.fill || '#333';
     const canLabel = width > 90 && height > 50;
 
     return (
@@ -59,7 +60,7 @@ const CustomizedContent = (props: any) => {
                 rx={12}
                 ry={12}
                 style={{
-                    fill: payload?.fill || '#333',
+                    fill: displayFill,
                     stroke: 'rgba(255,255,255,0.12)',
                     strokeWidth: 1,
                 }}
@@ -84,7 +85,7 @@ const CustomizedContent = (props: any) => {
                         fontSize={10}
                         fontWeight="normal"
                     >
-                        {formatMoney(value)}
+                        {formatMoney(displayValue)}
                     </text>
                 </>
             )}

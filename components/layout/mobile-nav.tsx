@@ -22,13 +22,6 @@ export function MobileNav() {
             href: "/dashboard/transactions",
         },
         {
-            // Placeholder for FAB
-            label: "Nuevo",
-            icon: PlusCircle,
-            href: "#",
-            isFab: true
-        },
-        {
             label: "Presupuestos",
             icon: PieChart,
             href: "/dashboard/budgets",
@@ -41,32 +34,43 @@ export function MobileNav() {
     ]
 
     return (
-        <div className="fixed bottom-4 left-4 right-4 z-50 rounded-2xl border bg-background/80 p-2 shadow-lg backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
-            <div className="flex items-center justify-around">
-                {routes.map((route) => {
-                    if (route.isFab) {
-                        return (
-                            <div key="fab" className="-mt-8">
-                                <Link href="/transactions/new">
-                                    <Button size="icon" className="h-14 w-14 rounded-full shadow-xl shadow-primary/30 bg-primary text-primary-foreground">
-                                        <PlusCircle className="h-7 w-7" />
-                                    </Button>
-                                </Link>
-                            </div>
-                        )
-                    }
+        <div className="fixed bottom-4 left-4 right-4 z-50 rounded-2xl border bg-background/80 p-1.5 shadow-lg backdrop-blur-lg supports-[backdrop-filter]:bg-background/60 md:hidden">
+            <div className="flex items-center justify-between px-4">
+                {/* First 2 items */}
+                {routes.slice(0, 2).map((route) => {
                     const isActive = pathname === route.href
                     return (
                         <Link
                             key={route.href}
                             href={route.href}
                             className={cn(
-                                "flex flex-col items-center gap-1 p-2 text-xs font-medium transition-colors",
+                                "flex flex-col items-center gap-0.5 p-1 px-2 text-[11px] font-medium transition-colors",
                                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
-                            <route.icon className={cn("h-6 w-6", isActive && "fill-current")} />
-                            {/* <span className="sr-only">{route.label}</span> */}
+                            <route.icon className={cn("h-5 w-5 transition-all", isActive && "fill-current")} />
+                            <span className="truncate hidden xs:block">{route.label}</span>
+                        </Link>
+                    )
+                })}
+
+                {/* FAB Spacer */}
+                <div className="w-16 h-10 flex-shrink-0" />
+
+                {/* Last 2 items */}
+                {routes.slice(2).map((route) => {
+                    const isActive = pathname === route.href
+                    return (
+                        <Link
+                            key={route.href}
+                            href={route.href}
+                            className={cn(
+                                "flex flex-col items-center gap-0.5 p-1 px-2 text-[11px] font-medium transition-colors",
+                                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            <route.icon className={cn("h-5 w-5 transition-all", isActive && "fill-current")} />
+                            <span className="truncate hidden xs:block">{route.label}</span>
                         </Link>
                     )
                 })}

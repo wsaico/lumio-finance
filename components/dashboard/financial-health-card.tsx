@@ -5,11 +5,14 @@ import { useAccounts } from "@/hooks/use-accounts"
 import { useFormat } from "@/hooks/use-format"
 import { TrendingUp, TrendingDown, Activity, Wallet, CreditCard } from "lucide-react"
 import { motion } from "framer-motion"
-import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from "recharts"
+import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from "recharts"
+import { useWindowSize } from "@/hooks/use-window-size"
 
 export function FinancialHealthCard() {
     const { accounts, isLoading, totalBalanceConverted } = useAccounts()
     const { formatCompactMoney } = useFormat()
+    const { width } = useWindowSize()
+    const isMobile = width > 0 && width < 640
 
     if (isLoading) {
         return (
@@ -56,9 +59,9 @@ export function FinancialHealthCard() {
                     <CardTitle className="text-sm font-medium">Salud Financiera</CardTitle>
                     <Activity className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4">
                     {/* Compact Score Display */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col xs:flex-row items-center gap-4">
                         {/* Mini Radial Chart */}
                         <div className="relative w-20 h-20 flex-shrink-0">
                             <ResponsiveContainer width="100%" height="100%">
@@ -83,37 +86,37 @@ export function FinancialHealthCard() {
                             <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="text-center">
                                     <div className="text-xl font-bold">{Math.round(healthScore)}</div>
-                                    <div className="text-[8px] text-muted-foreground">/ 100</div>
+                                    <div className="text-[10px] text-muted-foreground">/ 100</div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Stats Grid */}
-                        <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div className="w-full grid grid-cols-2 gap-3 xs:gap-2">
                             <div className="space-y-0.5">
-                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
                                     <Wallet className="h-3 w-3" />
                                     <span>Activos</span>
                                 </div>
-                                <div className="text-sm font-bold text-emerald-600">
+                                <div className="text-base font-bold text-emerald-600">
                                     {formatCompactMoney(totalAssets)}
                                 </div>
                             </div>
 
                             <div className="space-y-0.5">
-                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
                                     <CreditCard className="h-3 w-3" />
                                     <span>Pasivos</span>
                                 </div>
-                                <div className="text-sm font-bold text-rose-600">
+                                <div className="text-base font-bold text-rose-600">
                                     {formatCompactMoney(totalLiabilities)}
                                 </div>
                             </div>
 
-                            <div className="col-span-2 pt-1 border-t border-border/50">
+                            <div className="col-span-2 pt-2 border-t border-border/50">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-muted-foreground">Patrimonio</span>
-                                    <span className="text-base font-bold">
+                                    <span className="text-xs text-muted-foreground font-medium">Patrimonio Neto</span>
+                                    <span className="text-lg font-black tracking-tight">
                                         {formatCompactMoney(netWorth)}
                                     </span>
                                 </div>

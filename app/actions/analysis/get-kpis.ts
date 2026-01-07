@@ -93,8 +93,8 @@ export async function getDashboardData(): Promise<DashboardData> {
             const currency = t.currency_code || accounts.find(a => a.id === t.account_id)?.currency || targetCurrency;
             const val = convertAmount(rawAmount, currency, targetCurrency, rateMap);
 
-            if (t.transaction_type === 'INCOME') totalIncome += val;
-            if (t.transaction_type === 'EXPENSE') totalExpense += val;
+            if (t.transaction_type === 'INCOME') totalIncome += Math.abs(val);
+            if (t.transaction_type === 'EXPENSE') totalExpense += Math.abs(val);
         });
 
         const netFlow = totalIncome - totalExpense;
@@ -119,8 +119,8 @@ export async function getDashboardData(): Promise<DashboardData> {
                 const val = convertAmount(rawAmount, currency, targetCurrency, rateMap);
 
                 const entry = historyMap.get(key)!;
-                if (t.transaction_type === 'INCOME') entry.income += val;
-                if (t.transaction_type === 'EXPENSE') entry.expense += val;
+                if (t.transaction_type === 'INCOME') entry.income += Math.abs(val);
+                if (t.transaction_type === 'EXPENSE') entry.expense += Math.abs(val);
             }
         });
 
@@ -131,60 +131,31 @@ export async function getDashboardData(): Promise<DashboardData> {
             balance: data.income - data.expense
         }));
 
-        // 5. Process Expenses by Category (Last 90 Days)
-        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
-        const ninetyDayTx = transactions?.filter(t => t.transaction_type === 'EXPENSE' && t.transaction_date >= ninetyDaysAgo) || [];
+        // 5. Process Expenses by Category (Current Month Focus for Treemap - More relevant)
+        const categoryMap = new Map<string, { value: number, color: string }>();
 
-        const hierarchicalMap = new Map<string, { value: number, color: string, children: Map<string, number>, directValue: number }>();
+        currentMonthTx.forEach((t: any) => {
+            if (t.transaction_type === 'EXPENSE') {
+                const category = t.expense_category || t.subcategory?.expense_category;
+                if (!category) return;
 
-        ninetyDayTx.forEach((t: any) => {
-            const category = t.expense_category || t.subcategory?.expense_category;
-            if (!category) return;
+                const name = category.name;
+                const color = category.color || '#94a3b8';
+                const rawAmount = Number(t.amount);
+                const currency = t.currency_code || accounts.find(a => a.id === t.account_id)?.currency || targetCurrency;
+                const val = Math.abs(convertAmount(rawAmount, currency, targetCurrency, rateMap));
 
-            const catName = category.name;
-            const subName = t.subcategory?.name;
-            const color = category.color || '#94a3b8';
-            const rawAmount = Number(t.amount);
-            const currency = t.currency_code || accounts.find(a => a.id === t.account_id)?.currency || targetCurrency;
-            const val = convertAmount(rawAmount, currency, targetCurrency, rateMap);
-
-            if (!hierarchicalMap.has(catName)) {
-                hierarchicalMap.set(catName, { value: 0, color, children: new Map(), directValue: 0 });
-            }
-
-            const catEntry = hierarchicalMap.get(catName)!;
-            catEntry.value += val;
-
-            if (subName) {
-                catEntry.children.set(subName, (catEntry.children.get(subName) || 0) + val);
-            } else {
-                catEntry.directValue += val;
+                if (categoryMap.has(name)) {
+                    const entry = categoryMap.get(name)!;
+                    entry.value += val;
+                } else {
+                    categoryMap.set(name, { value: val, color });
+                }
             }
         });
 
-        const expensesByCategory = Array.from(hierarchicalMap.entries())
-            .map(([name, data]) => {
-                const children = Array.from(data.children.entries()).map(([subName, subVal]) => ({
-                    name: subName,
-                    value: subVal,
-                    fill: data.color
-                }));
-
-                if (data.directValue > 0) {
-                    children.push({
-                        name: 'Sin especificar',
-                        value: data.directValue,
-                        fill: data.color
-                    });
-                }
-
-                return {
-                    name,
-                    value: data.value,
-                    fill: data.color,
-                    children
-                };
-            })
+        const expensesByCategory = Array.from(categoryMap.entries())
+            .map(([name, data]) => ({ name, value: data.value, fill: data.color }))
             .sort((a, b) => b.value - a.value);
 
         // 6. Fetch Global Budget Comparison and Alerts

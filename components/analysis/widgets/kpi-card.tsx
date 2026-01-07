@@ -52,8 +52,8 @@ export function KpiCard({
                     <div className="space-y-1">
                         <span
                             className={cn(
-                                'text-[11px] font-semibold uppercase tracking-[0.2em]',
-                                isDefault ? 'text-muted-foreground' : 'text-white/70'
+                                'text-[12px] font-bold uppercase tracking-[0.2em]',
+                                isDefault ? 'text-muted-foreground' : 'text-white/80'
                             )}
                         >
                             {title}
@@ -93,7 +93,7 @@ export function KpiCard({
                         >
                             {trend.isPositive ? '+' : '-'}{Math.abs(trend.value)}%
                         </span>
-                        <span className={cn('text-[11px] truncate', isDefault ? 'text-muted-foreground' : 'text-white/70')}>
+                        <span className={cn('text-[12px] font-medium truncate', isDefault ? 'text-muted-foreground' : 'text-white/80')}>
                             {trend.label || 'vs mes anterior'}
                         </span>
                     </div>

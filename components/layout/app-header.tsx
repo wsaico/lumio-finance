@@ -82,7 +82,7 @@ export function Header() {
     const firstName = profile?.full_name?.split(' ')[0] || 'Usuario'
 
     return (
-        <header className="sticky top-0 z-40 flex h-24 w-full items-center justify-between px-6 bg-background/80 backdrop-blur-xl border-b transition-all duration-300">
+        <header className="sticky top-0 z-40 flex h-20 md:h-24 w-full items-center justify-between px-4 md:px-6 bg-background/80 backdrop-blur-xl border-b transition-all duration-300">
 
             {/* --- LEFT: Mobile Menu & Page Title --- */}
             <div className="flex items-center gap-4 z-20">
@@ -92,8 +92,9 @@ export function Header() {
                             <Menu className="h-5 w-5" />
                         </Button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="p-0 w-72 border-r-0">
-                        <Sidebar className="border-none w-full h-full shadow-none" />
+                    <SheetContent side="left" className="p-0 w-72 border-r-0 bg-primary dark:bg-[#09090b]">
+                        <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
+                        <Sidebar variant="flat" className="w-full h-full shadow-none" />
                     </SheetContent>
                 </Sheet>
 
@@ -114,7 +115,7 @@ export function Header() {
 
 
             {/* --- CENTER: HERO (Absolute) --- */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none md:pointer-events-auto">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none md:pointer-events-auto hidden sm:block">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -164,13 +165,12 @@ export function Header() {
                     </Button>
                 </CommandSearch>
 
-                {/* 2. Theme */}
-                <ThemeToggle />
+                <div className="hidden sm:flex items-center gap-2">
+                    <ThemeToggle />
+                    <NotificationsPopover />
+                </div>
 
-                {/* 3. Notifications */}
-                <NotificationsPopover />
-
-                <div className="h-6 w-px bg-border/40 mx-2" />
+                <div className="h-6 w-px bg-border/40 mx-1 hidden sm:block" />
 
                 {/* 4. PREMIUM PROFILE CIRCLE */}
                 <DropdownMenu>

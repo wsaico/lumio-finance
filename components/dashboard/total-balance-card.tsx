@@ -7,11 +7,14 @@ import { useSettingsStore } from "@/hooks/use-settings-store"
 import { TrendingUp, TrendingDown, Wallet, Eye, EyeOff, Sparkles } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useEffect, useState } from "react"
+import { useWindowSize } from "@/hooks/use-window-size"
 
 export function TotalBalanceCard() {
     const { accounts, isLoading, totalBalanceConverted, balancesByCurrency } = useAccounts()
     const { formatMoney, formatCompactMoney } = useFormat()
     const { currencyCode: baseCurrency } = useSettingsStore()
+    const { width } = useWindowSize()
+    const isMobile = width > 0 && width < 768
     const [displayBalance, setDisplayBalance] = useState(0)
     const [isBalanceVisible, setIsBalanceVisible] = useState(true)
     const [viewMode, setViewMode] = useState<'consolidated' | 'separated'>('consolidated')
@@ -141,7 +144,7 @@ export function TotalBalanceCard() {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                             >
-                                {viewMode === 'consolidated' ? 'Por Moneda' : 'Consolidado'}
+                                {viewMode === 'consolidated' ? (isMobile ? 'Monedas' : 'Por Moneda') : 'Consolidado'}
                             </motion.button>
                             <motion.button
                                 onClick={() => setIsBalanceVisible(!isBalanceVisible)}
@@ -173,7 +176,7 @@ export function TotalBalanceCard() {
                                     {viewMode === 'consolidated' ? (
                                         <>
                                             <motion.div
-                                                className="text-4xl md:text-5xl font-bold tracking-tight text-foreground"
+                                                className="text-3xl xs:text-4xl md:text-5xl font-bold tracking-tight text-foreground truncate"
                                                 initial={{ scale: 0.5 }}
                                                 animate={{ scale: 1 }}
                                                 transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
@@ -190,7 +193,7 @@ export function TotalBalanceCard() {
                                             {Object.entries(balancesByCurrency || {}).map(([currency, amount]) => (
                                                 <div key={currency} className="flex items-baseline justify-between gap-4">
                                                     <span className="text-sm text-muted-foreground font-bold">{currency}</span>
-                                                    <span className="text-2xl md:text-3xl font-black text-foreground tabular-nums">
+                                                    <span className="text-xl xs:text-2xl md:text-3xl font-black text-foreground tabular-nums">
                                                         {formatMoney(amount as number, currency)}
                                                     </span>
                                                 </div>
@@ -210,7 +213,7 @@ export function TotalBalanceCard() {
                                     transition={{ duration: 0.2 }}
                                     className="space-y-1"
                                 >
-                                    <div className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">******</div>
+                                    <div className="text-3xl xs:text-4xl md:text-5xl font-bold tracking-tight text-foreground">******</div>
                                     <div className="text-xs text-muted-foreground">
                                         Balance oculto
                                     </div>
