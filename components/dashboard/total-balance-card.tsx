@@ -1,13 +1,13 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useFormat } from "@/hooks/use-format"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { TrendingUp, TrendingDown, Wallet, Eye, EyeOff, Sparkles } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useEffect, useState } from "react"
-import { useWindowSize } from "@/hooks/use-window-size"
+import { useWindowSize } from "@/hooks/useWindowSize"
 
 export function TotalBalanceCard() {
     const { accounts, isLoading, totalBalanceConverted, balancesByCurrency } = useAccounts()
@@ -16,7 +16,7 @@ export function TotalBalanceCard() {
     const { width } = useWindowSize()
     const isMobile = width > 0 && width < 768
     const [displayBalance, setDisplayBalance] = useState(0)
-    const [isBalanceVisible, setIsBalanceVisible] = useState(true)
+    const { isBalanceVisible, setIsBalanceVisible } = useSettingsStore()
     const [viewMode, setViewMode] = useState<'consolidated' | 'separated'>('consolidated')
     const [monthlyData, setMonthlyData] = useState<any>(null)
     const [previousMonthData, setPreviousMonthData] = useState<any>(null)
@@ -252,13 +252,13 @@ export function TotalBalanceCard() {
                             <div className="p-3 rounded-xl bg-muted/50 border border-border/50">
                                 <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Ingresos</div>
                                 <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                                    {monthlyData ? `+${formatCompactMoney(monthlyData.totalIncome)}` : '...'}
+                                    {isBalanceVisible ? (monthlyData ? `+${formatCompactMoney(monthlyData.totalIncome)}` : '...') : '***'}
                                 </div>
                             </div>
                             <div className="p-3 rounded-xl bg-muted/50 border border-border/50">
                                 <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Gastos</div>
                                 <div className="text-lg font-black text-rose-600 dark:text-rose-400">
-                                    {monthlyData ? `-${formatCompactMoney(monthlyData.totalExpense)}` : '...'}
+                                    {isBalanceVisible ? (monthlyData ? `-${formatCompactMoney(monthlyData.totalExpense)}` : '...') : '***'}
                                 </div>
                             </div>
                         </div>

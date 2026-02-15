@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useCategories } from "@/hooks/use-categories"
+import { useCategories } from "@/hooks/useCategories"
 import { CategoryFormModal } from "@/components/categories/category-form-modal"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"

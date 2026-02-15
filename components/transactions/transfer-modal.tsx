@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import { CalendarIcon, ArrowRight, X, Delete, Check, ChevronUp, ChevronDown, RefreshCw } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useAccounts } from "@/hooks/useAccounts"
 import { toast } from "sonner"
 
 interface TransferModalProps {

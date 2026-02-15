@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 export function SettingsEffects() {
     const { accentColor, fontFamily } = useSettingsStore()

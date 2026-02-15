@@ -22,7 +22,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import {
     MoreHorizontal,
     Edit2,

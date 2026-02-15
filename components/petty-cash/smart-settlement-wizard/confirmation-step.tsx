@@ -6,8 +6,8 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, FileText, Eye, Plus, Sparkles } from "lucide-react"
 import Link from "next/link"
-import Confetti from "react-confetti"
-import { useWindowSize } from "@/hooks/use-window-size"
+import { useEffect } from "react"
+import confetti from "canvas-confetti"
 
 interface ConfirmationStepProps {
     settlementCode: string
@@ -25,18 +25,42 @@ export function ConfirmationStep({
     expenseCount
 }: ConfirmationStepProps) {
     const router = useRouter()
-    const { width, height } = useWindowSize()
+
+    useEffect(() => {
+        const duration = 3 * 1000
+        const animationEnd = Date.now() + duration
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 }
+
+        const randomInRange = (min: number, max: number) => {
+            return Math.random() * (max - min) + min
+        }
+
+        const interval: any = setInterval(function () {
+            const timeLeft = animationEnd - Date.now()
+
+            if (timeLeft <= 0) {
+                return clearInterval(interval)
+            }
+
+            const particleCount = 50 * (timeLeft / duration)
+
+            confetti({
+                ...defaults,
+                particleCount,
+                origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+            })
+            confetti({
+                ...defaults,
+                particleCount,
+                origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+            })
+        }, 250)
+
+        return () => clearInterval(interval)
+    }, [])
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 flex items-center justify-center p-6">
-            <Confetti
-                width={width}
-                height={height}
-                recycle={false}
-                numberOfPieces={500}
-                gravity={0.3}
-            />
-
             <div className="max-w-2xl w-full animate-in zoom-in-95 fade-in duration-500">
                 {/* Success Icon */}
                 <div className="text-center mb-8">

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Delete, Check } from "lucide-react"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useAccounts } from "@/hooks/useAccounts"
 import { cn } from "@/lib/utils"
 import {
     Select,

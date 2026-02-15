@@ -8,7 +8,7 @@ import { Plus, Calculator, FileText, Archive, TrendingUp, AlertCircle, CheckCirc
 import Link from "next/link"
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/ui/fade-in"
 import { Badge } from "@/components/ui/badge"
-import { usePettyCashFunds, usePettyCashExpenses, usePettyCashSettlements } from "@/hooks/use-petty-cash"
+import { usePettyCashFunds, usePettyCashExpenses, usePettyCashSettlements } from "@/hooks/usePettyCash"
 import { CreateFundModal } from "@/components/petty-cash/create-fund-modal"
 import { CreateAuditModal } from "@/components/petty-cash/create-audit-modal"
 import { ExpensesList } from "@/components/petty-cash/expenses-list"

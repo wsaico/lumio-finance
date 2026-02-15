@@ -1,7 +1,7 @@
 "use client"
 
 import { TrendingDown, TrendingUp, AlertCircle } from "lucide-react"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { cn } from "@/lib/utils"
 
 interface BalancePreviewProps {

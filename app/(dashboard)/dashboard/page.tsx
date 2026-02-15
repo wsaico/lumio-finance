@@ -1,6 +1,6 @@
 "use client"
 
-import { useDashboardStore, WidgetId } from "@/hooks/use-dashboard-store"
+import { useDashboardStore, WidgetId } from "@/hooks/useDashboardStore"
 import { WIDGET_REGISTRY } from "@/components/dashboard/widget-registry"
 import { ResizableWidget } from "@/components/dashboard/resizable-widget"
 import { Button } from "@/components/ui/button"
@@ -182,8 +182,8 @@ export default function DashboardPage() {
                     <motion.div
                         layout
                         className={cn(
-                            "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-min transition-all duration-300",
-                            isEditMode ? "gap-4 md:gap-6" : "gap-3 md:gap-4"
+                            "grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 auto-rows-min transition-all duration-300",
+                            isEditMode ? "gap-6 md:gap-8" : "gap-4 md:gap-6"
                         )}
                         style={{ gridAutoFlow: 'dense' }}
                     >

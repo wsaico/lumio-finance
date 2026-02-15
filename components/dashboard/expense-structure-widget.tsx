@@ -7,7 +7,7 @@ import { Loader2, Info, PieChart as PieChartIcon } from "lucide-react"
 import { formatCurrency, cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import {
     Popover,
     PopoverContent,

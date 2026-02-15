@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertTriangle, PieChart } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 
 interface Budget {
     id: string
@@ -14,7 +14,7 @@ interface Budget {
     color: string
 }
 
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 interface BudgetPulseProps {
     budgets: Budget[]

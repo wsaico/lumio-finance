@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts"
 import { motion } from "framer-motion"
 

@@ -6,9 +6,9 @@ import { BudgetCardPremium } from "@/components/budgets/budget-card-premium"
 import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw, TrendingUp, TrendingDown, Wallet, XCircle, ShieldAlert, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useBudgetRefresh } from "@/hooks/use-budget-refresh"
+import { useBudgetRefresh } from "@/hooks/useBudgetRefresh"
 import { toast } from "sonner"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 // Helper function to determine budget health status
 type BudgetStatus = 'healthy' | 'warning' | 'danger' | 'critical' | 'exceeded' | 'goal-achieved'

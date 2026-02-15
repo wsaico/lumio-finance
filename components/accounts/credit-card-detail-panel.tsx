@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { AccountFormModal } from "./account-form-modal"
 import { EditInitialBalanceModal } from "./edit-initial-balance-modal"
 import { cn } from "@/lib/utils"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useFormat } from "@/hooks/use-format"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
 import { useRouter } from "next/navigation"
 import {
     AlertDialog,

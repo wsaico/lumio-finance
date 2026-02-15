@@ -7,7 +7,7 @@ import { useEffect, useState } from "react"
 import { Info } from "lucide-react"
 
 export function ExpenseNatureWidget() {
-    const [data, setData] = useState<any>(null)
+    const [data, setData] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
@@ -21,17 +21,18 @@ export function ExpenseNatureWidget() {
                 const res = await fetch(`/api/analytics/budget-rule?month=${month}&year=${year}`)
                 if (res.ok) {
                     const result = await res.json()
-                    // Transform to chart data with safe checks
-                    // Expected: Needs, Wants, Savings
                     const chartData = [
                         { name: 'Debo', value: result?.savings?.spent || 0, color: '#ef4444', label: 'Ahorro/Deuda' },
                         { name: 'Necesito', value: result?.needs?.spent || 0, color: '#f59e0b', label: 'Necesidades' },
                         { name: 'Quiero', value: result?.wants?.spent || 0, color: '#10b981', label: 'Deseos' }
                     ]
                     setData(chartData)
+                } else {
+                    setData([])
                 }
             } catch (error) {
                 console.error('Error fetching expense nature:', error)
+                setData([])
             } finally {
                 setIsLoading(false)
             }

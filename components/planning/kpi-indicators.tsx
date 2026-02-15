@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { TrendingUp, TrendingDown, Zap, CalendarClock, Activity } from "lucide-react"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { cn } from "@/lib/utils"
 
 interface KPIIndicatorsProps {

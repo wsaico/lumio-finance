@@ -7,7 +7,7 @@
   --breakpoint-xs: 400px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-family, var(--font-geist-sans));
+  --font-sans: var(--font-outfit), var(--font-geist-sans), sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -176,18 +176,33 @@
   --loan-borrowed: oklch(0.58 0.21 250);
   /* Indigo */
 
-  /* Glassmorphism */
-  --glass-bg: oklch(1 0 0 / 0.7);
-  --glass-border: oklch(1 0 0 / 0.18);
-  --glass-blur: 12px;
+  /* Premium Dashboard Palette - Light */
+  --premium-cyan: oklch(0.85 0.22 190);
+  --premium-blue: oklch(0.80 0.20 210);
+  --premium-pink: oklch(0.75 0.35 0);
+  --premium-dark: oklch(0.12 0.04 260);
+  --premium-glass: oklch(1 0 0 / 0.7);
+  --premium-glass-border: oklch(1 0 0 / 0.12);
 
-  /* Premium Shadows (mobile-optimized - lighter) */
-  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.03);
-  --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.08);
-  --shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.08), 0 2px 4px -2px oklch(0 0 0 / 0.08);
-  --shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.08), 0 4px 6px -4px oklch(0 0 0 / 0.08);
-  --shadow-xl: 0 20px 25px -5px oklch(0 0 0 / 0.08), 0 8px 10px -6px oklch(0 0 0 / 0.08);
-  --shadow-glow: 0 0 20px oklch(0.558 0.288 302.321 / 0.3);
+  /* Glassmorphism 2.0 - Depth & Refinement (Boutique Standard) */
+  --glass-bg: oklch(1 0 0 / 0.02);
+  --glass-border: oklch(1 0 0 / 0.08);
+  --glass-blur: 32px;
+  --glass-shine: linear-gradient(135deg, oklch(1 0 0 / 0.03), transparent 60%);
+
+  /* Boutique Shadows - Multi-layered & Diffuse */
+  --shadow-boutique: 0 1px 2px oklch(0 0 0 / 0.02),
+    0 8px 16px -4px oklch(0 0 0 / 0.04),
+    0 24px 48px -12px oklch(0 0 0 / 0.06);
+  --shadow-raised: 0 0 0 1px oklch(1 0 0 / 0.05),
+    0 4px 6px -1px oklch(0 0 0 / 0.1),
+    0 2px 4px -1px oklch(0 0 0 / 0.06);
+
+  --shadow-premium-sm: 0 2px 4px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.02);
+  --shadow-premium-md: 0 10px 20px -5px oklch(0 0 0 / 0.08), 0 4px 6px -2px oklch(0 0 0 / 0.03);
+  --shadow-premium-lg: 0 20px 40px -10px oklch(0 0 0 / 0.12), 0 10px 15px -3px oklch(0 0 0 / 0.05);
+  --shadow-glow-cyan: 0 0 25px -5px oklch(var(--premium-cyan) / 0.4);
+  --shadow-glow-pink: 0 0 25px -5px oklch(var(--premium-pink) / 0.4);
 
   /* Smooth Transitions */
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -251,19 +266,28 @@
   --chart-5: oklch(0.7 0.22 25);
 
   /* Financial Semantic Colors (dark mode) */
-  --income: oklch(0.72 0.18 145);
-  --expense: oklch(0.7 0.22 15);
-  --savings: oklch(0.65 0.2 240);
-  --loan-lent: oklch(0.75 0.15 65);
   --loan-borrowed: oklch(0.65 0.2 280);
 
-  /* Premium Shadows (dark mode - more subtle and colored) */
-  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.3);
-  --shadow-sm: 0 2px 4px 0 oklch(0 0 0 / 0.4);
-  --shadow-md: 0 8px 16px -4px oklch(0 0 0 / 0.5);
-  --shadow-lg: 0 16px 32px -8px oklch(0 0 0 / 0.6);
-  --shadow-xl: 0 24px 48px -12px oklch(0 0 0 / 0.7);
-  --shadow-glow: 0 0 25px oklch(0.65 0.25 300 / 0.25);
+  /* Premium Dashboard Palette - Dark */
+  --premium-cyan: #00D1FF;
+  --premium-blue: #007AFF;
+  --premium-pink: #FF007A;
+  --premium-dark: #09090B;
+
+  /* Dark Mode Refinement (Boutique Standard) */
+  --glass-bg: oklch(0.12 0.02 260 / 0.45);
+  --glass-border: oklch(1 0 0 / 0.08);
+  --glass-blur: 32px;
+  --glass-shine: linear-gradient(135deg, oklch(1 0 0 / 0.05), transparent 50%);
+
+  /* Multi-layered shadows for dark mode */
+  --shadow-boutique: 0 1px 2px oklch(0 0 0 / 0.1),
+    0 8px 16px -4px oklch(0 0 0 / 0.2),
+    0 24px 48px -12px oklch(0 0 0 / 0.3);
+
+  --shadow-premium-sm: 0 2px 4px oklch(0 0 0 / 0.2);
+  --shadow-premium-md: 0 12px 24px -6px oklch(0 0 0 / 0.4);
+  --shadow-premium-lg: 0 24px 48px -12px oklch(0 0 0 / 0.6);
 
   /* Sidebar (Elite Dark) */
   --sidebar: oklch(0.12 0.02 260);
@@ -324,12 +348,24 @@
     background: linear-gradient(135deg, oklch(0.5 0.22 220), oklch(0.6 0.2 225));
   }
 
-  /* Glassmorphism Utility */
+  /* Glassmorphism 2.0 */
   .glass {
+    position: relative;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: var(--transition-smooth);
+  }
+
+  .glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--glass-shine);
+    border-radius: inherit;
+    z-index: -1;
   }
 
   /* Compact premium dashboard widgets */
@@ -360,44 +396,35 @@
     font-size: 0.75rem;
   }
 
-  /* Premium dashboard widget shell - EXTREME CONTRAST VERSION */
+  /* Boutique Shadows - Multi-layered & Diffuse are now in :root */
+
+  /* Dashboard Premium Shell - BOUTIQUE REFINEMENT */
   .dashboard-premium .widget-surface {
     position: relative;
     overflow: hidden;
-    border-radius: 1.5rem;
-    border: 1px solid oklch(0.15 0.05 260 / 0.15);
+    border-radius: 2rem;
+    border: 1px solid oklch(1 0 0 / 0.08);
     background: white;
-    box-shadow:
-      0 1px 3px 0 oklch(0 0 0 / 0.05),
-      0 20px 40px -20px oklch(0.15 0.05 260 / 0.12);
-    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease;
+    box-shadow: var(--shadow-boutique);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .dashboard-premium .widget-surface:hover {
-    box-shadow:
-      0 1px 3px 0 oklch(0 0 0 / 0.05),
-      0 25px 50px -15px oklch(0.15 0.05 260 / 0.18);
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 40px 80px -20px oklch(0 0 0 / 0.12);
   }
 
   .dark .dashboard-premium .widget-surface {
-    background: oklch(0.16 0.02 260);
-    border: 1px solid oklch(1 0 0 / 0.12);
+    background: oklch(0.12 0.02 260);
+    border: 1px solid oklch(1 0 0 / 0.1);
     box-shadow:
-      0 0 0 1px oklch(1 0 0 / 0.05),
-      0 20px 40px -20px oklch(0 0 0 / 0.5);
+      0 0 0 1px oklch(1 0 0 / 0.03),
+      0 40px 80px -20px oklch(0 0 0 / 0.6);
   }
 
-  .dashboard-premium .widget-surface::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, oklch(1 0 0 / 0.4), transparent 50%);
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .dark .dashboard-premium .widget-surface::before {
-    background: linear-gradient(135deg, oklch(1 0 0 / 0.05), transparent 50%);
+  .dark .dashboard-premium .widget-surface:hover {
+    border-color: oklch(1 0 0 / 0.2);
+    background: oklch(0.14 0.02 260);
   }
 
   .dashboard-premium .widget-header {
@@ -405,40 +432,27 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.9rem 1.1rem 0.6rem;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+    padding: 1.5rem 1.75rem 1rem;
   }
 
   .dashboard-premium .widget-kicker {
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.25em;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: rgba(30, 41, 59, 0.9);
+    color: oklch(var(--muted-foreground));
   }
 
   .dashboard-premium .widget-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: rgba(15, 23, 42, 0.98);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: oklch(var(--foreground));
   }
 
   .dashboard-premium .widget-subtitle {
     font-size: 0.75rem;
-    color: rgba(30, 41, 59, 0.78);
-  }
-
-  .dashboard-premium .widget-surface .text-muted-foreground {
-    color: rgba(30, 41, 59, 0.75);
-  }
-
-  .dark .dashboard-premium .widget-kicker,
-  .dark .dashboard-premium .widget-subtitle {
-    color: rgba(203, 213, 225, 0.78);
-  }
-
-  .dark .dashboard-premium .widget-title {
-    color: rgba(248, 250, 252, 0.95);
+    font-weight: 400;
+    color: oklch(var(--muted-foreground));
   }
 
   /* Premium Shadow Utilities */
@@ -485,8 +499,6 @@
 
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
-    margin-top: 3rem;
-    margin-bottom: 3rem;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {

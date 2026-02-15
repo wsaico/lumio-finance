@@ -11,13 +11,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useAccounts } from "@/hooks/useAccounts"
 import { AccountSelect } from "@/components/accounts/account-select"
-import { useCreateAccountReceivable } from "@/hooks/use-accounts-receivable"
-import { useCreateAccountPayable } from "@/hooks/use-accounts-payable"
-import { useSettingsStore } from "@/hooks/use-settings-store"
-import { useFormat } from "@/hooks/use-format"
-import { useBalanceValidation } from "@/hooks/use-balance-validation"
+import { useCreateAccountReceivable } from "@/hooks/useAccountsReceivable"
+import { useCreateAccountPayable } from "@/hooks/useAccountsPayable"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { useFormat } from "@/hooks/useFormat"
+import { useBalanceValidation } from "@/hooks/useBalanceValidation"
 import { BalanceAlert } from "@/components/ui/balance-alert"
 import {
     ArrowUpRight,
@@ -125,25 +125,34 @@ export function CreateLoanModal({ open, onClose }: CreateLoanModalProps) {
         }))
     )
 
-    // Schedule Preview Calculation
+    // Schedule Preview Calculation (Aligned with Backend precision)
     const schedulePreview = useMemo(() => {
         if (formData.amount <= 0 || formData.totalInstallments < 1) return []
 
         const installments = []
-        const principalPart = formData.amount / formData.totalInstallments
-
-        // Simple Interest logic for preview
-        const totalInterest = formData.amount * (formData.interestRate / 100)
-        const interestPart = totalInterest / formData.totalInstallments
-        const totalPart = principalPart + interestPart
+        // Rounded base values
+        const principalPerInstallment = Math.round((formData.amount / formData.totalInstallments) * 100) / 100
+        const totalInterest = Math.round((formData.amount * (formData.interestRate / 100)) * 100) / 100
+        const interestPerInstallment = Math.round((totalInterest / formData.totalInstallments) * 100) / 100
 
         let currentDate = formData.dueDate ? new Date(formData.dueDate) : new Date()
 
-        for (let i = 0; i < formData.totalInstallments; i++) {
+        for (let i = 1; i <= formData.totalInstallments; i++) {
+            const isLast = i === formData.totalInstallments
+
+            // Remainder adjustment for the last installment
+            const instPrincipal = isLast
+                ? Math.round((formData.amount - (principalPerInstallment * (formData.totalInstallments - 1))) * 100) / 100
+                : principalPerInstallment
+
+            const instInterest = isLast
+                ? Math.round((totalInterest - (interestPerInstallment * (formData.totalInstallments - 1))) * 100) / 100
+                : interestPerInstallment
+
             installments.push({
-                number: i + 1,
+                number: i,
                 date: new Date(currentDate),
-                amount: totalPart
+                amount: Math.round((instPrincipal + instInterest) * 100) / 100
             })
 
             // Advance date

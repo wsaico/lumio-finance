@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { ArrowLeft, Loader2, CheckCircle, FileText } from "lucide-react"
-import { useCreatePettyCashSettlement } from "@/hooks/use-petty-cash"
+import { useCreatePettyCashSettlement } from "@/hooks/usePettyCash"
 import { toast } from "sonner"
 
 const formSchema = z.object({
@@ -60,7 +60,7 @@ export function DetailsStep({
         setIsSubmitting(true)
         try {
             const result = await createSettlement({
-                settlementCode,
+                settlement_code: settlementCode,
                 fundId,
                 expenseIds,
                 settlementDate: new Date(values.settlementDate).toISOString(),

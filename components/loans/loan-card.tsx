@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { User, ArrowUpRight, ArrowDownLeft, Calendar, TrendingUp } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { motion } from "framer-motion"
 
 interface LoanCardProps {

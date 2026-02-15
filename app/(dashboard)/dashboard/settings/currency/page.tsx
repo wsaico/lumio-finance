@@ -4,7 +4,7 @@ import {
     SettingsSection,
     SettingsRow,
 } from "@/components/settings/settings-components"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { Check } from "lucide-react"
 
 // Mock Currencies - In a real app, this comes from DB or Constants

@@ -1,7 +1,7 @@
 "use client"
 
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 interface CashFlowAreaChartProps {
     data: { name: string, income: number, expense: number }[]

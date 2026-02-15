@@ -3,7 +3,7 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { useCategories } from "@/hooks/use-categories"
+import { useCategories } from "@/hooks/useCategories"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CategoryIcon } from "@/components/icons/category-icon"
 import { Button } from "@/components/ui/button"

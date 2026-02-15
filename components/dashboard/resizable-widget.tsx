@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GripVertical, X, Maximize2, Minimize2, Square } from 'lucide-react'
 import { useState, useRef } from 'react'
-import { useDashboardStore, WidgetId, WidgetSize } from '@/hooks/use-dashboard-store'
+import { useDashboardStore, WidgetId, WidgetSize } from '@/hooks/useDashboardStore'
 import { cn } from '@/lib/utils'
 
 interface ResizableWidgetProps {
@@ -16,10 +16,8 @@ interface ResizableWidgetProps {
     minH?: string
 }
 
-const colSpanClasses = {
-    1: 'col-span-1',
-    2: 'col-span-1 md:col-span-2',
-    3: 'col-span-1 md:col-span-2 lg:col-span-3',
+const getColSpanClass = (span: number) => {
+    return `col-span-1 md:col-span-${span} lg:col-span-${span}`;
 }
 
 export function ResizableWidget({ id, size, children, title, minH }: ResizableWidgetProps) {
@@ -40,7 +38,7 @@ export function ResizableWidget({ id, size, children, title, minH }: ResizableWi
         transition,
     }
 
-    const handleResize = (newSize: 1 | 2 | 3) => {
+    const handleResize = (newSize: 4 | 8 | 12) => {
         resizeWidget(id, { colSpan: newSize })
         setShowSizeMenu(false)
     }
@@ -50,7 +48,7 @@ export function ResizableWidget({ id, size, children, title, minH }: ResizableWi
             ref={setNodeRef}
             style={style}
             className={cn(
-                colSpanClasses[size.colSpan],
+                getColSpanClass(size.colSpan),
                 minH,
                 'relative group/widget',
                 isDragging && 'z-50 opacity-70 scale-105'
@@ -75,9 +73,9 @@ export function ResizableWidget({ id, size, children, title, minH }: ResizableWi
                             {...attributes}
                             {...listeners}
                         >
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/40 border border-white/20 backdrop-blur-sm">
-                                <GripVertical className="h-3.5 w-3.5" />
-                                <span className="text-[11px] font-bold tracking-wide">{title}</span>
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/90 dark:bg-white text-white dark:text-black shadow-boutique border border-white/10 dark:border-black/5 backdrop-blur-xl">
+                                <GripVertical className="h-3 w-3 opacity-50" />
+                                <span className="text-[10px] font-bold tracking-tight uppercase">{title}</span>
                             </div>
                         </motion.div>
 
@@ -86,10 +84,10 @@ export function ResizableWidget({ id, size, children, title, minH }: ResizableWi
                             initial={{ opacity: 0, scale: 0.5 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.5 }}
-                            className="absolute -top-2 -right-2 z-50 h-7 w-7 rounded-full bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
+                            className="absolute -top-3 -right-3 z-50 h-6 w-6 rounded-full bg-black dark:bg-white text-white dark:text-black shadow-boutique flex items-center justify-center hover:scale-110 active:scale-95 transition-transform border border-white/10"
                             onClick={() => removeWidget(id)}
                         >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-3 w-3" />
                         </motion.button>
 
                         {/* Size Menu Button */}
@@ -101,15 +99,15 @@ export function ResizableWidget({ id, size, children, title, minH }: ResizableWi
                         >
                             <button
                                 onClick={() => setShowSizeMenu(!showSizeMenu)}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/40 border border-white/20 text-[10px] font-bold hover:scale-105 active:scale-95 transition-transform"
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/90 dark:bg-white text-white dark:text-black shadow-boutique border border-white/10 dark:border-black/5 text-[9px] font-bold uppercase tracking-wider hover:scale-105 active:scale-95 transition-transform"
                             >
-                                {size.colSpan === 1 && <Minimize2 className="h-3 w-3" />}
-                                {size.colSpan === 2 && <Square className="h-3 w-3" />}
-                                {size.colSpan === 3 && <Maximize2 className="h-3 w-3" />}
+                                {size.colSpan <= 4 && <Minimize2 className="h-2.5 w-2.5" />}
+                                {size.colSpan > 4 && size.colSpan <= 8 && <Square className="h-2.5 w-2.5" />}
+                                {size.colSpan > 8 && <Maximize2 className="h-2.5 w-2.5" />}
                                 <span>
-                                    {size.colSpan === 1 && 'Pequeño'}
-                                    {size.colSpan === 2 && 'Mediano'}
-                                    {size.colSpan === 3 && 'Grande'}
+                                    {size.colSpan <= 4 && 'Compacto'}
+                                    {size.colSpan > 4 && size.colSpan <= 8 && 'Estándar'}
+                                    {size.colSpan > 8 && 'Extendido'}
                                 </span>
                             </button>
 
@@ -120,45 +118,37 @@ export function ResizableWidget({ id, size, children, title, minH }: ResizableWi
                                         initial={{ opacity: 0, y: -5, scale: 0.95 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: -5, scale: 0.95 }}
-                                        className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black/95 backdrop-blur-xl rounded-xl p-1 shadow-2xl border border-white/10 min-w-[140px]"
+                                        className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black/95 dark:bg-white backdrop-blur-xl rounded-xl p-1 shadow-boutique border border-white/10 dark:border-black/5 min-w-[150px]"
                                     >
-                                        <button
-                                            onClick={() => handleResize(1)}
-                                            className={cn(
-                                                "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-                                                size.colSpan === 1 ? "bg-violet-500/30 text-violet-300" : "hover:bg-white/10 text-white/70"
-                                            )}
-                                        >
-                                            <Minimize2 className="h-3.5 w-3.5" />
-                                            Pequeño (1 col)
-                                        </button>
-                                        <button
-                                            onClick={() => handleResize(2)}
-                                            className={cn(
-                                                "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-                                                size.colSpan === 2 ? "bg-violet-500/30 text-violet-300" : "hover:bg-white/10 text-white/70"
-                                            )}
-                                        >
-                                            <Square className="h-3.5 w-3.5" />
-                                            Mediano (2 col)
-                                        </button>
-                                        <button
-                                            onClick={() => handleResize(3)}
-                                            className={cn(
-                                                "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-                                                size.colSpan === 3 ? "bg-violet-500/30 text-violet-300" : "hover:bg-white/10 text-white/70"
-                                            )}
-                                        >
-                                            <Maximize2 className="h-3.5 w-3.5" />
-                                            Grande (3 col)
-                                        </button>
+                                        {[
+                                            { val: 4, label: 'Compacto', icon: Minimize2 },
+                                            { val: 8, label: 'Estándar', icon: Square },
+                                            { val: 12, label: 'Extendido', icon: Maximize2 },
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.val}
+                                                onClick={() => handleResize(opt.val as 4 | 8 | 12)}
+                                                className={cn(
+                                                    "w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-tight transition-all",
+                                                    size.colSpan === opt.val
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "hover:bg-white/10 dark:hover:bg-black/5 text-white/50 dark:text-black/50"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <opt.icon className="h-3 w-3" />
+                                                    {opt.label}
+                                                </div>
+                                                {size.colSpan === opt.val && <div className="w-1 h-1 rounded-full bg-current" />}
+                                            </button>
+                                        ))}
                                     </motion.div>
                                 )}
                             </AnimatePresence>
                         </motion.div>
 
                         {/* Edit Mode Border */}
-                        <div className="absolute inset-0 rounded-2xl ring-2 ring-violet-500/50 ring-offset-2 ring-offset-transparent pointer-events-none" />
+                        <div className="absolute -inset-0.5 rounded-[1.4rem] border-2 border-primary/20 pointer-events-none z-30 animate-in fade-in zoom-in-95 duration-500" />
                     </>
                 )}
             </AnimatePresence>

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SavingsRateGauge } from "./savings-rate-gauge"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { InsightsAdvisor } from "./insights-advisor"
 import { ExpensesPieChart } from "./expenses-pie-chart"
 import { CashFlowAreaChart } from "./cash-flow-area-chart"
@@ -45,11 +45,12 @@ import {
     TooltipTrigger,
     TooltipContent
 } from "@/components/ui/tooltip"
-import { useCategories } from "@/hooks/use-categories"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useCategories } from "@/hooks/useCategories"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { DateRangePicker } from "./date-range-picker"
 import { DateRange } from "react-day-picker"
+import { subMonths } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { ExecutiveHealthScore } from "./financial-health-score"
 import { ExecutiveAnnualizedImpact } from "./executive-annualized-impact"
@@ -117,8 +118,18 @@ export function ExpertFinancialDashboard() {
             filters.startDate = dateRange.from.toISOString()
             filters.endDate = dateRange.to.toISOString()
         } else {
-            // Default periods handled by backend, but for TransactionList we might need explicit dates
-            // For now let's hope TransactionList has its own state or we pass dates
+            // Calculate dates for standard periods so TransactionList matches Charts
+            const now = new Date()
+            let startDate: Date | undefined
+
+            if (period === '3m') startDate = subMonths(now, 3)
+            else if (period === '6m') startDate = subMonths(now, 6)
+            else if (period === '12m') startDate = subMonths(now, 12)
+
+            if (startDate) {
+                filters.startDate = startDate.toISOString()
+                filters.endDate = now.toISOString()
+            }
         }
         return filters
     }, [selectedAccounts, selectedType, focusedCategoryId, selectedCategories, period, dateRange])

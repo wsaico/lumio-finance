@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { Lightbulb, AlertTriangle, TrendingUp, Wallet, Target, CreditCard } from "lucide-react"
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
@@ -112,8 +112,8 @@ export function SmartInsightsWidget() {
                             whileHover={{ scale: 1.02 }}
                         >
                             <div className={`mt-0.5 p-2 rounded-full shrink-0 ${insight.type === 'warning' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
-                                    insight.type === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                                        'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                insight.type === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                                    'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                 }`}>
                                 <insight.icon className="w-4 h-4" />
                             </div>

@@ -13,9 +13,9 @@ import { es } from "date-fns/locale"
 import { CategoryIcon } from "@/components/icons/category-icon"
 import { Calendar } from "@/components/ui/calendar"
 import { useTransactionForm } from "../form/use-transaction-form"
-import { useTransactions } from "@/hooks/use-transactions"
-import { useSettingsStore } from "@/hooks/use-settings-store"
-import { useBudget } from "@/hooks/use-budget"
+import { useTransactions } from "@/hooks/useTransactions"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { useBudget } from "@/hooks/useBudget"
 import {
     Popover,
     PopoverContent,

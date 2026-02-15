@@ -2,8 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { Wallet } from 'lucide-react';
-import { useAccounts } from '@/hooks/use-accounts';
-import { useFormat } from '@/hooks/use-format';
+import { useAccounts } from '@/hooks/useAccounts';
+import { useFormat } from '@/hooks/useFormat';
 import type { WidgetProps } from '@/types/dashboard';
 
 export function BalanceWidget({ config }: WidgetProps) {

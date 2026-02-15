@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { motion } from "framer-motion"
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react"
-import { useWindowSize } from "@/hooks/use-window-size"
+import { useWindowSize } from "@/hooks/useWindowSize"
 
 export function BudgetRuleWidget() {
     const [data, setData] = useState<any>(null)

@@ -33,7 +33,7 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import type { AccountReceivable, AccountPayable, LoanPayment } from "@/types/loans"
 import { cn } from "@/lib/utils"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -47,8 +47,8 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { PaymentModal, type PaymentFormData } from "./payment-modal"
-import { useUpdateAccountReceivable } from "@/hooks/use-accounts-receivable"
-import { useUpdateAccountPayable } from "@/hooks/use-accounts-payable"
+import { useUpdateAccountReceivable } from "@/hooks/useAccountsReceivable"
+import { useUpdateAccountPayable } from "@/hooks/useAccountsPayable"
 
 interface LoanDetailsModalProps {
     open: boolean

@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowUpRight, ArrowDownLeft, AlertCircle, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 
 interface LoansSummaryProps {
     summary: {

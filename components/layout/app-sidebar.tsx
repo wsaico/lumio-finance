@@ -22,7 +22,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { Button } from "@/components/ui/button"
 import {
     Tooltip,
@@ -30,7 +30,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useUser } from "@/hooks/use-user"
+import { useUser } from "@/hooks/useUser"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 
@@ -51,7 +51,6 @@ export function Sidebar({ className, variant = "default" }: SidebarProps) {
 
     const routes = [
         { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-sky-500" },
-        { label: "Análisis", icon: BarChart3, href: "/dashboard/analysis", color: "text-indigo-500" },
         { label: "Transacciones", icon: ArrowRightLeft, href: "/dashboard/transactions", color: "text-violet-500" },
         { label: "Cuentas", icon: Wallet, href: "/dashboard/accounts", color: "text-pink-700" },
         { label: "Presupuestos", icon: PieChart, href: "/dashboard/budgets", color: "text-orange-700" },
@@ -59,7 +58,7 @@ export function Sidebar({ className, variant = "default" }: SidebarProps) {
         { label: "Caja Chica", icon: Banknote, href: "/dashboard/petty-cash", color: "text-emerald-600" },
         { label: "Planificación", icon: Target, href: "/dashboard/planning", color: "text-cyan-500" },
         { label: "Metas", icon: Target, href: "/dashboard/savings-goals", color: "text-rose-500" },
-        { label: "Reportes", icon: BarChart3, href: "/dashboard/reports", color: "text-purple-500" },
+        { label: "Análisis", icon: BarChart3, href: "/dashboard/analysis", color: "text-purple-500" },
     ]
 
     const configRoutes = [

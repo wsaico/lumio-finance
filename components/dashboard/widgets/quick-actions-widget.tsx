@@ -100,7 +100,7 @@ export function QuickActionsWidget() {
                                 whileHover={{ scale: 1.05, y: -4 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={action.onClick}
-                                className="group relative flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all duration-300"
+                                className="group relative flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/10 hover:border-zinc-200 dark:hover:border-white/20 transition-all duration-300"
                             >
                                 {/* Glow Effect on Hover */}
                                 <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${action.gradient} opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-xl`} />
@@ -115,7 +115,7 @@ export function QuickActionsWidget() {
                                 </motion.div>
 
                                 {/* Label */}
-                                <span className="text-[10px] font-semibold text-white/70 group-hover:text-white/90 transition-colors text-center leading-tight">
+                                <span className="text-[10px] font-semibold text-zinc-500 dark:text-white/70 group-hover:text-zinc-900 dark:group-hover:text-white/90 transition-colors text-center leading-tight">
                                     {action.shortLabel}
                                 </span>
                             </motion.button>

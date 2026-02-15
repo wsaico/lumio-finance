@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { usePettyCashReplenishments } from "@/hooks/use-petty-cash"
+import { usePettyCashReplenishments } from "@/hooks/usePettyCash"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { ArrowDownLeft, TrendingUp, Calendar, Wallet } from "lucide-react"

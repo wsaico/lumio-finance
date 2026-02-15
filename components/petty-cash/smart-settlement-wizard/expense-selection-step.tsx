@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ChevronRight, Receipt, CheckCircle2, X, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePettyCashExpenses, useUpdatePettyCashExpense } from "@/hooks/use-petty-cash"
+import { usePettyCashExpenses, useUpdatePettyCashExpense } from "@/hooks/usePettyCash"
 import { CategoryIcon } from "@/components/icons/category-icon"
 import { toast } from "sonner"
 

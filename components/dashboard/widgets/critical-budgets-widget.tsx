@@ -1,9 +1,9 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { useBudget } from "@/hooks/use-budget"
-import { useFormat } from "@/hooks/use-format"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useBudget } from "@/hooks/useBudget"
+import { useFormat } from "@/hooks/useFormat"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { AlertCircle, Flame, CheckCircle2, TrendingDown, Shield, Sparkles } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -93,9 +93,9 @@ export function CriticalBudgetsWidget() {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
             <Card className="widget-surface h-full">
-                    <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-emerald-400/15 blur-3xl" />
-                    <div className="absolute -bottom-24 left-0 h-32 w-32 rounded-full bg-amber-400/10 blur-3xl" />
-                    <div className="relative h-full flex flex-col">
+                <div className="absolute -top-24 right-0 h-32 w-32 rounded-full bg-emerald-400/15 blur-3xl" />
+                <div className="absolute -bottom-24 left-0 h-32 w-32 rounded-full bg-amber-400/10 blur-3xl" />
+                <div className="relative h-full flex flex-col">
                     {/* Header */}
                     <div className="widget-header">
                         <div className="flex items-center gap-2">

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, ChevronRight, Wallet, TrendingDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePettyCashFunds } from "@/hooks/use-petty-cash"
+import { usePettyCashFunds } from "@/hooks/usePettyCash"
 
 interface FundSelectionStepProps {
     onNext: (data: { fundId: string; fundCode: string; responsibleName: string }) => void
@@ -23,8 +23,8 @@ export function FundSelectionStep({ onNext, onBack }: FundSelectionStepProps) {
         if (fund) {
             onNext({
                 fundId: fund.id,
-                fundCode: fund.fundCode,
-                responsibleName: fund.responsibleName
+                fundCode: fund.fund_code,
+                responsibleName: fund.responsible
             })
         }
     }
@@ -111,7 +111,7 @@ export function FundSelectionStep({ onNext, onBack }: FundSelectionStepProps) {
 
                                         {/* Responsible */}
                                         <div className="text-sm text-muted-foreground">
-                                            <span className="font-medium">Responsable:</span> {fund.responsibleName}
+                                            <span className="font-medium">Responsable:</span> {fund.responsible}
                                             {fund.department && ` • ${fund.department}`}
                                         </div>
 

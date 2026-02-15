@@ -1,12 +1,12 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useFormat } from "@/hooks/use-format"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
 import { TrendingUp, TrendingDown, Activity, Wallet, CreditCard } from "lucide-react"
 import { motion } from "framer-motion"
 import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from "recharts"
-import { useWindowSize } from "@/hooks/use-window-size"
+import { useWindowSize } from "@/hooks/useWindowSize"
 
 export function FinancialHealthCard() {
     const { accounts, isLoading, totalBalanceConverted } = useAccounts()

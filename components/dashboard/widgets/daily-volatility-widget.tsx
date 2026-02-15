@@ -3,16 +3,18 @@
 
 import { Card } from "@/components/ui/card"
 import { useQuery } from "@tanstack/react-query"
-import { useFormat } from "@/hooks/use-format"
-import { ResponsiveContainer, AreaChart, Area, Tooltip, XAxis } from "recharts"
-import { Loader2, Activity, TrendingUp, TrendingDown, Plus } from "lucide-react"
+import { useFormat } from "@/hooks/useFormat"
+import { Activity, TrendingUp } from "lucide-react"
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 export function DailyVolatilityWidget() {
     const { formatMoney } = useFormat()
+    const { isBalanceVisible } = useSettingsStore()
 
     const { data, isLoading } = useQuery({
-        queryKey: ['daily-volatility'],
+        queryKey: ['daily-volatility-v2'],
         queryFn: async () => {
             const res = await fetch('/api/analytics/daily-volatility')
             if (!res.ok) throw new Error('Failed')
@@ -20,101 +22,76 @@ export function DailyVolatilityWidget() {
         }
     })
 
-    if (isLoading) {
-        return (
-            <Card className="widget-surface h-full flex items-center justify-center p-5">
-                <Loader2 className="w-6 h-6 animate-spin text-primary/40" />
-            </Card>
-        )
-    }
+    if (isLoading) return null;
 
-    const { history, avg, todayData, lastActive, yesterdayData } = data || {
-        history: [],
-        avg: 0,
-        todayData: { amount: 0 },
-        lastActive: 0,
-        yesterdayData: { amount: 0 }
-    }
-
+    const { avg, todayData, lastActive } = data || { avg: 0, todayData: { amount: 0 }, lastActive: 0 }
     const displayAmount = todayData?.amount > 0 ? todayData.amount : lastActive
     const diff = displayAmount - avg
 
-    // The original `isHighVolatility` logic is removed by the edit,
-    // and the icon color is now fixed.
-
-    // The chart data needs to be mapped to 'amount' if it's not already.
-    // Assuming history items have an 'amount' property.
-    const chartData = history.map((item: any) => ({
-        ...item,
-        amount: item.amount // Ensure the data key is 'amount'
-    }))
-
     return (
-        <Card className="widget-surface h-full overflow-hidden relative group p-5">
-            <div className="flex flex-col md:flex-row gap-4 h-full items-center">
+        <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="h-full"
+        >
+            <Card className="widget-surface bg-white dark:bg-zinc-900 border-none h-full flex flex-col sm:flex-row overflow-hidden relative shadow-2xl p-6">
                 {/* Information Column */}
-                <div className="flex-1 w-full md:w-[40%] flex flex-col justify-center z-10">
-                    <div className="flex items-center gap-2 mb-3">
-                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                            <Activity className="w-4 h-4" />
+                <div className="flex-1 flex flex-col justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 rounded-2xl bg-[#00D1FF]/10 border border-[#00D1FF]/20">
+                            <Activity className="w-5 h-5 text-[#00D1FF]" />
                         </div>
-                        <h3 className="font-bold text-xs uppercase tracking-widest text-muted-foreground">Volatilidad Diaria</h3>
+                        <div>
+                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Volatilidad Diaria</h3>
+                            <p className="text-[9px] font-bold text-zinc-500 opacity-60">Rango de saldos (Min/Max)</p>
+                        </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <div className="flex items-baseline gap-2 mb-1">
-                            <span className="text-3xl md:text-4xl font-black tracking-tighter">
-                                {formatMoney(displayAmount)}
+                    <div className="mt-8">
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black tracking-tight tabular-nums text-zinc-900 dark:text-white">
+                                {isBalanceVisible ? formatMoney(displayAmount) : '******'}
                             </span>
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-60 shrink-0">
-                                {todayData?.amount > 0 ? 'Hoy' : 'Reciente'}
+                            <span className="text-[9px] font-bold text-zinc-500 uppercase opacity-40">
+                                Reciente
                             </span>
                         </div>
 
                         <div className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold w-fit",
-                            diff > 0 ? "bg-rose-500/10 text-rose-600" : "bg-emerald-500/10 text-emerald-600"
+                            "mt-3 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-bold",
+                            diff > 0 ? "bg-[#FF4D00]/10 text-[#FF4D00]" : "bg-emerald-500/10 text-emerald-500"
                         )}>
                             <TrendingUp className={cn("w-3 h-3", diff <= 0 && "rotate-180")} />
-                            <span className="whitespace-nowrap">{formatMoney(Math.abs(diff))} {diff > 0 ? "sobre" : "bajo"} promedio</span>
+                            <span>{isBalanceVisible ? formatMoney(Math.abs(diff)) : '***'} sobre promedio</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Chart Section */}
-                <div className="flex-[1.5] w-full md:w-[60%] h-[120px] md:h-full relative">
-                    <ResponsiveContainer width="99%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="colorVol" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            {/* Tooltip was removed by the edit */}
-                            <Area
-                                type="monotone"
-                                dataKey="amount"
-                                stroke="var(--primary)"
-                                strokeWidth={3}
-                                fillOpacity={1}
-                                fill="url(#colorVol)"
-                                animationDuration={2000}
-                            // strokeLinecap="round" was removed by the edit
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-            {/* Overlay button refinement */}
-            <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                <button className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-xl hover:scale-110 active:scale-95 transition-all">
-                    <Plus className="w-5 h-5" />
-                </button>
-            </div>
+                {/* Pulse Visual (Candle Style) */}
+                <div className="w-full sm:w-[120px] h-32 sm:h-full flex items-center justify-center relative mt-6 sm:mt-0">
+                    {/* Background grid lines similar to target image */}
+                    <div className="absolute inset-0 flex flex-col justify-between opacity-10">
+                        {[...Array(6)].map((_, i) => <div key={i} className="h-px w-full bg-zinc-200 dark:bg-white" />)}
+                    </div>
 
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
-        </Card>
+                    {/* The Pulse Bar */}
+                    <div className="relative h-[80%] w-px bg-[#00D1FF]/30">
+                        <motion.div
+                            className="absolute left-1/2 -translate-x-1/2 w-[2px] bg-[#00D1FF]"
+                            initial={{ height: 0, bottom: '20%' }}
+                            animate={{ height: '40%', bottom: '30%' }}
+                            transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
+                        />
+                        <motion.div
+                            className="absolute left-1/2 -translate-x-1/2 w-4 h-[2px] bg-[#00D1FF]"
+                            initial={{ opacity: 0, bottom: '50%' }}
+                            animate={{ opacity: 1, bottom: '50%' }}
+                            style={{ boxShadow: '0 0 10px #00D1FF' }}
+                        />
+                    </div>
+                </div>
+            </Card>
+        </motion.div>
     )
 }
 

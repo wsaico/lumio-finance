@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { DashboardData, MonthlyMetric, BudgetAlert } from '@/components/analysis/types';
+import { DashboardData, MonthlyMetric, BudgetAlert } from '@/types/analytics';
 import { getExchangeRatesMap, convertAmount } from '@/lib/currency';
 
 export async function getDashboardData(): Promise<DashboardData> {

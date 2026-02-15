@@ -6,7 +6,7 @@ import { FundSelectionStep } from "./fund-selection-step"
 import { ExpenseSelectionStep } from "./expense-selection-step"
 import { DetailsStep } from "./details-step"
 import { ConfirmationStep } from "./confirmation-step"
-import { usePettyCashExpenses } from "@/hooks/use-petty-cash"
+import { usePettyCashExpenses } from "@/hooks/usePettyCash"
 
 type WizardStep = 'code' | 'fund' | 'expenses' | 'details' | 'confirmation'
 

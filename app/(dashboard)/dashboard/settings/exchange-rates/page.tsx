@@ -4,8 +4,8 @@ import {
     SettingsSection,
     SettingsRow,
 } from "@/components/settings/settings-components"
-import { useSettingsStore } from "@/hooks/use-settings-store"
-import { useExchangeRates } from "@/hooks/use-exchange-rates"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { RefreshCw, ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 

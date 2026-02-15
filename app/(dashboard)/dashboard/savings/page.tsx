@@ -1,14 +1,14 @@
 
 "use client"
 
-import { useSavingsGoals } from "@/hooks/use-savings-goals"
+import { useSavingsGoals } from "@/hooks/useSavingsGoals"
 import { SavingsGoalCard } from "@/components/savings/savings-goal-card"
 import { Button } from "@/components/ui/button"
 import { Plus, Loader2 } from "lucide-react"
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/ui/fade-in"
 
 export default function SavingsGoalsPage() {
-    const { goals, isLoading } = useSavingsGoals()
+    const { data: goals, isLoading } = useSavingsGoals()
 
     return (
         <FadeIn className="space-y-6">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useAccounts } from "@/hooks/use-accounts"
+import { useAccounts } from "@/hooks/useAccounts"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"

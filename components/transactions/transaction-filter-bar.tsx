@@ -31,9 +31,9 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { useTransactionFilters } from "@/hooks/use-transaction-filters"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useCategories } from "@/hooks/use-categories"
+import { useTransactionFilters } from "@/hooks/useTransactionFilters"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useCategories } from "@/hooks/useCategories"
 import { cn } from "@/lib/utils"
 import { useSearchParams, useRouter } from "next/navigation"
 
@@ -134,7 +134,7 @@ export function TransactionFilterBar() {
                     </div>
                     <Input
                         placeholder="Buscar transacciones..."
-                        value={filters.search}
+                        value={filters.search || ''}
                         onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                         className="pl-10 h-10 bg-background/50 backdrop-blur-md border-muted-foreground/20 focus:border-primary/50 focus:ring-primary/20 transition-all rounded-xl"
                     />
@@ -319,14 +319,14 @@ export function TransactionFilterBar() {
                                     <Input
                                         type="number"
                                         placeholder="Min"
-                                        value={filters.minAmount}
+                                        value={filters.minAmount || ''}
                                         onChange={(e) => setFilters({ ...filters, minAmount: e.target.value })}
                                         className="h-8 rounded-lg text-xs"
                                     />
                                     <Input
                                         type="number"
                                         placeholder="Max"
-                                        value={filters.maxAmount}
+                                        value={filters.maxAmount || ''}
                                         onChange={(e) => setFilters({ ...filters, maxAmount: e.target.value })}
                                         className="h-8 rounded-lg text-xs"
                                     />

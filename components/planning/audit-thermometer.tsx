@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import { motion } from "framer-motion"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { cn } from "@/lib/utils"
 
 interface AuditThermometerProps {

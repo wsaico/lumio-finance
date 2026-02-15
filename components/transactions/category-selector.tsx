@@ -14,17 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 
-interface CategorySelectorProps {
-    categories: any[]
-    categoryId?: string
-    subcategoryId?: string
-    onChange: (categoryId: string, subcategoryId?: string) => void
-    onNewCategory?: () => void
-    enableTabs?: boolean // Enable 50/30/20 tabs
-}
-
-type TabType = "NEED" | "WANT" | "SAVINGS" | "ALL"
-
 // --- REUSABLE GRID COMPONENT ---
 export function CategoryGrid({ categories, categoryId, subcategoryId, onSelect, enableTabs = true }: {
     categories: any[],
@@ -34,7 +23,7 @@ export function CategoryGrid({ categories, categoryId, subcategoryId, onSelect, 
     enableTabs?: boolean
 }) {
     const [searchTerm, setSearchTerm] = React.useState("")
-    const [activeTab, setActiveTab] = React.useState<TabType>("ALL")
+    const [activeTab, setActiveTab] = React.useState<"NEED" | "WANT" | "SAVINGS" | "ALL">("ALL")
     const [activeParentId, setActiveParentId] = React.useState<string | null>(null)
     const hasAutoOpened = React.useRef(false)
 
@@ -123,7 +112,7 @@ export function CategoryGrid({ categories, categoryId, subcategoryId, onSelect, 
                 {/* Tabs (Only show if enabled and not searching and not in subcategories) */}
                 {enableTabs && !searchTerm && !activeParentId && (
                     <div className="px-3 pt-3 shrink-0 animate-in fade-in duration-200">
-                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full">
+                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
                             <TabsList className="w-full grid grid-cols-4 bg-muted/50 p-1 h-9 rounded-xl">
                                 <TabsTrigger value="ALL" className="text-[10px] sm:text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:shadow-sm">Todo</TabsTrigger>
                                 <TabsTrigger value="NEED" className="text-[10px] sm:text-xs rounded-lg gap-1 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/40 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-200">
@@ -250,9 +239,37 @@ export function CategoryGrid({ categories, categoryId, subcategoryId, onSelect, 
     )
 }
 
-// --- POPOVER COMPONENT (Desktop) ---
-export function CategorySelector({ categories, categoryId, subcategoryId, onChange, onNewCategory, enableTabs = true }: CategorySelectorProps) {
+// --- POPOVER COMPONENT (Desktop/Responsive) ---
+export interface CategorySelectorProps {
+    categories: any[]
+    categoryId?: string | null
+    subcategoryId?: string | null
+    onChange: (categoryId: string, subcategoryId?: string) => void
+    onNewCategory?: () => void
+    enableTabs?: boolean // Enable 50/30/20 tabs
+    autoFocus?: boolean
+    defaultOpen?: boolean
+}
+
+export function CategorySelector({
+    categories,
+    categoryId,
+    subcategoryId,
+    onChange,
+    onNewCategory,
+    enableTabs = false,
+    autoFocus = false,
+    defaultOpen = false
+}: CategorySelectorProps) {
     const [open, setOpen] = React.useState(false)
+
+    // Force open on mount if defaultOpen is true (delayed to ensure Dialog is ready)
+    React.useEffect(() => {
+        if (defaultOpen) {
+            const timer = setTimeout(() => setOpen(true), 150)
+            return () => clearTimeout(timer)
+        }
+    }, [defaultOpen])
 
     // Find display name
     const selectedCategory = categories?.find(c => c.id === categoryId)
@@ -274,7 +291,8 @@ export function CategorySelector({ categories, categoryId, subcategoryId, onChan
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="w-full justify-between h-14 text-sm font-normal border-input/60 bg-muted/20 hover:bg-muted/40 transition-colors rounded-2xl px-4"
+                    autoFocus={autoFocus}
+                    className="w-full justify-between h-14 text-base font-medium border-input/60 bg-muted/20 hover:bg-muted/40 transition-all rounded-2xl px-4 shadow-sm"
                 >
                     <div className="flex items-center gap-3 truncate">
                         {selectedCategory ? (
@@ -299,23 +317,25 @@ export function CategorySelector({ categories, categoryId, subcategoryId, onChan
             <PopoverContent className="w-[320px] sm:w-[500px] h-[400px] p-0 rounded-2xl overflow-hidden shadow-2xl border-0" align="start">
                 <CategoryGrid
                     categories={categories}
-                    categoryId={categoryId}
-                    subcategoryId={subcategoryId}
+                    categoryId={categoryId || undefined}
+                    subcategoryId={subcategoryId || undefined}
                     onSelect={handleSelect}
                     enableTabs={enableTabs}
                 />
                 {/* Footer */}
-                <div className="p-2 border-t bg-muted/20 shrink-0">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs text-muted-foreground hover:text-primary gap-2 h-8"
-                        onClick={onNewCategory}
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        Crear nueva categoría
-                    </Button>
-                </div>
+                {onNewCategory && (
+                    <div className="p-2 border-t bg-muted/20 shrink-0">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-xs text-muted-foreground hover:text-primary gap-2 h-8"
+                            onClick={onNewCategory}
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            Crear nueva categoría
+                        </Button>
+                    </div>
+                )}
             </PopoverContent>
         </Popover>
     )

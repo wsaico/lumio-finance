@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Plus, Wallet } from "lucide-react"
-import { useCreatePettyCashFund } from "@/hooks/use-petty-cash"
+import { useCreatePettyCashFund } from "@/hooks/usePettyCash"
 
 const formSchema = z.object({
     fundName: z.string().min(1, "Nombre requerido"),
@@ -71,15 +71,16 @@ export function CreateFundModal({ trigger }: CreateFundModalProps) {
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         const result = await createFund({
-            fundName: values.fundName,
-            fundCode: values.fundCode,
-            assignedAmount: parseFloat(values.assignedAmount),
-            currencyCode: values.currencyCode,
-            responsibleName: values.responsibleName,
-            responsibleId: values.responsibleId || undefined,
-            department: values.department || undefined,
+            name: values.fundName,
+            fund_code: values.fundCode,
+            balance: parseFloat(values.assignedAmount),
+            currency: values.currencyCode,
+            responsible: values.responsibleName,
+            // responsible_id: values.responsibleId || undefined,
+            // department: values.department || undefined,
             description: values.description || undefined,
-            settlementThreshold: parseFloat(values.settlementThreshold),
+            status: 'ACTIVE'
+            // settlementThreshold: parseFloat(values.settlementThreshold),
         })
 
         if (result) {

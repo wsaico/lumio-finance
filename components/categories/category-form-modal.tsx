@@ -34,7 +34,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useCategories } from "@/hooks/use-categories"
+import { useCategories } from "@/hooks/useCategories"
 import { IconPicker } from "@/components/ui/icon-picker"
 import { BUDGET_RULES } from "@/types/budget-methodology"
 

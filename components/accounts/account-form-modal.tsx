@@ -45,7 +45,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useAccounts } from "@/hooks/useAccounts"
 import { BANK_PRESETS } from "@/lib/constants/banks"
 import { cn } from "@/lib/utils"
 

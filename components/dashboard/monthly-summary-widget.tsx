@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { TrendingUp, TrendingDown, DollarSign, ArrowUpDown } from "lucide-react"
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"

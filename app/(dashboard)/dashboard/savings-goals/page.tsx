@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Target, TrendingUp, Trophy, Sparkles } from "lucide-react"
 import Link from "next/link"
-import { useSavingsGoals, useSavingsGoalsAnalytics } from "@/hooks/use-savings-goals"
+import { useSavingsGoals, useSavingsGoalsAnalytics } from "@/hooks/useSavingsGoals"
 import { GoalCard } from "@/components/savings-goals/goal-card"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -15,7 +15,7 @@ export default function SavingsGoalsPage() {
     const { data: goalsData, isLoading: loadingGoals } = useSavingsGoals(statusFilter)
     const { data: analytics, isLoading: loadingAnalytics } = useSavingsGoalsAnalytics()
 
-    const goals = goalsData?.goals || []
+    const goals = goalsData || []
 
     return (
         <div className="space-y-6">

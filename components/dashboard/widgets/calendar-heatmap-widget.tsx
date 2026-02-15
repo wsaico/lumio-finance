@@ -1,21 +1,17 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Calendar } from 'lucide-react';
-import CalendarHeatmap from 'react-calendar-heatmap';
-import 'react-calendar-heatmap/dist/styles.css';
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import type { WidgetProps } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
+import { useState } from 'react';
 
-interface HeatmapValue {
-  date: string;
-  count: number;
-}
+export function CalendarHeatmapWidget() {
+  const [currentDate] = useState(new Date());
 
-export function CalendarHeatmapWidget({ config }: WidgetProps) {
   const { data: heatmapData, isLoading } = useQuery({
-    queryKey: ['activity-heatmap'],
+    queryKey: ['activity-heatmap-v2'],
     queryFn: async () => {
       const res = await fetch('/api/analytics/activity-heatmap')
       if (!res.ok) throw new Error('Failed')
@@ -23,139 +19,82 @@ export function CalendarHeatmapWidget({ config }: WidgetProps) {
     }
   })
 
-  const today = new Date();
-  const oneYearAgo = new Date(today);
-  oneYearAgo.setFullYear(today.getFullYear() - 1);
+  // Calendar Logic
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
 
-  if (isLoading) return <div className="h-[180px] animate-pulse bg-neutral-100 dark:bg-neutral-800 rounded-xl" />
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const emptyDays = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+  const weekDays = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 
+  const getIntensityClass = (day: number) => {
+    // Logic to match high activity or current day
+    if (day === currentDate.getDate()) return 'bg-[#FF007A] text-white shadow-lg shadow-[#FF007A]/40 scale-110 z-10';
+
+    // Check heatmap data
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const activity = heatmapData?.find((d: any) => d.date === dateStr);
+
+    if (!activity || activity.count === 0) return 'bg-zinc-100 dark:bg-white/5 text-zinc-400 dark:text-zinc-600';
+    if (activity.count < 3) return 'bg-zinc-200 dark:bg-white/10 text-zinc-500 dark:text-zinc-400';
+    if (activity.count < 6) return 'bg-zinc-300 dark:bg-white/20 text-zinc-700 dark:text-zinc-200';
+    return 'bg-zinc-400 dark:bg-white/30 text-zinc-900 dark:text-white';
+  };
+
+  if (isLoading) return null;
 
   return (
     <motion.div
-      className="p-6 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="h-full"
     >
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            Resumen de Actividad
-          </h3>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Frecuencia de transacciones en el último año
-          </p>
+      <Card className="widget-surface bg-white dark:bg-zinc-900 border-none h-full flex flex-col overflow-hidden relative shadow-2xl">
+        {/* Header Section */}
+        <div className="flex items-start justify-between p-6 pb-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-[#FF007A]/10 border border-[#FF007A]/20">
+              <Calendar className="w-5 h-5 text-[#FF007A]" />
+            </div>
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Mapa de Calor de Gastos</h3>
+              <p className="text-[9px] font-bold text-zinc-500 opacity-60">Intensidad diaria (Mes Actual)</p>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <button className="p-1 hover:bg-white/5 rounded-lg transition-colors"><ChevronLeft className="w-3.5 h-3.5 text-zinc-600" /></button>
+            <button className="p-1 hover:bg-white/5 rounded-lg transition-colors"><ChevronRight className="w-3.5 h-3.5 text-zinc-600" /></button>
+          </div>
         </div>
-        <Calendar className="w-5 h-5 text-neutral-400" />
-      </div>
 
-      <div className="calendar-heatmap-container">
-        <CalendarHeatmap
-          startDate={oneYearAgo}
-          endDate={today}
-          values={heatmapData}
-          classForValue={(value) => {
-            if (!value || value.count === 0) {
-              return 'color-empty';
-            }
-            if (value.count < 3) {
-              return 'color-scale-1';
-            }
-            if (value.count < 6) {
-              return 'color-scale-2';
-            }
-            if (value.count < 9) {
-              return 'color-scale-3';
-            }
-            return 'color-scale-4';
-          }}
-          tooltipDataAttrs={(value: HeatmapValue) => {
-            if (!value || !value.date) {
-              return { 'data-tip': 'Sin transacciones' };
-            }
-            return {
-              'data-tip': `${value.count} transacción${value.count !== 1 ? 'es' : ''} el ${value.date
-                }`,
-            };
-          }}
-          showWeekdayLabels
-        />
-      </div>
+        <div className="flex-1 px-6 pb-6">
+          {/* Weekday Labels */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {weekDays.map(wd => (
+              <div key={wd} className="text-center text-[8px] font-black text-zinc-600 uppercase">
+                {wd}
+              </div>
+            ))}
+          </div>
 
-      <div className="flex items-center justify-end gap-2 mt-4">
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">Menos</span>
-        <div className="flex gap-1">
-          <div className="w-3 h-3 rounded-sm bg-neutral-100 dark:bg-neutral-700" />
-          <div className="w-3 h-3 rounded-sm bg-primary-200 dark:bg-primary-900" />
-          <div className="w-3 h-3 rounded-sm bg-primary-400 dark:bg-primary-700" />
-          <div className="w-3 h-3 rounded-sm bg-primary-600 dark:bg-primary-500" />
-          <div className="w-3 h-3 rounded-sm bg-primary-800 dark:bg-primary-400" />
+          {/* Days Grid */}
+          <div className="grid grid-cols-7 gap-2">
+            {emptyDays.map(i => <div key={`empty-${i}`} className="aspect-square" />)}
+            {days.map(day => (
+              <motion.div
+                key={day}
+                whileHover={{ scale: 1.05 }}
+                className={cn(
+                  "aspect-square rounded-xl flex items-center justify-center text-[9px] sm:text-[10px] font-bold transition-all cursor-default",
+                  getIntensityClass(day)
+                )}
+              >
+                {day}
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">Más</span>
-      </div>
-
-      <style jsx global>{`
-        .calendar-heatmap-container {
-          font-size: 10px;
-        }
-
-        .react-calendar-heatmap {
-          width: 100%;
-        }
-
-        .react-calendar-heatmap text {
-          font-size: 10px;
-          fill: #9ca3af;
-        }
-
-        .react-calendar-heatmap .color-empty {
-          fill: #f3f4f6;
-        }
-
-        .react-calendar-heatmap .color-scale-1 {
-          fill: #bae6fd;
-        }
-
-        .react-calendar-heatmap .color-scale-2 {
-          fill: #7dd3fc;
-        }
-
-        .react-calendar-heatmap .color-scale-3 {
-          fill: #38bdf8;
-        }
-
-        .react-calendar-heatmap .color-scale-4 {
-          fill: #0ea5e9;
-        }
-
-        .dark .react-calendar-heatmap text {
-          fill: #6b7280;
-        }
-
-        .dark .react-calendar-heatmap .color-empty {
-          fill: #374151;
-        }
-
-        .dark .react-calendar-heatmap .color-scale-1 {
-          fill: #0c4a6e;
-        }
-
-        .dark .react-calendar-heatmap .color-scale-2 {
-          fill: #075985;
-        }
-
-        .dark .react-calendar-heatmap .color-scale-3 {
-          fill: #0369a1;
-        }
-
-        .dark .react-calendar-heatmap .color-scale-4 {
-          fill: #0ea5e9;
-        }
-
-        .react-calendar-heatmap rect:hover {
-          stroke: #0ea5e9;
-          stroke-width: 2px;
-        }
-      `}</style>
+      </Card>
     </motion.div>
   );
 }

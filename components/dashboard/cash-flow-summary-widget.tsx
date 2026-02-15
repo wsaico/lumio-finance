@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { useEffect, useState } from "react"
 import { Loader2, Activity, TrendingUp, TrendingDown, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"

@@ -30,7 +30,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Loader2, RefreshCw, Wallet } from "lucide-react"
-import { useCreatePettyCashReplenishment } from "@/hooks/use-petty-cash"
+import { useCreatePettyCashReplenishment } from "@/hooks/usePettyCash"
 
 const formSchema = z.object({
     paymentMethod: z.enum(['CASH', 'TRANSFER', 'CHECK', 'OTROS']),

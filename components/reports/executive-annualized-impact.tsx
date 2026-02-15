@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { TrendingDown, AlertCircle, CalendarRange } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 
 interface AnnualizedCategory {
     name: string

@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useFormat } from "@/hooks/use-format"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
 import { cn } from "@/lib/utils"
 import {
     Select,

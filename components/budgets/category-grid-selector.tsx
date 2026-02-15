@@ -1,6 +1,6 @@
 "use client"
 
-import { useCategories } from "@/hooks/use-categories"
+import { useCategories } from "@/hooks/useCategories"
 import { CategoryIcon } from "@/components/icons/category-icon"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"

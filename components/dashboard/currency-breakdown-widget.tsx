@@ -1,8 +1,8 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useFormat } from "@/hooks/use-format"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
 import { Coins } from "lucide-react"
 import { motion } from "framer-motion"
 

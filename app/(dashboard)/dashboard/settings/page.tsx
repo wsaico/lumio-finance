@@ -24,8 +24,8 @@ import {
     SettingsSwitch
 } from "@/components/settings/settings-components"
 
-import { useSettingsStore } from "@/hooks/use-settings-store"
-import { useUser } from "@/hooks/use-user"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { useUser } from "@/hooks/useUser"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
 import { BudgetingMethod } from "@/types/budget-methodology"

@@ -1,8 +1,8 @@
 "use client"
 
 import { AlertCircle, AlertTriangle, ArrowRight } from "lucide-react"
-import { BalanceValidationResult } from "@/hooks/use-balance-validation"
-import { useFormat } from "@/hooks/use-format"
+import { BalanceValidationResult } from "@/hooks/useBalanceValidation"
+import { useFormat } from "@/hooks/useFormat"
 
 interface BalanceAlertProps {
     validation: BalanceValidationResult | null

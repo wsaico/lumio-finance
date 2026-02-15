@@ -1,6 +1,6 @@
 "use client"
 
-import { usePettyCashSettlements, useUpdatePettyCashSettlement } from "@/hooks/use-petty-cash"
+import { usePettyCashSettlements, useUpdatePettyCashSettlement } from "@/hooks/usePettyCash"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { Loader2, FileText, CheckCircle2, Clock, AlertTriangle, Check, X, BookOpen } from "lucide-react"

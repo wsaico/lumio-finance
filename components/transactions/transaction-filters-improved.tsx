@@ -18,8 +18,8 @@ import {
     Repeat,
     Check
 } from "lucide-react"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useCategories } from "@/hooks/use-categories"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useCategories } from "@/hooks/useCategories"
 import {
     Sheet,
     SheetContent,

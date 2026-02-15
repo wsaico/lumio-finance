@@ -2,7 +2,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 import { Target, Trophy, Calendar, TrendingUp } from "lucide-react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"

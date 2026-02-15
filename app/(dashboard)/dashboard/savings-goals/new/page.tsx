@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, ArrowRight, Check, Target, Plane, Car, Home, GraduationCap, Heart, Sparkles } from "lucide-react"
-import { useCreateSavingsGoal } from "@/hooks/use-savings-goals"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useCreateSavingsGoal } from "@/hooks/useSavingsGoals"
+import { useAccounts } from "@/hooks/useAccounts"
 import { cn } from "@/lib/utils"
+// @ts-ignore
 import confetti from "canvas-confetti"
 
 const GOAL_TEMPLATES = [
@@ -88,14 +89,24 @@ export default function NewSavingsGoalPage() {
     const [step, setStep] = useState(1)
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        name: string
+        description: string
+        goalType: 'EMERGENCY' | 'TRAVEL' | 'HOME' | 'CAR' | 'EDUCATION' | 'RETIREMENT' | 'OTHER' | 'GADGET' | 'PURCHASE' | 'INVESTMENT'
+        priority: 'LOW' | 'MEDIUM' | 'HIGH'
+        targetAmount: number
+        targetDate: string
+        primaryAccountId: string | null
+        icon: string
+        color: string
+    }>({
         name: '',
         description: '',
-        goalType: 'OTHER' as const,
-        priority: 'MEDIUM' as const,
+        goalType: 'OTHER',
+        priority: 'MEDIUM',
         targetAmount: 0,
         targetDate: '',
-        primaryAccountId: null as string | null,
+        primaryAccountId: null,
         icon: 'target',
         color: '#f97316'
     })
@@ -116,13 +127,13 @@ export default function NewSavingsGoalPage() {
         setFormData({
             name: template.name,
             description: template.description,
-            goalType: template.type,
-            priority: template.priority,
+            goalType: template.type as any,
+            priority: template.priority as any,
             targetAmount: template.suggestedAmount,
             targetDate: targetDate.toISOString().split('T')[0],
             primaryAccountId: null,
             icon: template.id,
-            color: template.color
+            color: template.color as string
         })
 
         setStep(2)
@@ -331,7 +342,7 @@ export default function NewSavingsGoalPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="none">Sin vincular</SelectItem>
-                                        {accounts.map((account: any) => (
+                                        {accounts?.map((account: any) => (
                                             <SelectItem key={account.id} value={account.id}>
                                                 {account.name} - S/ {Number(account.currentBalance).toFixed(2)}
                                             </SelectItem>

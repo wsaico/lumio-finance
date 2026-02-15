@@ -1,8 +1,8 @@
 
 "use client"
 
-import { useCreditCards, CreditCard } from "@/hooks/use-credit-cards"
-import { useFormat } from "@/hooks/use-format"
+import { useCreditCards, CreditCard } from "@/hooks/useCreditCards"
+import { useFormat } from "@/hooks/useFormat"
 import { Card } from "@/components/ui/card"
 import { CreditCard as CardIcon, AlertTriangle, Calendar, CheckCircle2 } from "lucide-react"
 import { motion } from "framer-motion"

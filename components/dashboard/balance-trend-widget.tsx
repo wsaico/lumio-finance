@@ -1,36 +1,29 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { useEffect, useState } from "react"
-import { TrendingUp, TrendingDown } from "lucide-react"
+import { TrendingUp, TrendingDown, Info } from "lucide-react"
+import { motion } from "framer-motion"
+import { cn } from "@/lib/utils"
 
-import { useSettingsStore } from "@/hooks/use-settings-store"
-import { useFormat } from "@/hooks/use-format"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { useFormat } from "@/hooks/useFormat"
 
 export function BalanceTrendWidget() {
     const [data, setData] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
-    const [change, setChange] = useState<{ value: number, percent: number } | null>(null)
-    const { currencyCode } = useSettingsStore() // Get global currency
-    const { getCurrencySymbol } = useFormat() // Assume this helper exists or just map manually if not
+    const { currencyCode, isBalanceVisible } = useSettingsStore()
+    const { formatMoney } = useFormat()
 
     useEffect(() => {
         async function fetchData() {
             try {
-                const res = await fetch('/api/analytics/balance-trend?months=6')
+                // Simulate daily data for the current month to match target image's granularity
+                const res = await fetch('/api/analytics/balance-trend?months=1&granularity=daily')
                 if (res.ok) {
                     const result = await res.json()
                     setData(result)
-
-                    if (result.length >= 2) {
-                        const current = result[result.length - 1].balance
-                        const previous = result[result.length - 2].balance
-                        const diff = current - previous
-                        const percent = previous !== 0 ? (diff / Math.abs(previous)) * 100 : 0
-
-                        setChange({ value: diff, percent })
-                    }
                 }
             } catch (error) {
                 console.error('Error fetching balance trend:', error)
@@ -38,84 +31,90 @@ export function BalanceTrendWidget() {
                 setIsLoading(false)
             }
         }
-
         fetchData()
     }, [])
 
-    if (isLoading) {
-        return (
-            <Card className="glass border-none shadow-premium-md">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base md:text-lg font-semibold">Tendencia de Saldo</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center h-48">
-                    <div className="animate-pulse text-muted-foreground">Cargando...</div>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    const isPositive = change && change.value >= 0
+    if (isLoading) return null
 
     return (
-        <Card className="glass border-none shadow-premium-md">
-            <CardHeader className="pb-0">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-base md:text-lg font-semibold">Tendencia de Saldo</CardTitle>
-                    {change && (
-                        <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-emerald-600' : 'text-rose-600'
-                            }`}>
-                            {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                            <span>{Math.abs(change.percent).toFixed(1)}%</span>
+        <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="h-full"
+        >
+            <Card className="widget-surface bg-white dark:bg-zinc-900 border-none h-full flex flex-col overflow-hidden relative shadow-2xl">
+                {/* Header Section */}
+                <div className="flex items-start justify-between p-6 pb-0">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 rounded-2xl bg-[#FF007A]/10 border border-[#FF007A]/20">
+                            <TrendingUp className="w-5 h-5 text-[#FF007A]" />
                         </div>
-                    )}
+                        <div>
+                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">Tendencia Mensual</h3>
+                            <p className="text-[9px] font-bold text-zinc-500 opacity-60">Acumulado (Mes Actual)</p>
+                        </div>
+                    </div>
                 </div>
-                <div className="mt-1">
-                    <span className="text-2xl font-bold">
-                        {data[data.length - 1]?.balance.toLocaleString('es-PE', { style: 'currency', currency: currencyCode })}
-                    </span>
-                    <span className="text-xs text-muted-foreground ml-2">vs mes anterior</span>
+
+                {/* Chart Area */}
+                <div className="flex-1 px-2 pt-4 relative">
+                    <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorPinkTrend" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#FF007A" stopOpacity={0.3} />
+                                    <stop offset="60%" stopColor="#FF007A" stopOpacity={0.1} />
+                                    <stop offset="100%" stopColor="#FF007A" stopOpacity={0} />
+                                </linearGradient>
+                                <filter id="glowTrend">
+                                    <feGaussianBlur stdDeviation="4" result="blur" />
+                                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                </filter>
+                            </defs>
+                            <CartesianGrid strokeDasharray="0" vertical={false} stroke="oklch(var(--border) / 0.1)" strokeWidth={0.5} />
+                            <XAxis
+                                dataKey="day"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 8, fill: 'oklch(var(--muted-foreground))', fontWeight: 600 }}
+                                dy={10}
+                            />
+                            <YAxis
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 8, fill: 'oklch(var(--muted-foreground))', fontWeight: 600 }}
+                                tickFormatter={(val) => isBalanceVisible ? `${(val / 1000).toFixed(2)}k` : '***'}
+                            />
+                            <Tooltip
+                                contentStyle={{
+                                    backgroundColor: 'rgba(0,0,0,0.9)',
+                                    backdropFilter: 'blur(12px)',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '16px',
+                                    fontSize: '9px',
+                                    fontWeight: 'bold',
+                                    padding: '10px 14px',
+                                    boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+                                }}
+                                itemStyle={{ color: '#fff' }}
+                                cursor={{ stroke: 'rgba(255,0,122,0.3)', strokeWidth: 1.5 }}
+                                formatter={(value: any) => [isBalanceVisible ? formatMoney(value, currencyCode) : '******', 'Balance']}
+                            />
+                            <Area
+                                type="monotone"
+                                dataKey="balance"
+                                stroke="#FF007A"
+                                strokeWidth={3}
+                                strokeLinecap="round"
+                                fill="url(#colorPinkTrend)"
+                                animationDuration={1500}
+                                dot={false}
+                                activeDot={{ r: 5, strokeWidth: 3, stroke: '#fff', fill: '#FF007A', filter: 'url(#glowTrend)' }}
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
                 </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-                <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={data}>
-                        <defs>
-                            <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} className="text-border/30" />
-                        <XAxis
-                            dataKey="month"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12, fill: '#6b7280' }}
-                            dy={10}
-                        />
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'hsl(var(--background))',
-                                border: '1px solid hsl(var(--border))',
-                                borderRadius: '8px'
-                            }}
-                            formatter={(value: any) => [
-                                Number(value || 0).toLocaleString('es-PE', { style: 'currency', currency: currencyCode }),
-                                'Saldo'
-                            ]}
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="balance"
-                            stroke="#3b82f6"
-                            strokeWidth={2}
-                            fillOpacity={1}
-                            fill="url(#colorBalance)"
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </CardContent>
-        </Card>
+            </Card>
+        </motion.div>
     )
 }

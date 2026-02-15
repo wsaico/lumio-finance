@@ -2,8 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { Target } from 'lucide-react';
-import { useBudget } from '@/hooks/use-budget';
-import { useFormat } from '@/hooks/use-format';
+import { useBudget } from '@/hooks/useBudget';
+import { useFormat } from '@/hooks/useFormat';
 import type { WidgetProps } from '@/types/dashboard';
 
 export function BudgetProgressWidget({ config }: WidgetProps) {

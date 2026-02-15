@@ -1,9 +1,9 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { useSavingsGoals } from "@/hooks/use-savings-goals"
-import { useFormat } from "@/hooks/use-format"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSavingsGoals } from "@/hooks/useSavingsGoals"
+import { useFormat } from "@/hooks/useFormat"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { Button } from "@/components/ui/button"
 import { Target, Plus, ChevronRight, Calendar, TrendingUp, Sparkles, Rocket } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -25,7 +25,7 @@ export function SavingsGoalsWidget() {
     const { goalTotalType } = useSettingsStore()
     const router = useRouter()
 
-    const goals = data?.goals || []
+    const goals = data || []
 
     const getProjectedDate = (goal: any) => {
         if (!goal.current_amount || goal.current_amount <= 0 || !goal.start_date) return null
@@ -191,16 +191,15 @@ export function SavingsGoalsWidget() {
                                             <h4 className="font-bold text-white truncate mb-1">{goal.name}</h4>
                                             <div className="flex items-baseline gap-1.5">
                                                 <span className="text-xl font-black text-white">
-                                                    {goalTotalType === 'remaining'
+                                                    {!isBalanceVisible ? '******' : (goalTotalType === 'remaining'
                                                         ? formatMoney(Math.max(0, goal.target_amount - goal.current_amount), goal.currency)
-                                                        : formatMoney(goal.current_amount, goal.currency)
+                                                        : formatMoney(goal.current_amount, goal.currency))
                                                     }
                                                 </span>
                                                 <span className="text-xs text-white/40">
-                                                    {goalTotalType === 'remaining'
+                                                    {!isBalanceVisible ? ' / ***' : (goalTotalType === 'remaining'
                                                         ? ' para la meta'
-                                                        : ` / ${formatMoney(goal.target_amount, goal.currency)}`
-                                                    }
+                                                        : ` / ${formatMoney(goal.target_amount, goal.currency)}`)}
                                                 </span>
                                             </div>
                                         </div>

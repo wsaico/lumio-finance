@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useState } from "react"
-import { useAddContribution } from "@/hooks/use-savings-goals"
+import { useAddContribution } from "@/hooks/useSavingsGoals"
 import { Loader2 } from "lucide-react"
 
 interface ContributeModalProps {
@@ -24,9 +24,9 @@ export function ContributeModal({ goal, open, onOpenChange }: ContributeModalPro
         e.preventDefault()
 
         addContribution({
-            goalId: goal.id,
+            goal_id: goal.id,
             amount: parseFloat(amount),
-            date: new Date().toISOString().split('T')[0],
+            contribution_date: new Date().toISOString().split('T')[0],
             notes
         }, {
             onSuccess: () => {

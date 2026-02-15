@@ -13,7 +13,11 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReallocationModal } from "@/components/zbb/reallocation-modal"
-import { AutoAssignModal } from "@/components/zbb/auto-assign-modal"
+// Removed import { AutoAssignModal } 
+
+
+
+import { EditableMoneyCell } from "@/components/zbb/editable-money-cell"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -37,14 +41,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 // Allocations Comp
 function AllocationsList({ allocations, cycleId, onRefresh }: { allocations: any[], cycleId: string, onRefresh: () => void }) {
-    if (!allocations || allocations.length === 0) return null
-
     // Grouping
     const grouped = {
-        1: allocations.filter((a: any) => a.priority === 1),
-        2: allocations.filter((a: any) => a.priority === 2),
-        3: allocations.filter((a: any) => a.priority === 3),
-        4: allocations.filter((a: any) => a.priority === 4),
+        1: allocations ? allocations.filter((a: any) => a.priority === 1) : [],
+        2: allocations ? allocations.filter((a: any) => a.priority === 2) : [],
+        3: allocations ? allocations.filter((a: any) => a.priority === 3) : [],
+        4: allocations ? allocations.filter((a: any) => a.priority === 4) : [],
     }
 
     const priorityLabels = {
@@ -65,6 +67,25 @@ function AllocationsList({ allocations, cycleId, onRefresh }: { allocations: any
         }
     }
 
+
+
+    const handleQuickUpdate = async (id: string, amount: number, currency: 'PEN' | 'USD') => {
+        try {
+            const res = await fetch('/api/zbb/allocations', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, amount, currency })
+            })
+            if (!res.ok) throw new Error("Error al actualizar")
+
+            // Trigger refresh to update the money pool
+            onRefresh()
+        } catch (error) {
+            toast.error("No se pudo actualizar el monto")
+            throw error // Propagate to component to reset state if needed
+        }
+    }
+
     return (
         <Card className="shadow-sm border-neutral-200 dark:border-neutral-800">
             <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
@@ -77,161 +98,242 @@ function AllocationsList({ allocations, cycleId, onRefresh }: { allocations: any
                 </div>
             </CardHeader>
             <CardContent className="p-0">
-                <div className="divide-y relative w-full overflow-auto">
-                    {[1, 2, 3, 4].map((prio) => {
-                        const items = grouped[prio as keyof typeof grouped]
-                        if (items.length === 0) return null
-                        const config = priorityLabels[prio as keyof typeof priorityLabels]
+                {(!allocations || allocations.length === 0) ? (
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                        <div className="bg-neutral-100 dark:bg-neutral-800 p-4 rounded-full mb-3">
+                            <Target className="w-8 h-8 text-muted-foreground opacity-50" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground">Tu plan está vacío</h3>
+                        <p className="text-muted-foreground text-sm max-w-xs mb-6">
+                            Agrega tus gastos fijos y metas para empezar a distribuir tus ingresos.
+                        </p>
+                        <AllocationWizard
+                            cycleId={cycleId}
+                            onSuccess={onRefresh}
+                            trigger={
+                                <Button variant="outline" className="border-dashed border-2">
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Agregar Primer Gasto
+                                </Button>
+                            }
+                        />
+                    </div>
+                ) : (
+                    <div className="divide-y relative w-full overflow-auto">
+                        {[1, 2, 3, 4].map((prio) => {
+                            const items = grouped[prio as keyof typeof grouped]
+                            if (items.length === 0) return null
+                            const config = priorityLabels[prio as keyof typeof priorityLabels]
 
-                        return (
-                            <div key={prio} className="bg-white dark:bg-neutral-950/50">
-                                {/* Group Header */}
-                                <div className="px-4 py-2 bg-neutral-50/50 dark:bg-neutral-900/50 border-y border-neutral-100 dark:border-neutral-800 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-sm">
-                                    <span className={`w-2 h-2 rounded-full ${config.color.replace('text', 'bg').split(' ')[0]}`}></span>
-                                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Prioridad {prio}: {config.label}</span>
-                                </div>
+                            return (
+                                <div key={prio} className="bg-white dark:bg-neutral-950/50">
+                                    {/* Group Header */}
+                                    <div className="px-4 py-2 bg-neutral-50/50 dark:bg-neutral-900/50 border-y border-neutral-100 dark:border-neutral-800 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-sm">
+                                        <span className={`w-2 h-2 rounded-full ${config.color.replace('text', 'bg').split(' ')[0]}`}></span>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Prioridad {prio}: {config.label}</span>
+                                    </div>
 
-                                {/* DESKTOP TABLE */}
-                                <div className="hidden md:block w-full text-sm text-left">
-                                    <table className="w-full">
-                                        <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                                            {items.map((item: any) => (
-                                                <tr key={item.id} className="group hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50 transition-colors">
-                                                    <td className="p-3 pl-4 align-middle w-[40%]">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="h-8 w-8 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 border border-neutral-200 dark:border-neutral-700 text-muted-foreground">
-                                                                {item.goal ? (
-                                                                    <Target className="w-3.5 h-3.5" />
-                                                                ) : (
-                                                                    <CategoryIcon name={item.category?.icon} className="w-3.5 h-3.5" />
-                                                                )}
-                                                            </div>
-                                                            <div className="flex flex-col">
-                                                                <span className="font-medium text-foreground">
-                                                                    {item.goal ? item.goal.name : item.subcategory?.name || item.category?.name}
-                                                                </span>
-                                                                {(item.goal || item.subcategory) && (
-                                                                    <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
-                                                                        {item.goal ? 'Meta de Ahorro' : item.category?.name}
+                                    {/* DESKTOP TABLE */}
+                                    <div className="hidden md:block w-full text-sm text-left">
+                                        <table className="w-full">
+                                            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                                                {items.map((item: any) => (
+                                                    <tr key={item.id} className="group hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50 transition-colors">
+                                                        <td className="p-3 pl-4 align-middle w-[40%]">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-8 w-8 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 border border-neutral-200 dark:border-neutral-700 text-muted-foreground">
+                                                                    {item.goal ? (
+                                                                        <Target className="w-3.5 h-3.5" />
+                                                                    ) : (
+                                                                        <CategoryIcon name={item.category?.icon} className="w-3.5 h-3.5" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-medium text-foreground">
+                                                                        {item.goal ? item.goal.name : item.subcategory?.name || item.category?.name}
                                                                     </span>
+                                                                    {(item.goal || item.subcategory) && (
+                                                                        <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
+                                                                            {item.goal ? 'Meta de Ahorro' : item.category?.name}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 align-middle w-[30%]">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="text-muted-foreground text-xs italic line-clamp-1 opacity-80">{item.justification}</span>
+                                                                {/* Frequency Badge for Transparency */}
+                                                                {(item.justification?.includes('[Diario]') ||
+                                                                    item.justification?.includes('[Semanal]') ||
+                                                                    item.justification?.includes('[Quincenal]')) && (
+                                                                        <div className="flex items-center gap-1 opacity-70">
+                                                                            <div className="h-1 w-1 rounded-full bg-primary" />
+                                                                            <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">
+                                                                                {item.justification.includes('[Diario]') ? 'Diario' :
+                                                                                    item.justification.includes('[Semanal]') ? 'Semanal' : 'Quincenal'}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 align-middle text-right w-[20%]">
+                                                            <div className="flex flex-col items-end">
+                                                                <div className="flex flex-col items-end gap-1">
+                                                                    {/* PEN Cell */}
+                                                                    {(item.allocated_amount_pen > 0 || item.allocated_amount_usd === 0) && (
+                                                                        <EditableMoneyCell
+                                                                            id={item.id}
+                                                                            currency="PEN"
+                                                                            initialValue={parseFloat(item.allocated_amount_pen)}
+                                                                            onSave={async (id, val) => handleQuickUpdate(id, val, 'PEN')}
+                                                                        />
+                                                                    )}
+                                                                    {/* USD Cell (Only if explicitly USD or mixed? ZBB usually separates them clearly. 
+                                                                For now, if it has USD, show USD cell. If user wants to switch currency, they use the modal. 
+                                                                Inline editing usually strictly preserves the currency type to avoid accidents.)
+                                                            */}
+                                                                    {item.allocated_amount_usd > 0 && (
+                                                                        <EditableMoneyCell
+                                                                            id={item.id}
+                                                                            currency="USD"
+                                                                            initialValue={parseFloat(item.allocated_amount_usd)}
+                                                                            onSave={async (id, val) => handleQuickUpdate(id, val, 'USD')}
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 pr-4 align-middle text-right w-[10%]">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                                    <AllocationWizard
+                                                                        cycleId={cycleId}
+                                                                        onSuccess={onRefresh}
+                                                                        editingAllocation={item}
+                                                                        trigger={
+                                                                            <div className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
+                                                                                <Edit className="mr-2 h-4 w-4" /> Editar
+                                                                            </div>
+                                                                        }
+                                                                    />
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(item.id, item.category?.name)}>
+                                                                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* MOBILE CARDS LIST */}
+                                    <div className="md:hidden divide-y divide-neutral-100 dark:divide-neutral-800">
+                                        {items.map((item: any) => (
+                                            <div key={item.id} className="p-4 flex items-start gap-3 active:bg-neutral-50 dark:active:bg-neutral-900 overflow-hidden relative">
+                                                {/* Icon */}
+                                                <div className="h-10 w-10 mt-1 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 border border-neutral-200 dark:border-neutral-700 text-muted-foreground shadow-sm">
+                                                    {item.goal ? (
+                                                        <Target className="w-5 h-5" />
+                                                    ) : (
+                                                        <CategoryIcon name={item.category?.icon} className="w-5 h-5" />
+                                                    )}
+                                                </div>
+
+                                                {/* Content */}
+                                                <div className="flex-1 min-w-0 space-y-1">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h4 className="font-bold text-sm text-foreground truncate max-w-[180px]">
+                                                                {item.goal ? item.goal.name : item.subcategory?.name || item.category?.name}
+                                                            </h4>
+                                                            {(item.goal || item.subcategory) && (
+                                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+                                                                    {item.goal ? 'Meta' : item.category?.name}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col items-end shrink-0 ml-2">
+                                                            <div className="flex flex-col items-end shrink-0 ml-2 gap-1">
+                                                                {(item.allocated_amount_pen > 0 || item.allocated_amount_usd === 0) && (
+                                                                    <div className="scale-90 origin-right">
+                                                                        <EditableMoneyCell
+                                                                            id={item.id}
+                                                                            currency="PEN"
+                                                                            initialValue={parseFloat(item.allocated_amount_pen)}
+                                                                            onSave={async (id, val) => handleQuickUpdate(id, val, 'PEN')}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                {item.allocated_amount_usd > 0 && (
+                                                                    <div className="scale-90 origin-right">
+                                                                        <EditableMoneyCell
+                                                                            id={item.id}
+                                                                            currency="USD"
+                                                                            initialValue={parseFloat(item.allocated_amount_usd)}
+                                                                            onSave={async (id, val) => handleQuickUpdate(id, val, 'USD')}
+                                                                        />
+                                                                    </div>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                    <td className="p-3 align-middle w-[30%]">
-                                                        <span className="text-muted-foreground text-xs italic line-clamp-1 opacity-80">{item.justification}</span>
-                                                    </td>
-                                                    <td className="p-3 align-middle text-right w-[20%]">
-                                                        <div className="flex flex-col items-end">
-                                                            {item.allocated_amount_pen > 0 && (
-                                                                <span className="font-mono font-medium text-foreground text-sm">S/ {parseFloat(item.allocated_amount_pen).toFixed(2)}</span>
-                                                            )}
-                                                            {item.allocated_amount_usd > 0 && (
-                                                                <span className="font-mono font-medium text-emerald-600 dark:text-emerald-500 text-xs">$ {parseFloat(item.allocated_amount_usd).toFixed(2)}</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-3 pr-4 align-middle text-right w-[10%]">
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                                <AllocationWizard
-                                                                    cycleId={cycleId}
-                                                                    onSuccess={onRefresh}
-                                                                    editingAllocation={item}
-                                                                    trigger={
-                                                                        <div className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
-                                                                            <Edit className="mr-2 h-4 w-4" /> Editar
-                                                                        </div>
-                                                                    }
-                                                                />
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(item.id, item.category?.name)}>
-                                                                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                    </div>
 
-                                {/* MOBILE CARDS LIST */}
-                                <div className="md:hidden divide-y divide-neutral-100 dark:divide-neutral-800">
-                                    {items.map((item: any) => (
-                                        <div key={item.id} className="p-4 flex items-start gap-3 active:bg-neutral-50 dark:active:bg-neutral-900 overflow-hidden relative">
-                                            {/* Icon */}
-                                            <div className="h-10 w-10 mt-1 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 border border-neutral-200 dark:border-neutral-700 text-muted-foreground shadow-sm">
-                                                {item.goal ? (
-                                                    <Target className="w-5 h-5" />
-                                                ) : (
-                                                    <CategoryIcon name={item.category?.icon} className="w-5 h-5" />
-                                                )}
-                                            </div>
-
-                                            {/* Content */}
-                                            <div className="flex-1 min-w-0 space-y-1">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <h4 className="font-bold text-sm text-foreground truncate max-w-[180px]">
-                                                            {item.goal ? item.goal.name : item.subcategory?.name || item.category?.name}
-                                                        </h4>
-                                                        {(item.goal || item.subcategory) && (
-                                                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
-                                                                {item.goal ? 'Meta' : item.category?.name}
+                                                    {item.justification && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs text-muted-foreground italic line-clamp-2 leading-relaxed bg-neutral-50 dark:bg-neutral-900/50 p-2 rounded-lg border border-neutral-100 dark:border-neutral-800/50">
+                                                                "{item.justification}"
                                                             </p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-col items-end shrink-0 ml-2">
-                                                        {item.allocated_amount_pen > 0 && (
-                                                            <span className="font-mono font-bold text-foreground text-sm">S/ {parseFloat(item.allocated_amount_pen).toFixed(0)}</span>
-                                                        )}
-                                                        {item.allocated_amount_usd > 0 && (
-                                                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-500 text-xs">$ {parseFloat(item.allocated_amount_usd).toFixed(0)}</span>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                                            {(item.justification?.includes('[Diario]') ||
+                                                                item.justification?.includes('[Semanal]') ||
+                                                                item.justification?.includes('[Quincenal]')) && (
+                                                                    <div className="flex items-center gap-1.5 px-1">
+                                                                        <div className="h-1 w-1 rounded-full bg-primary" />
+                                                                        <span className="text-[9px] font-bold text-primary uppercase tracking-wider">
+                                                                            Monto Recurrente Detectado
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                        </div>
+                                                    )}
 
-                                                {item.justification && (
-                                                    <p className="text-xs text-muted-foreground italic line-clamp-2 leading-relaxed bg-neutral-50 dark:bg-neutral-900/50 p-2 rounded-lg border border-neutral-100 dark:border-neutral-800/50">
-                                                        "{item.justification}"
-                                                    </p>
-                                                )}
-
-                                                {/* Actions Row */}
-                                                <div className="flex justify-end gap-3 pt-2">
-                                                    <AllocationWizard
-                                                        cycleId={cycleId}
-                                                        onSuccess={onRefresh}
-                                                        editingAllocation={item}
-                                                        trigger={
-                                                            <button className="text-xs font-semibold text-primary flex items-center gap-1 px-2 py-1 bg-primary/5 rounded-md active:bg-primary/10">
-                                                                <Edit className="w-3 h-3" /> Editar
-                                                            </button>
-                                                        }
-                                                    />
-                                                    <button
-                                                        onClick={() => handleDelete(item.id, item.category?.name)}
-                                                        className="text-xs font-semibold text-destructive flex items-center gap-1 px-2 py-1 bg-destructive/5 rounded-md active:bg-destructive/10"
-                                                    >
-                                                        <Trash2 className="w-3 h-3" />
-                                                    </button>
+                                                    {/* Actions Row */}
+                                                    <div className="flex justify-end gap-3 pt-2">
+                                                        <AllocationWizard
+                                                            cycleId={cycleId}
+                                                            onSuccess={onRefresh}
+                                                            editingAllocation={item}
+                                                            trigger={
+                                                                <button className="text-xs font-semibold text-primary flex items-center gap-1 px-2 py-1 bg-primary/5 rounded-md active:bg-primary/10">
+                                                                    <Edit className="w-3 h-3" /> Editar
+                                                                </button>
+                                                            }
+                                                        />
+                                                        <button
+                                                            onClick={() => handleDelete(item.id, item.category?.name)}
+                                                            className="text-xs font-semibold text-destructive flex items-center gap-1 px-2 py-1 bg-destructive/5 rounded-md active:bg-destructive/10"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )
-                    })}
-                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </CardContent>
         </Card>
     )
@@ -430,14 +532,7 @@ export function MonthlyPlanner() {
                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                         <ReallocationModal cycleId={cycle.id} allocations={cycle.allocations} onSuccess={() => mutate()} trigger={<div className="flex items-center w-full">Mover Dinero</div>} />
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                        <AutoAssignModal
-                                            cycleId={cycle.id}
-                                            onSuccess={() => mutate()}
-                                            disabled={!moneyPool || moneyPool.unassigned <= 0}
-                                            trigger={<div className="flex items-center w-full">Auto-Asignar</div>}
-                                        />
-                                    </DropdownMenuItem>
+
                                     <DropdownMenuSeparator />
                                     {cycle.status === 'draft' && (
                                         <DropdownMenuItem className="text-red-600 focus:text-red-600" onSelect={() => document.getElementById('reset-plan-trigger')?.click()}>
@@ -497,11 +592,7 @@ export function MonthlyPlanner() {
 
                             <ReallocationModal cycleId={cycle.id} allocations={cycle.allocations} onSuccess={() => mutate()} />
 
-                            <AutoAssignModal
-                                cycleId={cycle.id}
-                                onSuccess={() => mutate()}
-                                disabled={!moneyPool || moneyPool.unassigned <= 0}
-                            />
+
                         </div>
 
                         {/* Primary Actions (Always visible or adapted) */}

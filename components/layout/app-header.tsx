@@ -8,7 +8,7 @@ import { CommandSearch } from "./command-search"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Sidebar } from "./app-sidebar"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { ThemeToggle } from "./theme-toggle"
 import { NotificationsPopover } from "./notifications-popover"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -19,9 +19,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, UserCircle, Search, Bell, Menu, Calendar as CalendarIcon, TrendingUp, Wallet, Sparkles } from "lucide-react"
+import { LogOut, UserCircle, Search, Bell, Menu, Calendar as CalendarIcon, TrendingUp, Wallet, Sparkles, Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { useUser } from "@/hooks/use-user"
+import { useUser } from "@/hooks/useUser"
 import {
     Popover,
     PopoverContent,
@@ -31,8 +31,8 @@ import { Calendar } from "@/components/ui/calendar"
 
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useFormat } from "@/hooks/use-format"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
 import { cn } from "@/lib/utils"
 
 
@@ -53,7 +53,7 @@ const PAGE_CONFIG: Record<string, { title: string, subtitle: string }> = {
 export function Header() {
     const pathname = usePathname()
     const router = useRouter()
-    const { sidebarCollapsed } = useSettingsStore()
+    const { sidebarCollapsed, isBalanceVisible, setIsBalanceVisible } = useSettingsStore()
     const [date, setDate] = useState<Date | undefined>(new Date())
     const [isOpen, setIsOpen] = useState(false)
 
@@ -143,7 +143,7 @@ export function Header() {
 
                         <div className="flex items-center gap-2">
                             <span className="text-lg font-black text-primary tabular-nums leading-none tracking-tight">
-                                {formatMoney(netWorth)}
+                                {isBalanceVisible ? formatMoney(netWorth) : '******'}
                             </span>
 
                             {/* Trend Indicator - System Colored */}
@@ -173,6 +173,20 @@ export function Header() {
                 </CommandSearch>
 
                 <div className="hidden sm:flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                            "h-10 w-10 rounded-full transition-all duration-300 border",
+                            !isBalanceVisible
+                                ? "bg-[#FF007A] text-white border-transparent shadow-[0_0_15px_-3px_#FF007A] hover:bg-[#FF007A]/90"
+                                : "hover:bg-muted text-muted-foreground border-transparent"
+                        )}
+                        onClick={() => setIsBalanceVisible(!isBalanceVisible)}
+                        title={isBalanceVisible ? "Ocultar montos" : "Mostrar montos"}
+                    >
+                        {isBalanceVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5 animate-pulse" />}
+                    </Button>
                     <ThemeToggle />
                     <NotificationsPopover />
                 </div>

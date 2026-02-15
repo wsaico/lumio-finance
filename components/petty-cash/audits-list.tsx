@@ -1,6 +1,6 @@
 "use client"
 
-import { usePettyCashAudits } from "@/hooks/use-petty-cash"
+import { usePettyCashAudits } from "@/hooks/usePettyCash"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { Loader2, Calculator, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react"

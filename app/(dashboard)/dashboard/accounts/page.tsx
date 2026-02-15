@@ -1,13 +1,15 @@
+"use client"
+
 import { useState, useMemo, useEffect } from "react"
 import { AccountFormModal } from "@/components/accounts/account-form-modal"
 import { CompactAccountCard } from "@/components/accounts/compact-account-card"
 import { CreditCardsStats } from "@/components/accounts/credit-cards-stats"
 import { CreditCardDetailPanel } from "@/components/accounts/credit-card-detail-panel"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useAccounts } from "@/hooks/useAccounts"
 import { Loader2, CreditCard, Wallet, Banknote, Landmark, TrendingUp } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
-import { useMediaQuery } from "@/hooks/use-media-query"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 
 type AccountType = 'ALL' | 'CREDIT_CARD' | 'BANK' | 'CASH' | 'DIGITAL' | 'INVESTMENT'
 

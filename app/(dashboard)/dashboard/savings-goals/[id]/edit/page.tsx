@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Save } from "lucide-react"
-import { useSavingsGoal, useUpdateSavingsGoal } from "@/hooks/use-savings-goals"
-import { useAccounts } from "@/hooks/use-accounts"
+import { useSavingsGoal, useUpdateSavingsGoal } from "@/hooks/useSavingsGoals"
+import { useAccounts } from "@/hooks/useAccounts"
 
 export default function EditGoalPage() {
     const params = useParams()
@@ -22,7 +22,7 @@ export default function EditGoalPage() {
     const { mutate: updateGoal, isPending } = useUpdateSavingsGoal()
     const { accounts } = useAccounts()
 
-    const goal = goalData?.goal
+    const goal = goalData
 
     const [formData, setFormData] = useState({
         name: '',

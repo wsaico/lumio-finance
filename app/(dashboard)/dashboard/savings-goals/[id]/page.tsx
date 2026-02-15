@@ -11,11 +11,12 @@ import {
     ArrowLeft, Plus, Calendar, TrendingUp, TrendingDown,
     Target, CheckCircle2, Clock, Trophy, Sparkles, Edit, Trash2, RefreshCw
 } from "lucide-react"
-import { useSavingsGoal, useGoalContributions, useDeleteSavingsGoal, useUpdateContribution, useDeleteContribution, useSyncSavingsGoal } from "@/hooks/use-savings-goals"
+import { useSavingsGoal, useGoalContributions, useDeleteSavingsGoal, useUpdateContribution, useDeleteContribution, useSyncSavingsGoal } from "@/hooks/useSavingsGoals"
 import { ContributeModal } from "@/components/savings-goals/contribute-modal"
 import { EditContributionModal } from "@/components/savings-goals/edit-contribution-modal"
 import { WithdrawModal } from "@/components/savings-goals/withdraw-modal"
 import { cn } from "@/lib/utils"
+// @ts-ignore
 import confetti from "canvas-confetti"
 
 export default function GoalDetailsPage() {
@@ -37,8 +38,8 @@ export default function GoalDetailsPage() {
 
     // ... rest of the code ...
 
-    const goal = goalData?.goal
-    const contributions = contributionsData?.contributions || []
+    const goal = goalData
+    const contributions = contributionsData || []
 
     const isCompleted = goal?.status === 'COMPLETED'
     const progress = goal?.progress || 0

@@ -3,7 +3,7 @@
 
 import { CategoryFormModal } from "@/components/categories/category-form-modal"
 import { CategoryCard } from "@/components/categories/category-card"
-import { useCategories } from "@/hooks/use-categories"
+import { useCategories } from "@/hooks/useCategories"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2 } from "lucide-react"
 

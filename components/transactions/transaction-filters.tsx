@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { X, Search, Filter } from "lucide-react"
-import { useAccounts } from "@/hooks/use-accounts"
-import { useCategories } from "@/hooks/use-categories"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useCategories } from "@/hooks/useCategories"
 import {
     Popover,
     PopoverContent,

@@ -41,8 +41,8 @@ function mapAccountReceivable(row: any): any {
 
     // Self-Healing Status Logic:
     // Determine which installments MUST be paid based on current Outstanding Balance.
-    // This fixes stale "PENDING" statuses if the DB didn't update correctly.
-    const totalPrincipalPaid = Number(row.original_amount) - Number(row.outstanding_balance)
+    // Enhanced precision: Use exact rounding and a smaller epsilon (0.001).
+    const totalPrincipalPaid = Math.round((Number(row.original_amount) - Number(row.outstanding_balance)) * 100) / 100
     let accumulatedPrincipalPaid = 0
 
     const installments = (row.loan_installments || [])
@@ -53,11 +53,11 @@ function mapAccountReceivable(row: any): any {
 
             // Virtual Status Override
             // If we have covered this installment in the total paid, force it to 'PAID'
-            if (accumulatedPrincipalPaid + (principal - 0.05) <= totalPrincipalPaid) {
+            if (accumulatedPrincipalPaid + (principal - 0.001) <= totalPrincipalPaid) {
                 status = 'PAID'
             }
 
-            accumulatedPrincipalPaid += principal
+            accumulatedPrincipalPaid = Math.round((accumulatedPrincipalPaid + principal) * 100) / 100
 
             return {
                 id: i.id,
@@ -337,12 +337,11 @@ export async function POST(request: Request) {
         const totalInstallments = validated.totalInstallments || 1
         if (totalInstallments > 0) {
             const installments = []
-            const principalPerInstallment = validated.amount / totalInstallments
-            // Simple interest calculation for the whole period default
-            // Future improvement: Support compound interest or amortization formulas
+            // Use 2-decimal rounded base values
+            const principalPerInstallment = Math.round((validated.amount / totalInstallments) * 100) / 100
             const interestRate = validated.interestRate || 0
-            const totalInterest = (validated.amount * (interestRate / 100))
-            const interestPerInstallment = totalInterest / totalInstallments
+            const totalInterest = Math.round((validated.amount * (interestRate / 100)) * 100) / 100
+            const interestPerInstallment = Math.round((totalInterest / totalInstallments) * 100) / 100
 
             // Determine start date (loan date or today)
             let currentDate = new Date(validated.dueDate ? validated.dueDate : new Date())
@@ -359,12 +358,20 @@ export async function POST(request: Request) {
 
 
             for (let i = 1; i <= totalInstallments; i++) {
+                const isLast = i === totalInstallments
+                const instPrincipal = isLast
+                    ? Math.round((validated.amount - (principalPerInstallment * (totalInstallments - 1))) * 100) / 100
+                    : principalPerInstallment
+                const instInterest = isLast
+                    ? Math.round((totalInterest - (interestPerInstallment * (totalInstallments - 1))) * 100) / 100
+                    : interestPerInstallment
+
                 installments.push({
                     account_receivable_id: receivable.id, // Linked to this AR
                     installment_number: i,
                     due_date: currentDate.toISOString(),
-                    principal_amount: principalPerInstallment,
-                    interest_amount: interestPerInstallment,
+                    principal_amount: instPrincipal,
+                    interest_amount: instInterest,
                     status: 'PENDING'
                 })
 
@@ -447,17 +454,6 @@ export async function DELETE(request: Request) {
         // 1. Refund the initial outflow (Original Amount) -> Balance += Original Amount
         // 2. Revert any payments made (Inflows from payments) -> Balance -= Payments Amount
 
-        // Let's get the account
-        const { data: account } = await supabase
-            .from('accounts')
-            .select('current_balance')
-            .eq('id', loan.account_id) // Assuming account_id is stored on loan? Or we use transaction.
-        // Wait, accounts_receivable table doesn't seem to store account_id directly in the visible schema above?
-        // Let's check the POST: It uses `validated.accountId` to create transaction, but does it save to accounts_receivable?
-        // Checking POST payload... `metadata`? No.
-        // It seems `accounts_receivable` might NOT have `account_id` column?
-        // `linked_transaction_id` points to the transaction. The transaction has `account_id`.
-
         // Fetch linked transaction to get account_id
         if (loan.linked_transaction_id) {
             const { data: transaction } = await supabase
@@ -477,13 +473,7 @@ export async function DELETE(request: Request) {
                         .select('amount')
                         .eq('account_receivable_id', id)
 
-                    const totalPaidBack = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
-
-                    // Logic:
-                    // Loan Creation: Balance - 1000
-                    // Payment 1: Balance + 200
-                    // Current Net Impact: -800
-                    // To Undo: Balance + 800 (which is Original - Paid)
+                    const totalPaidBack = payments?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0
 
                     const amountToRefund = Number(loan.original_amount) - totalPaidBack
                     const newBalance = Number(acc.current_balance) + amountToRefund
@@ -511,7 +501,7 @@ export async function DELETE(request: Request) {
             .eq('account_receivable_id', id)
 
         if (paymentsToDelete && paymentsToDelete.length > 0) {
-            const txIds = paymentsToDelete.map(p => p.transaction_id).filter(Boolean)
+            const txIds = paymentsToDelete.map((p: any) => p.transaction_id).filter(Boolean)
             if (txIds.length > 0) {
                 await supabase.from('transactions').delete().in('id', txIds)
             }
@@ -584,7 +574,7 @@ export async function PATCH(request: Request) {
 
             // VALIDATION: Principal component cannot exceed outstanding principal balance
             // But total payment CAN exceed it (if it includes interest)
-            if (principalAmount > (receivable.outstanding_balance + 0.05)) { // Small buffer for rounding
+            if (principalAmount > (receivable.outstanding_balance + 0.001)) { // Smaller epsilon
                 return NextResponse.json(
                     { error: 'El abono a capital excede el saldo pendiente' },
                     { status: 400 }
@@ -755,17 +745,13 @@ export async function PATCH(request: Request) {
 
             if (installments) {
                 for (const inst of installments) {
-                    if (remainingPrincipalPayment <= 0.01) break // Done distributing
+                    if (remainingPrincipalPayment <= 0.001) break // Done distributing
                     if (inst.status === 'PAID') continue
 
                     // How much does this installment owe?
-                    // Simplified: We assume installments match principal. 
-                    // Use total_amount or principal_amount depending on if interest is capitalized.
-                    // Here we focus on Principal reduction.
+                    const openAmount = Number(inst.principal_amount)
 
-                    const openAmount = Number(inst.principal_amount) // Assuming simple tracking
-
-                    if (remainingPrincipalPayment >= (openAmount - 0.05)) {
+                    if (remainingPrincipalPayment >= (openAmount - 0.001)) {
                         // Fully cover this installment
                         await supabase
                             .from('loan_installments')
@@ -774,17 +760,16 @@ export async function PATCH(request: Request) {
 
                         remainingPrincipalPayment -= openAmount
                     } else {
-                        // Partial cover (Optional: mark as PARTIAL)
-                        // For now, we prefer to keep it simple. Only mark PAID if fully paid.
-                        // Or we can update a 'paid_amount' column if it existed.
-                        // Let's just consume the amount.
+                        // Partial cover
                         remainingPrincipalPayment = 0
                     }
                 }
             }
 
             // 3. Update outstanding balance (Only reduce by Principal)
-            const newBalance = receivable.outstanding_balance - principalAmount
+            // Ensure strict rounding and check for zero-balance
+            let newBalance = Math.round((receivable.outstanding_balance - principalAmount) * 100) / 100
+            if (newBalance < 0.01) newBalance = 0 // Forced zero closure
 
             const { data: updated, error: updateError } = await supabase
                 .from('accounts_receivable')

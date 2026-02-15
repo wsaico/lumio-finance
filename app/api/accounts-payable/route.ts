@@ -40,7 +40,8 @@ function mapAccountPayable(row: any): any {
     if (!row) return null
 
     // Self-Healing Status Logic:
-    const totalPrincipalPaid = Number(row.original_amount) - Number(row.outstanding_balance)
+    // Enhanced precision: Use exact rounding and a smaller epsilon (0.001).
+    const totalPrincipalPaid = Math.round((Number(row.original_amount) - Number(row.outstanding_balance)) * 100) / 100
     let accumulatedPrincipalPaid = 0
 
     const installments = (row.loan_installments || [])
@@ -49,11 +50,11 @@ function mapAccountPayable(row: any): any {
             const principal = Number(i.principal_amount)
             let status = i.status
 
-            if (accumulatedPrincipalPaid + (principal - 0.05) <= totalPrincipalPaid) {
+            if (accumulatedPrincipalPaid + (principal - 0.001) <= totalPrincipalPaid) {
                 status = 'PAID'
             }
 
-            accumulatedPrincipalPaid += principal
+            accumulatedPrincipalPaid = Math.round((accumulatedPrincipalPaid + principal) * 100) / 100
 
             return {
                 id: i.id,
@@ -299,14 +300,15 @@ export async function POST(request: Request) {
         }
 
         // 3. Generate Installments (Automatic Payment Scheduling)
-        // Adapted from expert loans logic
+        // Adapted from expert loans logic with 2-decimal rounding and remainder adjustment
         const totalInstallments = validated.totalInstallments || 1
         if (totalInstallments > 0) {
             const installments = []
-            const principalPerInstallment = validated.amount / totalInstallments
+            // Use 2-decimal rounded base values
+            const principalPerInstallment = Math.round((validated.amount / totalInstallments) * 100) / 100
             const interestRate = validated.interestRate || 0
-            const totalInterest = (validated.amount * (interestRate / 100))
-            const interestPerInstallment = totalInterest / totalInstallments
+            const totalInterest = Math.round((validated.amount * (interestRate / 100)) * 100) / 100
+            const interestPerInstallment = Math.round((totalInterest / totalInstallments) * 100) / 100
 
             let currentDate = new Date(validated.dueDate ? validated.dueDate : new Date())
             if (!validated.dueDate) {
@@ -317,12 +319,20 @@ export async function POST(request: Request) {
             }
 
             for (let i = 1; i <= totalInstallments; i++) {
+                const isLast = i === totalInstallments
+                const instPrincipal = isLast
+                    ? Math.round((validated.amount - (principalPerInstallment * (totalInstallments - 1))) * 100) / 100
+                    : principalPerInstallment
+                const instInterest = isLast
+                    ? Math.round((totalInterest - (interestPerInstallment * (totalInstallments - 1))) * 100) / 100
+                    : interestPerInstallment
+
                 installments.push({
                     account_payable_id: payable.id, // Linked to this AP
                     installment_number: i,
                     due_date: currentDate.toISOString(),
-                    principal_amount: principalPerInstallment,
-                    interest_amount: interestPerInstallment,
+                    principal_amount: instPrincipal,
+                    interest_amount: instInterest,
                     status: 'PENDING'
                 })
 
@@ -416,7 +426,7 @@ export async function DELETE(request: Request) {
                         .select('amount')
                         .eq('account_payable_id', id)
 
-                    const totalPaidBack = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+                    const totalPaidBack = payments?.reduce((sum: number, p: any) => sum + Number(p.amount), 0) || 0
 
                     const amountToDeduct = Number(loan.original_amount) - totalPaidBack
                     const newBalance = Number(acc.current_balance) - amountToDeduct
@@ -441,7 +451,7 @@ export async function DELETE(request: Request) {
             .eq('account_payable_id', id)
 
         if (paymentsToDelete && paymentsToDelete.length > 0) {
-            const txIds = paymentsToDelete.map(p => p.transaction_id).filter(Boolean)
+            const txIds = paymentsToDelete.map((p: any) => p.transaction_id).filter(Boolean)
             if (txIds.length > 0) {
                 await supabase.from('transactions').delete().in('id', txIds)
             }
@@ -513,7 +523,7 @@ export async function PATCH(request: Request) {
 
             // VALIDATION: Principal component cannot exceed outstanding principal balance
             // But total payment CAN exceed it (if it includes interest)
-            if (principalAmount > (payable.outstanding_balance + 0.05)) { // Small buffer for rounding
+            if (principalAmount > (payable.outstanding_balance + 0.001)) { // Smaller epsilon
                 return NextResponse.json(
                     { error: 'El abono a capital excede el saldo pendiente' },
                     { status: 400 }
@@ -568,7 +578,7 @@ export async function PATCH(request: Request) {
                     .insert({
                         user_id: user.id,
                         name: 'Gastos por Intereses',
-                        icon: 'trending-down',
+                        icon: 'trending-up',
                         color: '#ef4444',
                         budget_rule: 'NEEDS', // Interest is usually a commitment/need
                         is_system: false,
@@ -710,12 +720,12 @@ export async function PATCH(request: Request) {
 
             if (installments) {
                 for (const inst of installments) {
-                    if (remainingPrincipalPayment <= 0.01) break
+                    if (remainingPrincipalPayment <= 0.001) break
                     if (inst.status === 'PAID') continue
 
                     const openAmount = Number(inst.principal_amount)
 
-                    if (remainingPrincipalPayment >= (openAmount - 0.05)) {
+                    if (remainingPrincipalPayment >= (openAmount - 0.001)) {
                         await supabase
                             .from('loan_installments')
                             .update({ status: 'PAID', paid_at: new Date().toISOString() })
@@ -729,7 +739,9 @@ export async function PATCH(request: Request) {
             }
 
             // 3. Update outstanding balance (Only reduce by Principal)
-            const newBalance = payable.outstanding_balance - principalAmount
+            // Ensure strict rounding and check for zero-balance
+            let newBalance = Math.round((payable.outstanding_balance - principalAmount) * 100) / 100
+            if (newBalance < 0.01) newBalance = 0 // Forced zero closure
 
             const { data: updated, error: updateError } = await supabase
                 .from('accounts_payable')

@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Calculator, AlertTriangle, CheckCircle2 } from "lucide-react"
-import { useCreatePettyCashAudit, usePettyCashFunds } from "@/hooks/use-petty-cash"
+import { useCreatePettyCashAudit, usePettyCashFunds } from "@/hooks/usePettyCash"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
@@ -77,7 +77,7 @@ export function CreateAuditModal({ trigger }: CreateAuditModalProps) {
     const actualCash = form.watch("actualCash")
 
     const selectedFund = funds?.find((f: any) => f.id === selectedFundId)
-    const expectedCash = selectedFund ? Number(selectedFund.currentBalance) : 0
+    const expectedCash = selectedFund ? Number(selectedFund.balance) : 0
     const actualCashNum = actualCash ? parseFloat(actualCash) : 0
     const variance = actualCashNum - expectedCash
     const variancePercentage = expectedCash > 0 ? Math.abs(variance / expectedCash) * 100 : 0
@@ -91,14 +91,14 @@ export function CreateAuditModal({ trigger }: CreateAuditModalProps) {
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         const result = await createAudit({
-            fundId: values.fundId,
-            auditDate: new Date(values.auditDate).toISOString(),
-            auditType: values.auditType,
-            expectedCash: expectedCash,
-            actualCash: parseFloat(values.actualCash),
-            pendingExpenses: parseFloat(values.pendingExpenses),
-            auditedBy: values.auditedBy,
-            responsiblePresent: values.responsiblePresent,
+            fund_id: values.fundId,
+            audit_date: new Date(values.auditDate).toISOString(),
+            audit_type: values.auditType,
+            expected_cash: expectedCash,
+            actual_cash: parseFloat(values.actualCash),
+            pending_expenses: parseFloat(values.pendingExpenses),
+            audited_by: values.auditedBy,
+            responsible_present: values.responsiblePresent,
             findings: values.findings || undefined,
             recommendations: values.recommendations || undefined,
         })

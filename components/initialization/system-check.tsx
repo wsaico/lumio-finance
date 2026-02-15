@@ -3,7 +3,7 @@
 import * as React from "react"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { useCategories } from "@/hooks/use-categories"
+import { useCategories } from "@/hooks/useCategories"
 import { toast } from "sonner"
 
 export function SystemCheck() {

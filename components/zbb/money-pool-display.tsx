@@ -90,13 +90,13 @@ function UnassignedPoolCard({ currency, symbol, data, color, actualIncome }: { c
                         {hasAudit && (
                             <div className="flex items-center gap-1.5 ml-1">
                                 {hasSurplus && (
-                                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold border border-emerald-200" title={`Ingreso Real: ${symbol} ${actualIncome?.toLocaleString()}`}>
-                                        +{symbol}{surplus.toLocaleString(undefined, { maximumFractionDigits: 0 })} Real
+                                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold border border-emerald-200" title={`Ingreso Real: ${symbol} ${actualIncome?.toLocaleString()} vs Planificado: ${symbol} ${data.total.toLocaleString()}`}>
+                                        +{symbol}{surplus.toLocaleString(undefined, { maximumFractionDigits: 0 })} Excedente
                                     </span>
                                 )}
                                 {hasDeficit && (
-                                    <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-bold border border-rose-200" title={`Ingreso Real: ${symbol} ${actualIncome?.toLocaleString()}`}>
-                                        {symbol}{surplus.toLocaleString(undefined, { maximumFractionDigits: 0 })} Real
+                                    <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-bold border border-rose-200" title={`Ingreso Real: ${symbol} ${actualIncome?.toLocaleString()} vs Planificado: ${symbol} ${data.total.toLocaleString()}`}>
+                                        {symbol}{surplus.toLocaleString(undefined, { maximumFractionDigits: 0 })} Brecha
                                     </span>
                                 )}
                             </div>
@@ -153,7 +153,13 @@ function UnassignedPoolCard({ currency, symbol, data, color, actualIncome }: { c
             {hasSurplus && (
                 <div className="mt-3 text-xs text-emerald-600 font-medium bg-emerald-100/50 p-2 rounded border border-emerald-100 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Tienes un excedente real de {symbol}{surplus.toFixed(2)}. ¡Ajusta tus ingresos!
+                    Ingresos reales superan lo planificado por {symbol}{surplus.toFixed(2)}.
+                </div>
+            )}
+            {hasDeficit && (
+                <div className="mt-3 text-xs text-rose-600 font-medium bg-rose-100/50 p-2 rounded border border-rose-100 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                    Ingresos reales son menores a lo planificado por {symbol}{Math.abs(surplus).toFixed(2)}.
                 </div>
             )}
         </motion.div>

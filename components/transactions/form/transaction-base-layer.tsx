@@ -49,7 +49,7 @@ import { TransferModal } from "../transfer-modal"
 import { useSmartCategories } from "@/hooks/useSmartCategories"
 import { Calendar } from "@/components/ui/calendar"
 import { CategoryGrid } from "@/components/transactions/category-selector"
-import { useBudget } from "@/hooks/use-budget"
+import { useBudget } from "@/hooks/useBudget"
 
 interface TransactionBaseLayerProps {
     form: any
@@ -858,6 +858,9 @@ export function TransactionBaseLayer({
                             {/* Drag Handle */}
                             <div className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full shadow-sm" />
                         </div>
+                        <SheetHeader className="sr-only">
+                            <SheetTitle>Seleccionar Categoría</SheetTitle>
+                        </SheetHeader>
                         <div className="flex-1 overflow-hidden pt-8 pb-0 h-full">
                             <CategoryGrid
                                 categories={categories}

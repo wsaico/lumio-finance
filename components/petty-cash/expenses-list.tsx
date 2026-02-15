@@ -1,13 +1,13 @@
 "use client"
 
-import { usePettyCashExpenses, useUpdatePettyCashExpense } from "@/hooks/use-petty-cash"
+import { usePettyCashExpenses, useUpdatePettyCashExpense } from "@/hooks/usePettyCash"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { Loader2, Receipt, ReceiptText, AlertCircle, CheckCircle2, Clock, XCircle, Check, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { useSettingsStore } from "@/hooks/use-settings-store"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 interface ExpensesListProps {
     fundId?: string

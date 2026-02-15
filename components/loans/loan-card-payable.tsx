@@ -9,7 +9,7 @@ import { format, differenceInDays } from "date-fns"
 import { es } from "date-fns/locale"
 import type { AccountPayable } from "@/types/loans"
 import { cn } from "@/lib/utils"
-import { useFormat } from "@/hooks/use-format"
+import { useFormat } from "@/hooks/useFormat"
 
 interface LoanCardPayableProps {
     payable: AccountPayable
