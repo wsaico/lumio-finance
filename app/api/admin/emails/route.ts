@@ -3,6 +3,11 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/server/admin-auth"
 import {
+    getResolvedEmailSettings,
+    saveEmailSettings,
+    toPublicEmailProviderConfig,
+} from "@/lib/server/email-settings"
+import {
     EMAIL_TEMPLATES_META,
     renderEmailTemplate,
     type EmailTemplateId,
@@ -21,12 +26,19 @@ export async function GET() {
     }
 
     try {
-        const { settings } = await getSystemBrandingAndPlans(auth.adminClient)
+        const [{ settings }, resolved, transport] = await Promise.all([
+            getSystemBrandingAndPlans(auth.adminClient),
+            getResolvedEmailSettings(auth.adminClient),
+            getEmailTransportStatus(auth.adminClient),
+        ])
+
         const brand = {
             appName: settings.app_name,
             tagline: settings.tagline,
             primaryColor: settings.primary_color,
-            siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+            siteUrl: resolved.siteUrl || "https://lumio.esaico.com",
+            supportEmail: resolved.replyTo || "willysaico@gmail.com",
+            logoUrl: settings.logo_white_url,
         }
 
         const templates = EMAIL_TEMPLATES_META.map((meta) =>
@@ -50,7 +62,8 @@ export async function GET() {
 
         return NextResponse.json({
             templates,
-            transport: getEmailTransportStatus(),
+            transport,
+            providerConfig: toPublicEmailProviderConfig(resolved),
             logs: getRecentEmailLogs(),
         })
     } catch (error: any) {
@@ -64,6 +77,40 @@ export async function GET() {
         return NextResponse.json(
             { error: "No se pudieron cargar las plantillas de correo" },
             { status: 500 }
+        )
+    }
+}
+
+export async function PATCH(req: Request) {
+    const auth = await requireAdmin()
+    if (!auth.ok) {
+        return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
+    try {
+        const body = await req.json()
+        const { publicConfig } = await saveEmailSettings(body, {
+            supabase: auth.adminClient,
+            updatedBy: auth.user.id,
+        })
+        const transport = await getEmailTransportStatus(auth.adminClient)
+
+        return NextResponse.json({
+            ok: true,
+            providerConfig: publicConfig,
+            transport,
+        })
+    } catch (error: any) {
+        if (
+            error &&
+            (error.digest === "DYNAMIC_SERVER_USAGE" ||
+                String(error).includes("Dynamic server usage"))
+        ) {
+            throw error
+        }
+        return NextResponse.json(
+            { error: error?.message || "No se pudo guardar la configuración de correo" },
+            { status: 400 }
         )
     }
 }
@@ -106,7 +153,9 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
             ok: result.ok,
+            status: result.status,
             transport: result.transport,
+            messageId: result.messageId,
             error: result.error,
             logs: getRecentEmailLogs(),
         })

@@ -210,15 +210,15 @@ otp_length = 6
 # Number of seconds before the email OTP expires (10 minutes).
 otp_expiry = 600
 
-# Use a production-ready SMTP server
+# Use a production-ready SMTP server (Brevo)
 # [auth.email.smtp]
 # enabled = true
-# host = "smtp.sendgrid.net"
+# host = "smtp-relay.brevo.com"
 # port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# user = "env(BREVO_SMTP_USER)"
+# pass = "env(BREVO_SMTP_PASS)"
+# admin_email = "no-reply@esaico.com"
+# sender_name = "Lumio Finance"
 
 # Premium Lumio Finance Auth email templates
 [auth.email.template.magic_link]

@@ -32,9 +32,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { EmailProviderPanel } from "@/components/admin/email-provider-panel"
 import { useUser } from "@/hooks/useUser"
 import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { ACCENT_COLORS } from "@/lib/appearance"
+import type {
+    EmailTransportStatus,
+    PublicEmailProviderConfig,
+} from "@/lib/email-providers"
 import type { PlanDefinition } from "@/lib/entitlements"
 import type { SystemBrandingSettings } from "@/lib/server/system-settings"
 import { cn } from "@/lib/utils"
@@ -82,7 +87,8 @@ export default function AdminDashboardPage() {
     const [userSearch, setUserSearch] = useState("")
     const [emailTemplates, setEmailTemplates] = useState<any[]>([])
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>("OTP_VERIFICATION")
-    const [emailTransport, setEmailTransport] = useState<any>(null)
+    const [emailTransport, setEmailTransport] = useState<EmailTransportStatus | null>(null)
+    const [emailProviderConfig, setEmailProviderConfig] = useState<PublicEmailProviderConfig | null>(null)
     const [emailLogs, setEmailLogs] = useState<any[]>([])
     const [testRecipient, setTestRecipient] = useState<string>("willysaico@gmail.com")
     const [sendingTestEmail, setSendingTestEmail] = useState(false)
@@ -111,6 +117,7 @@ export default function AdminDashboardPage() {
                 const eData = await eRes.json()
                 setEmailTemplates(eData.templates || [])
                 setEmailTransport(eData.transport || null)
+                setEmailProviderConfig(eData.providerConfig || null)
                 setEmailLogs(eData.logs || [])
             }
         } finally {
@@ -130,11 +137,17 @@ export default function AdminDashboardPage() {
             const data = await res.json().catch(() => ({}))
             if (!res.ok) throw new Error(data?.error || "Error al despachar plantilla")
             if (Array.isArray(data?.logs)) setEmailLogs(data.logs)
-            toast.success(
-                data.transport === "RESEND" || data.transport === "WEBHOOK"
-                    ? `Correo enviado a ${testRecipient}`
-                    : `Plantilla procesada y registrada en el historial de notificaciones`
-            )
+
+            if (!data.ok || data.status === "FAILED") {
+                toast.error(data?.error || "El proveedor rechazó el envío del correo")
+            } else if (data.status === "QUEUED_LOG") {
+                toast.warning(
+                    data?.error ||
+                        "Plantilla registrada en historial in-app porque el proveedor activo aún no tiene credenciales configuradas."
+                )
+            } else {
+                toast.success(`Correo enviado vía ${data.transport} a ${testRecipient}`)
+            }
         } catch (err: any) {
             toast.error(err?.message || "No se pudo enviar el correo de prueba")
         } finally {
@@ -293,7 +306,7 @@ export default function AdminDashboardPage() {
                     </TabsTrigger>
                     <TabsTrigger value="emails" className="rounded-xl text-xs font-bold gap-1.5 px-3.5 py-2">
                         <Mail className="h-3.5 w-3.5" />
-                        Correos y Plantillas ({emailTemplates.length || 7})
+                        Correos y Plantillas ({emailTemplates.length || 11})
                     </TabsTrigger>
                 </TabsList>
 
@@ -758,33 +771,49 @@ export default function AdminDashboardPage() {
 
                 {/* 6. EMAIL TEMPLATES STUDIO & DISPATCHER */}
                 <TabsContent value="emails" className="space-y-5">
+                    {emailProviderConfig && (
+                        <EmailProviderPanel
+                            config={emailProviderConfig}
+                            onSaved={(nextConfig, nextTransport) => {
+                                setEmailProviderConfig(nextConfig)
+                                setEmailTransport(nextTransport)
+                                fetch("/api/admin/emails")
+                                    .then((r) => (r.ok ? r.json() : null))
+                                    .then((eData) => {
+                                        if (!eData) return
+                                        setEmailTemplates(eData.templates || [])
+                                        setEmailTransport(eData.transport || nextTransport)
+                                        setEmailProviderConfig(eData.providerConfig || nextConfig)
+                                        setEmailLogs(eData.logs || [])
+                                    })
+                                    .catch(() => null)
+                            }}
+                        />
+                    )}
                     {(() => {
                         const activeTpl =
                             emailTemplates.find((t) => t.id === selectedTemplateId) ||
                             emailTemplates[0]
                         return (
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                                {/* Left Catalog of 7 Templates */}
+                                {/* Left Catalog of Templates */}
                                 <div className="lg:col-span-5 space-y-4">
                                     <div className="rounded-3xl bg-card border border-border/70 p-4 space-y-3">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-2">
                                             <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                                                 Catálogo de Plantillas ({emailTemplates.length})
                                             </span>
                                             <span
                                                 className={cn(
-                                                    "text-[10px] font-bold px-2.5 py-0.5 rounded-full",
-                                                    emailTransport?.resendConfigured ||
-                                                        emailTransport?.webhookConfigured
-                                                        ? "bg-emerald-500/12 text-emerald-600"
-                                                        : "bg-primary/12 text-primary"
+                                                    "text-[10px] font-bold px-2.5 py-0.5 rounded-full truncate",
+                                                    emailTransport?.activeConfigured
+                                                        ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
+                                                        : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                                                 )}
                                             >
-                                                {emailTransport?.resendConfigured
-                                                    ? "Resend SMTP Activo"
-                                                    : emailTransport?.webhookConfigured
-                                                      ? "Webhook SMTP Activo"
-                                                      : "Motor Integrado + Notificaciones"}
+                                                {emailTransport?.activeConfigured
+                                                    ? `${emailTransport.activeProviderLabel} Activo`
+                                                    : "Solo Registro In-App (sin clave)"}
                                             </span>
                                         </div>
 
@@ -842,18 +871,32 @@ export default function AdminDashboardPage() {
                                                 {emailLogs.slice(0, 8).map((log) => (
                                                     <div
                                                         key={log.id}
-                                                        className="p-2.5 rounded-xl bg-muted/35 border border-border/60 text-xs flex items-center justify-between gap-2"
+                                                        className="p-2.5 rounded-xl bg-muted/35 border border-border/60 text-xs flex items-start justify-between gap-2"
                                                     >
-                                                        <div className="min-w-0">
+                                                        <div className="min-w-0 space-y-0.5">
                                                             <p className="font-bold text-foreground truncate">
                                                                 {log.subject}
                                                             </p>
                                                             <p className="text-[10px] text-muted-foreground truncate">
-                                                                Para: {log.to} ·{" "}
+                                                                Para: {log.to} · {log.transport} ·{" "}
                                                                 {new Date(log.createdAt).toLocaleTimeString("es-PE")}
                                                             </p>
+                                                            {log.error && (
+                                                                <p className="text-[10px] font-medium text-rose-600 dark:text-rose-400 break-words">
+                                                                    {log.error}
+                                                                </p>
+                                                            )}
                                                         </div>
-                                                        <span className="shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600">
+                                                        <span
+                                                            className={cn(
+                                                                "shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full",
+                                                                log.status === "SENT"
+                                                                    ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
+                                                                    : log.status === "FAILED"
+                                                                      ? "bg-rose-500/12 text-rose-600 dark:text-rose-400"
+                                                                      : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                                                            )}
+                                                        >
                                                             {log.status}
                                                         </span>
                                                     </div>

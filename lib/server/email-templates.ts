@@ -17,6 +17,23 @@ export interface EmailBrandContext {
     primaryColor: string
     siteUrl: string
     supportEmail: string
+    logoUrl?: string
+}
+
+export function resolveEmailLogoUrl(logoUrl?: string, siteUrl?: string): string {
+    const candidate = (logoUrl || "").trim()
+    if (
+        /^https?:\/\//i.test(candidate) &&
+        !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(candidate)
+    ) {
+        return candidate
+    }
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "")
+    if (supabaseUrl) {
+        return `${supabaseUrl}/storage/v1/object/public/branding/lumio-icon-white.png`
+    }
+    const cleanSiteUrl = (siteUrl || "https://lumio.esaico.com").trim().replace(/\/+$/, "")
+    return `${cleanSiteUrl}/icons/icon-white.png`
 }
 
 export interface EmailTemplatePayload {
@@ -208,7 +225,7 @@ function wrapEmailLayout(params: {
         footerNote,
     } = params
     const color = brand.primaryColor || "#7C3AED"
-    const initial = (brand.appName || "L").trim().charAt(0).toUpperCase() || "L"
+    const logoUrl = resolveEmailLogoUrl(brand.logoUrl, brand.siteUrl)
 
     const badgeStyles: Record<
         NonNullable<typeof badgeTone>,
@@ -266,9 +283,13 @@ function wrapEmailLayout(params: {
                     <table role="presentation" cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="vertical-align:middle;padding-right:12px;">
-                          <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg, ${color} 0%, #A855F7 100%);background-color:${color};text-align:center;line-height:38px;font-size:19px;font-weight:900;color:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;box-shadow:0 6px 16px rgba(124,58,237,0.45);">
-                            ${initial}
-                          </div>
+                          <table role="presentation" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td align="center" valign="middle" width="42" height="42" style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg, ${color} 0%, #A855F7 100%);background-color:${color};box-shadow:0 6px 16px rgba(124,58,237,0.45);text-align:center;vertical-align:middle;">
+                                <img src="${logoUrl}" alt="${brand.appName}" width="26" height="26" style="display:block;margin:0 auto;width:26px;height:26px;border:0;outline:none;text-decoration:none;" />
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                         <td style="vertical-align:middle;">
                           <span style="display:block;font-size:18px;font-weight:800;letter-spacing:-0.025em;color:#FFFFFF;line-height:1.15;">${brand.appName}</span>
@@ -379,15 +400,18 @@ export function renderEmailTemplate(
     payload: EmailTemplatePayload = {},
     brandInput?: Partial<EmailBrandContext>
 ): RenderedEmailTemplate {
+    const siteUrl =
+        brandInput?.siteUrl ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        "https://lumio.esaico.com"
+
     const brand: EmailBrandContext = {
         appName: brandInput?.appName || "Lumio Finance",
         tagline: brandInput?.tagline || "Claridad financiera para tu día a día",
         primaryColor: brandInput?.primaryColor || "#7C3AED",
-        siteUrl:
-            brandInput?.siteUrl ||
-            process.env.NEXT_PUBLIC_SITE_URL ||
-            "https://lumio.esaico.com",
+        siteUrl,
         supportEmail: brandInput?.supportEmail || "willysaico@gmail.com",
+        logoUrl: resolveEmailLogoUrl(brandInput?.logoUrl, siteUrl),
     }
 
     const meta =
