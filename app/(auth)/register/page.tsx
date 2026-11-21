@@ -41,20 +41,22 @@ const registerSchema = z.object({
 
 type RegisterFormValues = z.infer<typeof registerSchema>
 
-const OTP_LENGTH = 6
+const DEFAULT_OTP_LENGTH =
+    Number(process.env.NEXT_PUBLIC_OTP_LENGTH) === 8 ? 8 : 6
 
 export default function RegisterPage() {
     const router = useRouter()
     const supabase = createClient()
 
     const [step, setStep] = useState<"form" | "otp">("form")
+    const [otpLength, setOtpLength] = useState<6 | 8>(DEFAULT_OTP_LENGTH)
     const [isLoading, setIsLoading] = useState(false)
     const [isVerifying, setIsVerifying] = useState(false)
     const [isResending, setIsResending] = useState(false)
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
 
-    // Saved registration payload waiting for 6-digit email OTP verification
+    // Saved registration payload waiting for email OTP verification (6 or 8 digits)
     const [pendingData, setPendingData] = useState<{
         fullName: string
         email: string
@@ -64,7 +66,9 @@ export default function RegisterPage() {
         timezone: string
     } | null>(null)
 
-    const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""))
+    const [otpDigits, setOtpDigits] = useState<string[]>(
+        Array(DEFAULT_OTP_LENGTH).fill("")
+    )
     const [cooldown, setCooldown] = useState<number>(0)
     const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -157,13 +161,13 @@ export default function RegisterPage() {
             await sendVerificationCode(payload, false)
 
             setPendingData(payload)
-            setOtpDigits(Array(OTP_LENGTH).fill(""))
+            setOtpDigits(Array(otpLength).fill(""))
             setCooldown(60)
             setStep("otp")
 
             showAppToast.info({
                 title: "Código enviado a tu correo",
-                description: `Revisa tu bandeja de entrada (${payload.email}) e ingresa los 6 dígitos.`,
+                description: `Revisa tu bandeja de entrada (${payload.email}) e ingresa tu código de verificación.`,
             })
         } catch (err: any) {
             showAppToast.error({
@@ -180,7 +184,7 @@ export default function RegisterPage() {
         setIsResending(true)
         try {
             await sendVerificationCode(pendingData, true)
-            setOtpDigits(Array(OTP_LENGTH).fill(""))
+            setOtpDigits(Array(otpLength).fill(""))
             setCooldown(60)
             inputRefs.current[0]?.focus()
             showAppToast.success({
@@ -200,10 +204,11 @@ export default function RegisterPage() {
     const handleVerifyOtp = async (codeOverride?: string) => {
         if (!pendingData || isVerifying) return
         const code = (codeOverride ?? otpDigits.join("")).trim()
-        if (code.length < OTP_LENGTH) {
+        const requiredLen = codeOverride ? codeOverride.length : otpLength
+        if (code.length < requiredLen || (code.length !== 6 && code.length !== 8)) {
             showAppToast.warning({
                 title: "Código incompleto",
-                description: "Ingresa los 6 dígitos del código que enviamos a tu correo.",
+                description: `Ingresa los ${otpLength} dígitos del código que enviamos a tu correo.`,
             })
             return
         }
@@ -270,7 +275,7 @@ export default function RegisterPage() {
         } catch (err: any) {
             showAppToast.error({
                 title: "No se pudo verificar el código",
-                description: err?.message || "Revisa los 6 dígitos e inténtalo nuevamente.",
+                description: err?.message || "Revisa el código e inténtalo nuevamente.",
             })
         } finally {
             setIsVerifying(false)
@@ -286,18 +291,24 @@ export default function RegisterPage() {
             return
         }
 
-        // Handle multi-digit input or autofill
+        // Handle multi-digit input or autofill (auto-adapts between 6 and 8 digits)
         if (cleaned.length > 1) {
-            const chars = cleaned.slice(0, OTP_LENGTH).split("")
-            const next = [...otpDigits]
+            const targetLen: 6 | 8 =
+                cleaned.length >= 8 ? 8 : cleaned.length === 6 ? 6 : otpLength
+            if (targetLen !== otpLength) {
+                setOtpLength(targetLen)
+            }
+            const chars = cleaned.slice(0, targetLen).split("")
+            const next = Array(targetLen).fill("")
             chars.forEach((ch, idx) => {
-                if (index + idx < OTP_LENGTH) {
-                    next[index + idx] = ch
+                const pos = cleaned.length >= 6 ? idx : index + idx
+                if (pos < targetLen) {
+                    next[pos] = ch
                 }
             })
             setOtpDigits(next)
-            const focusIdx = Math.min(OTP_LENGTH - 1, index + chars.length)
-            inputRefs.current[focusIdx]?.focus()
+            const focusIdx = Math.min(targetLen - 1, chars.length)
+            setTimeout(() => inputRefs.current[focusIdx]?.focus(), 20)
             if (next.every((d) => d.length === 1)) {
                 handleVerifyOtp(next.join(""))
             }
@@ -308,7 +319,7 @@ export default function RegisterPage() {
         next[index] = cleaned
         setOtpDigits(next)
 
-        if (index < OTP_LENGTH - 1) {
+        if (index < otpLength - 1) {
             inputRefs.current[index + 1]?.focus()
         } else if (next.every((d) => d.length === 1)) {
             handleVerifyOtp(next.join(""))
@@ -330,7 +341,7 @@ export default function RegisterPage() {
             e.preventDefault()
         } else if (e.key === "ArrowLeft" && index > 0) {
             inputRefs.current[index - 1]?.focus()
-        } else if (e.key === "ArrowRight" && index < OTP_LENGTH - 1) {
+        } else if (e.key === "ArrowRight" && index < otpLength - 1) {
             inputRefs.current[index + 1]?.focus()
         } else if (e.key === "Enter") {
             e.preventDefault()
@@ -341,20 +352,39 @@ export default function RegisterPage() {
     const handlePasteOtp = (e: React.ClipboardEvent<HTMLInputElement>) => {
         e.preventDefault()
         const pasted = e.clipboardData.getData("text").trim()
-        // Extract 6 consecutive digits even if user pasted a line of text from the email
+        // Extract 8 or 6 consecutive digits even if user pasted a line of text from the email
+        const match8 = pasted.match(/\b(\d{8})\b/)
         const match6 = pasted.match(/\b(\d{6})\b/)
-        const digits = (match6 ? match6[1] : pasted.replace(/\D/g, "")).slice(0, OTP_LENGTH)
+        const rawDigits = pasted.replace(/\D/g, "")
+
+        let targetLen: 6 | 8 = otpLength
+        let digits = ""
+        if (match8) {
+            targetLen = 8
+            digits = match8[1]
+        } else if (match6) {
+            targetLen = 6
+            digits = match6[1]
+        } else if (rawDigits.length >= 8) {
+            targetLen = 8
+            digits = rawDigits.slice(0, 8)
+        } else {
+            digits = rawDigits.slice(0, otpLength)
+        }
         if (!digits) return
 
-        const next = Array(OTP_LENGTH).fill("")
+        if (targetLen !== otpLength) {
+            setOtpLength(targetLen)
+        }
+        const next = Array(targetLen).fill("")
         digits.split("").forEach((ch, i) => {
             next[i] = ch
         })
         setOtpDigits(next)
-        const focusIdx = Math.min(OTP_LENGTH - 1, digits.length)
-        inputRefs.current[focusIdx]?.focus()
+        const focusIdx = Math.min(targetLen - 1, digits.length)
+        setTimeout(() => inputRefs.current[focusIdx]?.focus(), 20)
 
-        if (digits.length === OTP_LENGTH) {
+        if (digits.length === targetLen) {
             handleVerifyOtp(digits)
         }
     }
@@ -414,41 +444,43 @@ export default function RegisterPage() {
                         Ingresa tu código
                     </h2>
                     <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                        Enviamos un código de 6 dígitos a{" "}
+                        Enviamos un código de {otpLength} dígitos a{" "}
                         <strong className="text-foreground font-bold">{pendingData.email}</strong>
                     </p>
                 </div>
 
-                {/* 6-Digit OTP Input Boxes */}
-                <div className="flex items-center justify-center gap-2 sm:gap-2.5">
-                    {otpDigits.map((digit, idx) => (
-                        <input
-                            key={idx}
-                            ref={(el) => {
-                                inputRefs.current[idx] = el
-                            }}
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={6}
-                            value={digit}
-                            disabled={isVerifying}
-                            onChange={(e) => handleDigitChange(idx, e.target.value)}
-                            onKeyDown={(e) => handleDigitKeyDown(idx, e)}
-                            onPaste={handlePasteOtp}
-                            aria-label={`Dígito ${idx + 1}`}
-                            className={cn(
-                                "h-12 w-11 sm:h-14 sm:w-12 rounded-2xl border-2 bg-muted/35 text-center text-lg sm:text-xl font-black text-foreground tabular-nums transition-all focus:outline-none focus:border-primary focus:bg-card focus:ring-4 focus:ring-primary/15",
-                                digit ? "border-primary/70 bg-card" : "border-border/70"
-                            )}
-                        />
-                    ))}
+                {/* Adaptive 6 or 8-Digit OTP Input Boxes */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2 sm:gap-2.5">
+                        {otpDigits.map((digit, idx) => (
+                            <input
+                                key={`${otpLength}-${idx}`}
+                                ref={(el) => {
+                                    inputRefs.current[idx] = el
+                                }}
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={6}
+                                value={digit}
+                                disabled={isVerifying}
+                                onChange={(e) => handleDigitChange(idx, e.target.value)}
+                                onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                                onPaste={handlePasteOtp}
+                                aria-label={`Dígito ${idx + 1}`}
+                                className={cn(
+                                    "h-12 w-11 sm:h-14 sm:w-12 rounded-2xl border-2 bg-muted/35 text-center text-lg sm:text-xl font-black text-foreground tabular-nums transition-all focus:outline-none focus:border-primary focus:bg-card focus:ring-4 focus:ring-primary/15",
+                                    digit ? "border-primary/70 bg-card" : "border-border/70"
+                                )}
+                            />
+                        ))}
+                    </div>
                 </div>
 
                 <Button
                     type="button"
                     onClick={() => handleVerifyOtp()}
-                    disabled={isVerifying || otpDigits.join("").length < OTP_LENGTH}
+                    disabled={isVerifying || otpDigits.join("").length < otpLength}
                     className="w-full h-11 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm shadow-lg shadow-primary/20 transition-all gap-2 cursor-pointer"
                 >
                     {isVerifying ? (
@@ -505,7 +537,7 @@ export default function RegisterPage() {
                     Crear cuenta
                 </h1>
                 <p className="text-xs text-muted-foreground mt-1">
-                    Incluye 15 días de prueba completa sin tarjeta. Verificaremos tu correo con un código de 6 dígitos.
+                    Incluye 15 días de prueba completa sin tarjeta. Verificaremos tu correo con un código de seguridad.
                 </p>
             </div>
 

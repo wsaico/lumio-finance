@@ -875,6 +875,14 @@ export default function AdminDashboardPage() {
                                                     <h3 className="text-sm sm:text-base font-extrabold text-foreground truncate mt-0.5">
                                                         {activeTpl.subject}
                                                     </h3>
+                                                    {activeTpl.supabaseSubject && (
+                                                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                                                            Asunto Supabase:{" "}
+                                                            <code className="font-mono text-foreground/90">
+                                                                {activeTpl.supabaseSubject}
+                                                            </code>
+                                                        </p>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex flex-wrap items-center gap-2 shrink-0">
