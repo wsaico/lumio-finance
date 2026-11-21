@@ -73,11 +73,20 @@ export async function POST(req: NextRequest) {
                 const existing = (usersData?.users || []).find(
                     (u) => u.email?.toLowerCase() === rawEmail
                 )
-                // If user already exists and either verified OTP or logged in previously
+                // If user exists with pending_verification=true and otp_verified!==true,
+                // they never completed OTP + password setup (e.g. closed tab or code expired).
+                // Allow them to re-request OTP instead of trapping them in limbo!
+                const isIncompletePending =
+                    existing?.user_metadata?.pending_verification === true &&
+                    existing?.user_metadata?.otp_verified !== true
+
                 if (
                     existing &&
+                    !isIncompletePending &&
                     (existing.user_metadata?.otp_verified === true ||
-                        Boolean(existing.last_sign_in_at))
+                        Boolean(existing.last_sign_in_at) ||
+                        (Array.isArray(existing.identities) &&
+                            existing.identities.length > 0))
                 ) {
                     return NextResponse.json(
                         {
