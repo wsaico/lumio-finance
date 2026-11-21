@@ -1,3 +1,4 @@
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
 export const dynamic = 'force-dynamic';
 
 import { createClient } from '@/lib/supabase/server'
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
             return new NextResponse('Unauthorized', { status: 401 })
         }
 
-        const userCurrency = user.user_metadata?.currency || 'PEN'
+        const userCurrency = user.user_metadata?.currency || DEFAULT_CURRENCY
         const today = new Date()
         const startDate = subDays(today, 29) // Last 30 days including today
 
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
             let totalConverted = 0
             dayTransactions.forEach(t => {
                 const amount = Number(t.amount) || 0
-                const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || 'PEN'
+                const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || DEFAULT_CURRENCY
                 totalConverted += convertAmount(amount, currency, userCurrency, rateMap)
             })
 

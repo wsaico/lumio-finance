@@ -1,3 +1,4 @@
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
 export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
         if (countRes.error) throw countRes.error
 
         const rateMap = rateMapRes
-        const userCurrencyCode = user.user_metadata?.currency || 'PEN'
+        const userCurrencyCode = user.user_metadata?.currency || DEFAULT_CURRENCY
         const accounts = accountsRes.data || []
         const incomeData = incomeRes.data || []
         const expenseData = expenseRes.data || []
@@ -76,7 +77,7 @@ export async function GET(req: Request) {
         let totalIncome = 0
         for (const t of incomeData) {
             const amount = Number(t.amount) || 0
-            const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || 'PEN'
+            const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || DEFAULT_CURRENCY
             totalIncome += convertAmount(amount, currency, userCurrencyCode, rateMap)
         }
 
@@ -84,7 +85,7 @@ export async function GET(req: Request) {
         let totalExpense = 0
         for (const t of expenseData) {
             const amount = Number(t.amount) || 0
-            const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || 'PEN'
+            const currency = t.currency_code || accountCurrencyMap[t.account_id as string] || DEFAULT_CURRENCY
             totalExpense += convertAmount(amount, currency, userCurrencyCode, rateMap)
         }
 

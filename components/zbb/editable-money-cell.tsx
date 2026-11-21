@@ -6,29 +6,36 @@ import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 
 interface EditableMoneyCellProps {
-    id: string
-    initialValue: number
-    currency: 'PEN' | 'USD'
-    onSave: (id: string, amount: number) => Promise<void>
+    id?: string
+    amount?: number
+    initialValue?: number
+    currency?: 'PEN' | 'USD'
+    onSave: ((amount: number) => Promise<void> | void) | ((id: string, amount: number) => Promise<void> | void)
 }
 
-export function EditableMoneyCell({ id, initialValue, currency, onSave }: EditableMoneyCellProps) {
+export function EditableMoneyCell({
+    id,
+    amount,
+    initialValue,
+    currency = 'PEN',
+    onSave,
+}: EditableMoneyCellProps) {
+    const numericValue = typeof amount === 'number' ? amount : typeof initialValue === 'number' ? initialValue : 0
     const [isEditing, setIsEditing] = useState(false)
-    const [value, setValue] = useState(initialValue.toString())
+    const [value, setValue] = useState(String(numericValue))
     const [isLoading, setIsLoading] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
-    const isSavingRef = useRef(false) // Prevent double submit
+    const isSavingRef = useRef(false)
 
     // Sync external changes (only if not editing)
     useEffect(() => {
-        if (!isEditing) setValue(initialValue.toString())
-    }, [initialValue, isEditing])
+        if (!isEditing) setValue(String(numericValue))
+    }, [numericValue, isEditing])
 
     // Focus input when editing starts
     useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus()
-            // Select all for quick replacement
             inputRef.current.select()
         }
     }, [isEditing])
@@ -41,13 +48,13 @@ export function EditableMoneyCell({ id, initialValue, currency, onSave }: Editab
         // 1. Validation
         if (isNaN(numValue) || numValue < 0) {
             toast.error("Monto inválido")
-            setValue(initialValue.toString())
+            setValue(String(numericValue))
             setIsEditing(false)
             return
         }
 
         // 2. Optimistic check (prevent useless calls)
-        if (Math.abs(numValue - initialValue) < 0.01) {
+        if (Math.abs(numValue - numericValue) < 0.01) {
             setIsEditing(false)
             return
         }
@@ -56,12 +63,15 @@ export function EditableMoneyCell({ id, initialValue, currency, onSave }: Editab
         setIsLoading(true)
 
         try {
-            await onSave(id, numValue)
+            if (id !== undefined && onSave.length >= 2) {
+                await (onSave as (id: string, amount: number) => Promise<void>)(id, numValue)
+            } else {
+                await (onSave as (amount: number) => Promise<void>)(numValue)
+            }
             setIsEditing(false)
-            // Toast handled by parent or silent success
         } catch (error) {
             toast.error("Error al guardar")
-            setValue(initialValue.toString()) // Revert
+            setValue(String(numericValue))
         } finally {
             setIsLoading(false)
             isSavingRef.current = false
@@ -70,19 +80,20 @@ export function EditableMoneyCell({ id, initialValue, currency, onSave }: Editab
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
-            e.preventDefault() // Prevent form submit if any
-            inputRef.current?.blur() // Trigger blur which triggers save
+            e.preventDefault()
+            inputRef.current?.blur()
         } else if (e.key === 'Escape') {
-            setValue(initialValue.toString())
+            setValue(String(numericValue))
             setIsEditing(false)
         }
     }
 
-    // Toggle Edit Mode (and reset saving state)
     const startEditing = () => {
         if (isLoading) return
         setIsEditing(true)
     }
+
+    const displayNum = parseFloat(value) || 0
 
     if (isEditing || isLoading) {
         return (
@@ -119,22 +130,21 @@ export function EditableMoneyCell({ id, initialValue, currency, onSave }: Editab
                 group cursor-pointer rounded-xl px-3 py-2 transition-all 
                 text-right flex items-center justify-end gap-2 border border-transparent
                 hover:bg-muted/50 hover:border-border/50 hover:shadow-sm
-                ${value === "0" ? 'opacity-60 hover:opacity-100' : ''}
+                ${numericValue === 0 ? 'opacity-60 hover:opacity-100' : ''}
             `}
             title="Clic para editar"
         >
             <span className={`
-                font-bold text-base tracking-tight
+                font-bold text-base tracking-tight tabular-nums
                 ${currency === 'USD' ? 'text-emerald-600 dark:text-emerald-500' : 'text-foreground'}
             `}>
                 <span className="text-muted-foreground/60 text-xs mr-1 font-normal align-top">
                     {currency === 'PEN' ? 'S/' : '$'}
                 </span>
-                {parseFloat(value).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {displayNum.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
 
-            {/* Subtle pencil on hover */}
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-primary">
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-primary text-xs">
                 ✎
             </span>
         </div>

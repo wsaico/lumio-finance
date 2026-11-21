@@ -4,40 +4,56 @@ import { useState, useEffect } from "react"
 import { useForm, Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, ArrowRight, Check, Calendar as CalendarIcon, TrendingDown, TrendingUp, Wallet, Info, Sparkles, X, Loader2, CreditCard, AlertTriangle } from "lucide-react"
+import {
+    Form,
+    FormControl,
+    FormDescription,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from "@/components/ui/form"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    Sparkles,
+    Loader2,
+    AlertTriangle,
+    TrendingDown,
+    TrendingUp,
+} from "lucide-react"
 import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { CURRENCIES, DEFAULT_CURRENCY, getCurrencySymbol } from "@/lib/currencies"
 import { cn } from "@/lib/utils"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
 
-// Import advanced components
 import { CategoryGridSelector } from "./category-grid-selector"
 import { AccountSelector } from "./account-selector"
 import { TransactionFilterSelector } from "./transaction-filter-selector"
 import { BudgetScopeSelector } from "./budget-scope-selector"
-import { BudgetFormData, TransactionFilterMode, BudgetType } from "@/types/budget"
+import { TransactionFilterMode, BudgetScope } from "@/types/budget"
 
 const budgetSchema = z.object({
-    name: z.string().min(1, "El nombre es requerido"),
-    amount: z.coerce.number().min(1, "El monto debe ser mayor a 0"),
-    period: z.enum(["MONTHLY", "CUSTOM"]),
+    name: z.string().trim().min(1, "El nombre es requerido"),
+    amount: z.coerce.number().gt(0, "El monto debe ser mayor a 0"),
+    period: z.enum(["MONTHLY"]),
     type: z.enum(["EXPENSE", "SAVINGS"]),
     color: z.string(),
-    currencyCode: z.string(),
-    startDate: z.date().optional(),
-    endDate: z.date().optional(),
+    currencyCode: z.string().min(1),
 
     // Advanced filters
     transactionFilterMode: z.string().default("DEFAULT"),
-    budgetScope: z.string().default("ALL_TRANSACTIONS"),
+    budgetScope: z.enum(["GLOBAL", "ACCOUNT"]).default("GLOBAL"),
     includeLoaned: z.boolean().default(false),
     includeGoalTransactions: z.boolean().default(false),
     includeBalanceCorrections: z.boolean().default(false),
@@ -48,7 +64,7 @@ const budgetSchema = z.object({
     accountIds: z.array(z.string()).default([]),
     includeCategories: z.array(z.string()).default([]),
     excludeCategories: z.array(z.string()).default([]),
-    includeTags: z.array(z.string()).default([])
+    includeTags: z.array(z.string()).default([]),
 })
 
 type BudgetFormValues = z.infer<typeof budgetSchema>
@@ -61,18 +77,32 @@ interface BudgetWizardAdvancedProps {
 }
 
 const COLORS = [
-    '#0ea5e9', '#10b981', '#06b6d4', '#0891b2',
-    '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7',
-    '#ec4899', '#f43f5e', '#f97316', '#f59e0b',
-    '#eab308', '#84cc16', '#64748b', '#475569'
+    "#7C5CFC",
+    "#0ea5e9",
+    "#10b981",
+    "#06b6d4",
+    "#3b82f6",
+    "#ec4899",
+    "#f43f5e",
+    "#f97316",
+    "#f59e0b",
+    "#84cc16",
 ]
 
+function normalizeScope(scope?: string | null): BudgetScope {
+    return scope === "ACCOUNT" ? "ACCOUNT" : "GLOBAL"
+}
 
-
-export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBudget }: BudgetWizardAdvancedProps) {
+export function BudgetWizardAdvanced({
+    open,
+    onOpenChange,
+    onComplete,
+    editingBudget,
+}: BudgetWizardAdvancedProps) {
     const [step, setStep] = useState(0)
-    const [selectedFilters, setSelectedFilters] = useState<TransactionFilterMode[]>(['DEFAULT'])
+    const [selectedFilters, setSelectedFilters] = useState<TransactionFilterMode[]>(["DEFAULT"])
     const { currencyCode } = useSettingsStore()
+    const defaultCurrency = currencyCode || DEFAULT_CURRENCY
     const isEditing = !!editingBudget
 
     const form = useForm<BudgetFormValues>({
@@ -83,11 +113,9 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
             period: "MONTHLY",
             type: "EXPENSE",
             color: COLORS[0],
-            currencyCode: currencyCode || "USD",
-            startDate: undefined,
-            endDate: undefined,
+            currencyCode: defaultCurrency,
             transactionFilterMode: "DEFAULT",
-            budgetScope: "ALL_TRANSACTIONS",
+            budgetScope: "GLOBAL",
             includeLoaned: false,
             includeGoalTransactions: false,
             includeBalanceCorrections: false,
@@ -96,64 +124,76 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
             accountIds: [],
             includeCategories: [],
             excludeCategories: [],
-            includeTags: []
-        }
+            includeTags: [],
+        },
     })
-
-    const currentType = form.watch('type')
-    const currentPeriod = form.watch('period')
-    const currentBudgetScope = form.watch('budgetScope')
 
     useEffect(() => {
         if (!open) {
             setStep(0)
-            setSelectedFilters(['DEFAULT'])
-            form.reset()
+            setSelectedFilters(["DEFAULT"])
+            form.reset({
+                name: "",
+                amount: 0,
+                period: "MONTHLY",
+                type: "EXPENSE",
+                color: COLORS[0],
+                currencyCode: defaultCurrency,
+                transactionFilterMode: "DEFAULT",
+                budgetScope: "GLOBAL",
+                includeLoaned: false,
+                includeGoalTransactions: false,
+                includeBalanceCorrections: false,
+                includeFromOtherBudgets: false,
+                excludedBudgetIds: [],
+                accountIds: [],
+                includeCategories: [],
+                excludeCategories: [],
+                includeTags: [],
+            })
         } else if (editingBudget) {
-            (form.reset as any)({
-                name: editingBudget.name,
-                amount: Number(editingBudget.amount),
-                period: editingBudget.period,
-                type: editingBudget.type,
-                color: editingBudget.color,
-                currencyCode: editingBudget.currencyCode || currencyCode,
-                ...(editingBudget.startDate ? { startDate: new Date(editingBudget.startDate) } : {}),
-                ...(editingBudget.endDate ? { endDate: new Date(editingBudget.endDate) } : {}),
-                transactionFilterMode: editingBudget.transactionFilterMode || 'DEFAULT',
-                budgetScope: editingBudget.budgetScope || 'ALL_TRANSACTIONS',
-                includeLoaned: editingBudget.includeLoaned || false,
-                includeGoalTransactions: editingBudget.includeGoalTransactions || false,
-                includeBalanceCorrections: editingBudget.includeBalanceCorrections || false,
-                includeFromOtherBudgets: editingBudget.includeFromOtherBudgets || false,
+            const scope = normalizeScope(editingBudget.budgetScope)
+            form.reset({
+                name: editingBudget.name || "",
+                amount: Number(editingBudget.amount || 0),
+                period: "MONTHLY",
+                type: editingBudget.type === "SAVINGS" ? "SAVINGS" : "EXPENSE",
+                color: editingBudget.color || COLORS[0],
+                currencyCode: editingBudget.currencyCode || defaultCurrency,
+                transactionFilterMode: editingBudget.transactionFilterMode || "DEFAULT",
+                budgetScope: scope,
+                includeLoaned: Boolean(editingBudget.includeLoaned),
+                includeGoalTransactions: Boolean(editingBudget.includeGoalTransactions),
+                includeBalanceCorrections: Boolean(editingBudget.includeBalanceCorrections),
+                includeFromOtherBudgets: Boolean(editingBudget.includeFromOtherBudgets),
                 excludedBudgetIds: editingBudget.excludedBudgetIds || [],
-                accountIds: editingBudget.accountIds || [],
+                accountIds: scope === "ACCOUNT" ? editingBudget.accountIds || [] : [],
                 includeCategories: editingBudget.includeCategories || [],
                 excludeCategories: editingBudget.excludeCategories || [],
-                includeTags: editingBudget.includeTags || []
+                includeTags: editingBudget.includeTags || [],
             })
 
-            // Set initial filters
-            const initialFilters: TransactionFilterMode[] = ['DEFAULT']
-            if (editingBudget.includeLoaned) initialFilters.push('LOANED')
-            if (editingBudget.includeGoalTransactions) initialFilters.push('ADDED_TO_GOAL')
-            if (editingBudget.includeBalanceCorrections) initialFilters.push('BALANCE_CORRECTION')
+            const initialFilters: TransactionFilterMode[] = ["DEFAULT"]
+            if (editingBudget.includeLoaned) initialFilters.push("LOANED")
+            if (editingBudget.includeGoalTransactions) initialFilters.push("ADDED_TO_GOAL")
+            if (editingBudget.includeBalanceCorrections) initialFilters.push("BALANCE_CORRECTION")
             setSelectedFilters(initialFilters)
+            setStep(1) // Start directly on details when editing
         }
-    }, [open, editingBudget, form, currencyCode])
+    }, [open, editingBudget, form, defaultCurrency])
 
     const handleNext = async () => {
-        let fieldsToValidate: (keyof BudgetFormValues)[] = []
-
         if (step === 1) {
-            fieldsToValidate = ['name', 'amount', 'period', 'type']
-            if (currentPeriod === 'CUSTOM') {
-                fieldsToValidate.push('startDate', 'endDate')
-            }
+            const isValid = await form.trigger(["name", "amount", "type", "currencyCode"])
+            if (!isValid) return
         }
 
-        if (fieldsToValidate.length > 0) {
-            const isValid = await form.trigger(fieldsToValidate)
-            if (!isValid) return
+        if (step === 3 && form.getValues("budgetScope") === "ACCOUNT") {
+            const selectedAccounts = form.getValues("accountIds") || []
+            if (selectedAccounts.length === 0) {
+                toast.error("Selecciona al menos una cuenta o cambia el alcance a Global")
+                return
+            }
         }
 
         if (step < 4) {
@@ -168,195 +208,182 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
     }
 
     const handleFilterToggle = (filter: TransactionFilterMode) => {
-        setSelectedFilters(prev => {
-            if (prev.includes(filter)) {
-                // Don't allow removing DEFAULT if it's the only one
-                if (filter === 'DEFAULT' && prev.length === 1) {
-                    return prev
-                }
-                return prev.filter(f => f !== filter)
-            } else {
-                return [...prev, filter]
-            }
-        })
+        const isAlreadySelected = selectedFilters.includes(filter)
+        if (filter === "DEFAULT" && isAlreadySelected && selectedFilters.length === 1) {
+            return
+        }
 
-        // Update form values based on filter
-        if (filter === 'LOANED') {
-            form.setValue('includeLoaned', !selectedFilters.includes(filter))
-        } else if (filter === 'ADDED_TO_GOAL') {
-            form.setValue('includeGoalTransactions', !selectedFilters.includes(filter))
-        } else if (filter === 'BALANCE_CORRECTION') {
-            form.setValue('includeBalanceCorrections', !selectedFilters.includes(filter))
+        const nextFilters = isAlreadySelected
+            ? selectedFilters.filter((f) => f !== filter)
+            : [...selectedFilters, filter]
+
+        setSelectedFilters(nextFilters)
+
+        if (filter === "LOANED") {
+            form.setValue("includeLoaned", !isAlreadySelected)
+        } else if (filter === "ADDED_TO_GOAL") {
+            form.setValue("includeGoalTransactions", !isAlreadySelected)
+        } else if (filter === "BALANCE_CORRECTION") {
+            form.setValue("includeBalanceCorrections", !isAlreadySelected)
         }
     }
 
     const handleSubmit = async (values: BudgetFormValues) => {
         try {
-            // Calculate dates if MONTHLY
-            let startDate = values.startDate
-            let endDate = values.endDate
-
-            if (values.period === 'MONTHLY') {
-                const now = new Date()
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-            }
+            const now = new Date()
+            const scope = normalizeScope(values.budgetScope)
 
             const payload = {
                 ...values,
+                name: values.name.trim(),
                 amount: Number(values.amount),
-                startDate: startDate?.toISOString(),
-                endDate: endDate?.toISOString(),
-                currencyCode: values.currencyCode || currencyCode,
-
-                // ZBB Desynchronization Logic
-                // If this budget was ZBB controlled, manual edits break the link
-                ...(editingBudget?.is_zbb_controlled ? {
-                    is_zbb_controlled: false,
-                    zbb_allocation_id: null
-                } : {})
+                budgetScope: scope,
+                accountIds: scope === "ACCOUNT" ? values.accountIds : [],
+                currencyCode: values.currencyCode || defaultCurrency,
+                budgetYear: editingBudget?.budgetYear || now.getFullYear(),
+                budgetMonth: editingBudget?.budgetMonth || now.getMonth() + 1,
+                ...(editingBudget?.isZbbControlled
+                    ? {
+                          isZbbControlled: false,
+                          zbbAllocationId: null,
+                      }
+                    : {}),
             }
 
-            const url = isEditing ? `/api/budgets/${editingBudget.id}` : '/api/budgets'
-            const method = isEditing ? 'PUT' : 'POST'
+            const url = isEditing ? `/api/budgets/${editingBudget.id}` : "/api/budgets"
+            const method = isEditing ? "PUT" : "POST"
 
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
             })
 
             if (!response.ok) {
-                const errorData = await response.json()
-                throw new Error(errorData.error || 'Error al guardar presupuesto')
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.error || "Error al guardar presupuesto")
             }
 
+            toast.success(isEditing ? "Presupuesto actualizado" : "Presupuesto creado")
             onComplete()
             onOpenChange(false)
         } catch (error) {
-            console.error('Error saving budget:', error)
-            alert(error instanceof Error ? error.message : 'Error al guardar presupuesto')
+            console.error("Error saving budget:", error)
+            toast.error(error instanceof Error ? error.message : "Error al guardar presupuesto")
         }
     }
 
-    const symbolMap: Record<string, string> = { 'PEN': 'S/.', 'USD': '$', 'EUR': '€', 'MXN': '$' }
-    const symbol = symbolMap[currencyCode] || '$'
+    const activeCurrency = form.watch("currencyCode") || defaultCurrency
+    const symbol = getCurrencySymbol(activeCurrency)
+    const isZbbControlled = Boolean(editingBudget?.isZbbControlled)
 
     if (!open) return null
 
     return (
-        <div className="fixed inset-0 lg:left-72 z-[100] bg-white dark:bg-zinc-950 flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-500">
-            {/* 1. Header (Internal Page Style) */}
-            <div className="px-10 py-6 flex items-center justify-between border-b border-border/40">
+        <div className="fixed inset-0 lg:left-72 z-[100] bg-card flex flex-col animate-in fade-in slide-in-from-bottom-5 duration-300">
+            {/* 1. Header */}
+            <div className="px-6 sm:px-10 py-5 flex items-center justify-between border-b border-border/50">
                 <div className="flex items-center gap-4">
                     <Button
                         type="button"
                         variant="ghost"
                         size="icon"
                         onClick={() => onOpenChange(false)}
-                        className="rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
+                        aria-label="Cerrar asistente"
+                        className="rounded-full hover:bg-muted"
                     >
-                        <ArrowLeft className="w-6 h-6" />
+                        <ArrowLeft className="w-5 h-5" />
                     </Button>
                     <div className="flex flex-col">
-                        <h1 className="text-3xl font-black tracking-tighter text-slate-800 dark:text-white">
-                            {isEditing ? 'Editar Presupuesto' : 'Nuevo Presupuesto'}
+                        <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-foreground">
+                            {isEditing ? "Editar Presupuesto" : "Nuevo Presupuesto"}
                         </h1>
-                        <p className="text-sm font-medium text-slate-400">
-                            {step === 0 && "Elige una categoría para empezar"}
-                            {step === 1 && "Personaliza los detalles"}
-                            {step === 2 && "Configura las reglas inteligentes"}
-                            {step === 3 && "Selecciona la cuenta"}
-                            {step === 4 && "Confirma tu presupuesto"}
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground">
+                            {step === 0 && "Paso 1 de 5 · Elige categorías para empezar"}
+                            {step === 1 && "Paso 2 de 5 · Personaliza los detalles"}
+                            {step === 2 && "Paso 3 de 5 · Configura las reglas inteligentes"}
+                            {step === 3 && "Paso 4 de 5 · Selecciona el alcance de cuentas"}
+                            {step === 4 && "Paso 5 de 5 · Confirma tu presupuesto"}
                         </p>
                     </div>
                 </div>
-                {/* Optional: Add a helper icon or status here if needed */}
             </div>
 
             {/* ZBB WARNING BANNER */}
-            {isEditing && editingBudget?.is_zbb_controlled && (
-                <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/50 px-10 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-full text-amber-600 dark:text-amber-400">
-                            <AlertTriangle className="w-4 h-4" />
-                        </div>
-                        <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                            Este presupuesto está <strong>sincronizado con ZBB</strong>. Si editas aquí, se perderá la conexión automática.
-                        </p>
+            {isEditing && isZbbControlled && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800/50 px-6 sm:px-10 py-3 flex items-center gap-3">
+                    <div className="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-full text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="w-4 h-4" />
                     </div>
+                    <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-200 font-medium">
+                        Este presupuesto está <strong>sincronizado con ZBB</strong>. Si editas aquí, se desvinculará de la asignación automática.
+                    </p>
                 </div>
             )}
 
             {/* 2. Main Content Area */}
             <Form {...form}>
-                <form className="flex-1 flex flex-col relative bg-transparent overflow-hidden">
-
+                <form
+                    onSubmit={form.handleSubmit(handleSubmit)}
+                    className="flex-1 flex flex-col relative bg-transparent overflow-hidden"
+                >
                     {/* Scrollable Step Content */}
                     <div className="flex-1 overflow-y-auto px-4 lg:px-10 pt-6 pb-20 custom-scrollbar">
                         <div className="max-w-7xl mx-auto h-full pb-10">
-
-                            {/* STEP 0: Category Selection (Smart Start) */}
+                            {/* STEP 0: Category Selection */}
                             {step === 0 && (
-                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                                    <div className="text-center space-y-2 mb-8">
-                                        <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 text-purple-600 shadow-sm">
-                                            <Sparkles className="w-8 h-8" />
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="text-center space-y-2 mb-6">
+                                        <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3 text-primary shadow-sm">
+                                            <Sparkles className="w-7 h-7" />
                                         </div>
-                                        <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+                                        <h2 className="text-2xl font-black text-foreground">
                                             ¿Qué quieres presupuestar hoy?
                                         </h2>
-                                        <p className="text-slate-500 max-w-md mx-auto">
-                                            Selecciona una categoría y la configuraremos automáticamente por ti.
+                                        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                                            Selecciona una o más categorías y lo configuraremos por ti.
                                         </p>
                                     </div>
 
                                     <CategoryGridSelector
-                                        selectedIds={form.watch('includeCategories')}
+                                        selectedIds={form.watch("includeCategories")}
                                         onToggle={(id, category) => {
-                                            const current = form.watch('includeCategories') || []
+                                            const current = form.getValues("includeCategories") || []
                                             const isSelected = current.includes(id)
-                                            let newSelected = []
-
-                                            if (isSelected) {
-                                                newSelected = current.filter(c => c !== id)
-                                            } else {
-                                                newSelected = [...current, id]
-                                            }
+                                            const newSelected = isSelected
+                                                ? current.filter((c) => c !== id)
+                                                : [...current, id]
 
                                             form.setValue("includeCategories", newSelected)
 
-                                            // Logic to auto-set details based on FIRST selected category (if any)
-                                            if (newSelected.length > 0) {
-                                                const lastSelectedId = newSelected[newSelected.length - 1]
-                                                // We might want to look up the category object for the name
-                                                // For now, let's keep the name generic if multiple
-
+                                            if (!isEditing && newSelected.length > 0) {
                                                 if (newSelected.length === 1) {
-                                                    // Single selection logic (same as before)
                                                     form.setValue("name", `Presupuesto de ${category.name}`)
-                                                    const type = category.type === 'INCOME' ? 'SAVINGS' : 'EXPENSE'
-                                                    form.setValue("type", type)
+                                                    form.setValue(
+                                                        "type",
+                                                        category.type === "INCOME" ? "SAVINGS" : "EXPENSE"
+                                                    )
                                                 } else {
-                                                    // Multiple selection logic
                                                     form.setValue("name", "Presupuesto Agrupado")
-                                                    // Default to EXPENSE if mixed, or keep previous
                                                 }
-                                                form.setValue("budgetScope", "GLOBAL")
                                             }
                                         }}
                                         type="ALL"
                                         mode="INCLUDE"
                                     />
 
-                                    <div className="flex flex-col items-center justify-center mt-8 gap-4">
-                                        {form.watch('includeCategories')?.length > 0 && (
+                                    <div className="flex flex-col items-center justify-center mt-8 gap-3">
+                                        {form.watch("includeCategories")?.length > 0 && (
                                             <Button
+                                                type="button"
                                                 size="lg"
                                                 onClick={() => setStep(1)}
-                                                className="rounded-full px-8 font-bold bg-primary hover:bg-primary/90 shadow-lg animate-in zoom-in duration-300"
+                                                className="rounded-full px-8 font-bold bg-primary hover:bg-primary/90 shadow-lg"
                                             >
-                                                Continuar con {form.watch('includeCategories').length} {form.watch('includeCategories').length === 1 ? 'Categoría' : 'Categorías'}
+                                                Continuar con {form.watch("includeCategories").length}{" "}
+                                                {form.watch("includeCategories").length === 1
+                                                    ? "Categoría"
+                                                    : "Categorías"}
                                                 <ArrowRight className="w-5 h-5 ml-2" />
                                             </Button>
                                         )}
@@ -368,9 +395,11 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                                 form.setValue("includeCategories", [])
                                                 setStep(1)
                                             }}
-                                            className="text-slate-400 hover:text-slate-600"
+                                            className="text-muted-foreground hover:text-foreground"
                                         >
-                                            Configurar manualmente desde cero
+                                            {isEditing
+                                                ? "Continuar sin filtrar categorías (Global)"
+                                                : "Configurar manualmente desde cero"}
                                         </Button>
                                     </div>
                                 </div>
@@ -378,28 +407,86 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
 
                             {/* STEP 1: Details Form */}
                             {step === 1 && (
-                                <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
-
-                                    {/* Selected Category Indicator */}
-                                    {form.watch('includeCategories')?.[0] && (
-                                        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 p-4 rounded-2xl flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/50 rounded-xl flex items-center justify-center text-purple-600">
-                                                <Sparkles className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-0.5">Categoría Seleccionada</p>
-                                                <p className="font-bold text-slate-700 dark:text-slate-200">{form.watch('name')}</p>
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="ml-auto text-purple-600 hover:bg-purple-100"
-                                                onClick={() => setStep(0)}
-                                            >
-                                                Cambiar
-                                            </Button>
+                                <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    {/* Selected Categories Summary */}
+                                    <div className="bg-primary/5 border border-primary/20 p-4 rounded-2xl flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+                                            <Sparkles className="w-5 h-5" />
                                         </div>
-                                    )}
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-primary mb-0.5">
+                                                Categorías incluidas
+                                            </p>
+                                            <p className="text-sm font-bold text-foreground truncate">
+                                                {form.watch("includeCategories")?.length > 0
+                                                    ? `${form.watch("includeCategories").length} ${
+                                                          form.watch("includeCategories").length === 1
+                                                              ? "categoría seleccionada"
+                                                              : "categorías seleccionadas"
+                                                      }`
+                                                    : "Todas las categorías (Presupuesto Global)"}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="ml-auto text-primary hover:bg-primary/10 shrink-0"
+                                            onClick={() => setStep(0)}
+                                        >
+                                            Cambiar
+                                        </Button>
+                                    </div>
+
+                                    {/* Budget Type Selector */}
+                                    <FormField
+                                        control={form.control}
+                                        name="type"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Tipo de Presupuesto</FormLabel>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => field.onChange("EXPENSE")}
+                                                        className={cn(
+                                                            "flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all",
+                                                            field.value === "EXPENSE"
+                                                                ? "border-primary bg-primary/5"
+                                                                : "border-border hover:border-primary/40"
+                                                        )}
+                                                    >
+                                                        <TrendingDown className="h-5 w-5 text-rose-500 shrink-0" />
+                                                        <div>
+                                                            <p className="text-sm font-bold text-foreground">Gasto</p>
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                Límite máximo mensual
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => field.onChange("SAVINGS")}
+                                                        className={cn(
+                                                            "flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all",
+                                                            field.value === "SAVINGS"
+                                                                ? "border-primary bg-primary/5"
+                                                                : "border-border hover:border-primary/40"
+                                                        )}
+                                                    >
+                                                        <TrendingUp className="h-5 w-5 text-emerald-500 shrink-0" />
+                                                        <div>
+                                                            <p className="text-sm font-bold text-foreground">Ahorro</p>
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                Meta de acumulación mensual
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
 
                                     {/* Name & Amount */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -410,7 +497,11 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                                 <FormItem>
                                                     <FormLabel>Nombre del Presupuesto</FormLabel>
                                                     <FormControl>
-                                                        <Input {...field} placeholder="Ej. Alimentación Mensual" className="h-12 text-lg font-bold bg-slate-50 dark:bg-zinc-900/50 border-input/50" />
+                                                        <Input
+                                                            {...field}
+                                                            placeholder="Ej. Alimentación Mensual"
+                                                            className="h-12 text-base font-bold bg-muted/50 border-input/50"
+                                                        />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
@@ -422,21 +513,31 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                             name="amount"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Monto Límite</FormLabel>
+                                                    <FormLabel>
+                                                        {form.watch("type") === "SAVINGS"
+                                                            ? "Meta Mensual"
+                                                            : "Monto Límite"}
+                                                    </FormLabel>
                                                     <FormControl>
                                                         <div className="relative">
-                                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">
+                                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">
                                                                 {symbol}
                                                             </span>
                                                             <Input
                                                                 {...field}
                                                                 type="number"
-                                                                value={field.value === 0 || Number.isNaN(field.value) ? '' : field.value}
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={
+                                                                    field.value === 0 || Number.isNaN(field.value)
+                                                                        ? ""
+                                                                        : field.value
+                                                                }
                                                                 placeholder="0.00"
-                                                                className="h-12 text-lg font-bold pl-10 bg-slate-50 dark:bg-zinc-900/50 border-input/50"
-                                                                onChange={e => {
+                                                                className="h-12 text-base font-bold pl-12 bg-muted/50 border-input/50"
+                                                                onChange={(e) => {
                                                                     const val = e.target.value
-                                                                    field.onChange(val === '' ? 0 : parseFloat(val))
+                                                                    field.onChange(val === "" ? 0 : parseFloat(val))
                                                                 }}
                                                             />
                                                         </div>
@@ -447,23 +548,26 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                         />
                                     </div>
 
-                                    {/* Period & Colors */}
+                                    {/* Currency & Colors */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <FormField
                                             control={form.control}
-                                            name="period"
+                                            name="currencyCode"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Periodo</FormLabel>
-                                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormLabel>Moneda</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value}>
                                                         <FormControl>
-                                                            <SelectTrigger className="h-12 bg-slate-50 dark:bg-zinc-900/50 border-input/50">
-                                                                <SelectValue placeholder="Seleccionar periodo" />
+                                                            <SelectTrigger className="h-12 bg-muted/50 border-input/50">
+                                                                <SelectValue placeholder="Seleccionar moneda" />
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="MONTHLY">Mensual</SelectItem>
-                                                            <SelectItem value="CUSTOM">Personalizado</SelectItem>
+                                                            {CURRENCIES.map((c) => (
+                                                                <SelectItem key={c.code} value={c.code}>
+                                                                    {c.symbol} · {c.code} ({c.name})
+                                                                </SelectItem>
+                                                            ))}
                                                         </SelectContent>
                                                     </Select>
                                                     <FormMessage />
@@ -478,23 +582,26 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                                 <FormItem>
                                                     <FormLabel>Color Identificativo</FormLabel>
                                                     <FormControl>
-                                                        <div className="bg-slate-50 dark:bg-zinc-900/50 p-2 rounded-lg border border-input/50 flex flex-wrap gap-2">
-                                                            {COLORS.slice(0, 8).map((color) => (
+                                                        <div className="bg-muted/50 p-2.5 rounded-lg border border-input/50 flex flex-wrap gap-2.5 items-center min-h-[48px]">
+                                                            {COLORS.map((color) => (
                                                                 <button
                                                                     key={color}
                                                                     type="button"
+                                                                    aria-label={`Seleccionar color ${color}`}
                                                                     onClick={(e) => {
                                                                         e.preventDefault()
                                                                         field.onChange(color)
                                                                     }}
                                                                     className={cn(
-                                                                        "w-6 h-6 rounded-full transition-all hover:scale-110",
-                                                                        field.value === color ? "ring-2 ring-offset-2 ring-foreground scale-110" : "hover:opacity-80"
+                                                                        "w-6 h-6 rounded-full transition-all hover:scale-110 flex items-center justify-center",
+                                                                        field.value === color
+                                                                            ? "ring-2 ring-offset-2 ring-foreground scale-110"
+                                                                            : "hover:opacity-80"
                                                                     )}
                                                                     style={{ backgroundColor: color }}
                                                                 >
                                                                     {field.value === color && (
-                                                                        <Check className="w-3 h-3 text-white mx-auto" />
+                                                                        <Check className="w-3 h-3 text-white" />
                                                                     )}
                                                                 </button>
                                                             ))}
@@ -505,18 +612,17 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                             )}
                                         />
                                     </div>
-
                                 </div>
                             )}
 
-                            {/* STEP 2: Filter Selector (Smart Cards) */}
+                            {/* STEP 2: Filter Selector */}
                             {step === 2 && (
-                                <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-right-8 duration-500">
+                                <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
                                     <FormItem>
                                         <div className="mb-6">
                                             <FormLabel className="text-xl font-bold">Reglas de Inclusión</FormLabel>
                                             <FormDescription className="text-base">
-                                                Define qué transacciones contarán para este presupuesto.
+                                                Define qué movimientos contarán para este presupuesto.
                                             </FormDescription>
                                         </div>
                                         <TransactionFilterSelector
@@ -529,7 +635,7 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
 
                             {/* STEP 3: Account Selector */}
                             {step === 3 && (
-                                <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-right-8 duration-500">
+                                <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
                                     <FormField
                                         control={form.control}
                                         name="budgetScope"
@@ -538,20 +644,24 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                                 <div className="mb-4">
                                                     <FormLabel className="text-xl font-bold">Alcance de Cuentas</FormLabel>
                                                     <FormDescription>
-                                                        ¿Este presupuesto aplica a todas tus cuentas o solo a una específica?
+                                                        ¿Este presupuesto aplica a todas tus cuentas o solo a cuentas específicas?
                                                     </FormDescription>
                                                 </div>
 
                                                 <BudgetScopeSelector
-                                                    selected={field.value as any}
-                                                    onChange={field.onChange}
+                                                    selected={field.value}
+                                                    onChange={(nextScope) => {
+                                                        field.onChange(nextScope)
+                                                        if (nextScope === "GLOBAL") {
+                                                            form.setValue("accountIds", [])
+                                                        }
+                                                    }}
                                                 />
                                             </FormItem>
                                         )}
                                     />
 
-                                    {/* Account Picker if Specific is selected */}
-                                    {form.watch('budgetScope') === 'ACCOUNT' && (
+                                    {form.watch("budgetScope") === "ACCOUNT" && (
                                         <div className="mt-6 animate-in slide-in-from-top-2">
                                             <FormField
                                                 control={form.control}
@@ -562,11 +672,11 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                                         <AccountSelector
                                                             selectedIds={field.value}
                                                             onToggle={(id) => {
-                                                                const current = field.value || [];
+                                                                const current = field.value || []
                                                                 const updated = current.includes(id)
-                                                                    ? current.filter(i => i !== id)
-                                                                    : [...current, id];
-                                                                field.onChange(updated);
+                                                                    ? current.filter((i) => i !== id)
+                                                                    : [...current, id]
+                                                                field.onChange(updated)
                                                             }}
                                                         />
                                                         <FormMessage />
@@ -578,89 +688,106 @@ export function BudgetWizardAdvanced({ open, onOpenChange, onComplete, editingBu
                                 </div>
                             )}
 
-                            {/* STEP 4: Review (Optional, or just confirm on last step) */}
+                            {/* STEP 4: Review */}
                             {step === 4 && (
-                                <div className="max-w-3xl mx-auto text-center space-y-6 animate-in fade-in zoom-in-95 duration-500">
-                                    <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Check className="h-12 w-12" />
+                                <div className="max-w-3xl mx-auto text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
+                                    <div className="w-20 h-20 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                                        <Check className="h-10 w-10" />
                                     </div>
                                     <h2 className="text-3xl font-black">¡Todo listo!</h2>
-                                    <p className="text-lg text-muted-foreground max-w-lg mx-auto">
-                                        Hemos configurado tu presupuesto <strong>{form.watch('name')}</strong> de <strong>{symbol}{form.watch('amount')}</strong>.
+                                    <p className="text-base text-muted-foreground max-w-lg mx-auto">
+                                        {isEditing ? "Actualizaremos" : "Crearemos"} tu presupuesto{" "}
+                                        <strong className="text-foreground">{form.watch("name")}</strong> de{" "}
+                                        <strong className="text-foreground">
+                                            {symbol} {Number(form.watch("amount") || 0).toFixed(2)}
+                                        </strong>
+                                        .
                                     </p>
 
-                                    <div className="bg-slate-50 dark:bg-zinc-900 rounded-xl p-6 text-left max-w-md mx-auto space-y-3 shadow-inner">
-                                        <div className="flex justify-between">
+                                    <div className="bg-muted/50 rounded-2xl p-6 text-left max-w-md mx-auto space-y-3 border border-border/50">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Tipo:</span>
+                                            <span className="font-bold">
+                                                {form.watch("type") === "SAVINGS" ? "Ahorro" : "Gasto"}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Periodo:</span>
-                                            <span className="font-bold">
-                                                {form.watch('period') === 'MONTHLY' ? 'Mensual' : 'Personalizado'}
+                                            <span className="font-bold">Mensual</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Moneda:</span>
+                                            <span className="font-bold">{activeCurrency}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm gap-4">
+                                            <span className="text-muted-foreground shrink-0">Reglas:</span>
+                                            <span className="font-bold text-right">
+                                                {selectedFilters
+                                                    .map((f) => {
+                                                        if (f === "DEFAULT") return "Estándar"
+                                                        if (f === "LOANED") return "Préstamos"
+                                                        if (f === "ADDED_TO_GOAL") return "Ahorro metas"
+                                                        if (f === "BALANCE_CORRECTION") return "Transferencias"
+                                                        return f
+                                                    })
+                                                    .join(", ")}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Regla:</span>
-                                            <span className="font-bold">
-                                                {selectedFilters.length > 0
-                                                    ? selectedFilters.map(f => {
-                                                        if (f === 'DEFAULT') return 'Estándar';
-                                                        if (f === 'LOANED') return 'Incluye Préstamos';
-                                                        if (f === 'ADDED_TO_GOAL') return 'Incluye Ahorros';
-                                                        if (f === 'BALANCE_CORRECTION') return 'Incluye Transferencias';
-                                                        return f;
-                                                    }).join(', ')
-                                                    : 'Todo'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between">
+                                        <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Alcance:</span>
-                                            <span className="font-bold">{form.watch('budgetScope') === 'GLOBAL' ? 'Global' : 'Cuenta Específica'}</span>
+                                            <span className="font-bold">
+                                                {form.watch("budgetScope") === "GLOBAL"
+                                                    ? "Global (Todas las cuentas)"
+                                                    : `${form.watch("accountIds")?.length || 0} cuenta(s)`}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
                             )}
-
                         </div>
                     </div>
 
-                    {/* 3. Bottom Action Bar (Fixed Footer) */}
-                    <div className="w-full bg-white/80 dark:bg-zinc-950/80 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md px-10 py-4 flex justify-between items-center z-20">
-                        {step > 0 && (
+                    {/* 3. Bottom Action Bar */}
+                    <div className="w-full bg-card/90 border-t border-border backdrop-blur-md px-6 sm:px-10 py-4 flex justify-between items-center z-20">
+                        {step > 0 ? (
                             <Button
                                 type="button"
                                 variant="ghost"
                                 onClick={handleBack}
-                                className="text-slate-500 hover:text-slate-800 font-bold"
+                                className="text-muted-foreground hover:text-foreground font-bold"
                             >
                                 <span className="mr-2">←</span> Atrás
                             </Button>
+                        ) : (
+                            <div />
                         )}
 
-                        {step === 0 && <div />} {/* Spacer for layout balance */}
-
                         {step < 4 ? (
-                            step > 0 && ( /* Only show Next on steps > 0 */
+                            step > 0 && (
                                 <Button
                                     type="button"
                                     onClick={handleNext}
-                                    className="rounded-xl px-8 font-bold text-lg bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl transition-all"
+                                    className="rounded-xl px-8 font-bold text-base bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg transition-all"
                                 >
                                     Siguiente
                                 </Button>
                             )
                         ) : (
                             <Button
-                                type="button"
-                                onClick={form.handleSubmit(handleSubmit)}
+                                type="submit"
                                 disabled={form.formState.isSubmitting}
                                 className={cn(
-                                    "rounded-xl px-12 h-14 font-black text-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl transition-all w-full max-w-xs ml-auto",
+                                    "rounded-xl px-10 h-12 font-black text-base bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl transition-all w-full max-w-xs ml-auto",
                                     form.formState.isSubmitting && "opacity-80 scale-95"
                                 )}
                             >
                                 {form.formState.isSubmitting ? (
                                     <>
                                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                        Creando...
+                                        {isEditing ? "Guardando..." : "Creando..."}
                                     </>
+                                ) : isEditing ? (
+                                    "Guardar Cambios"
                                 ) : (
                                     "Crear Presupuesto"
                                 )}

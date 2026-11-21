@@ -1,119 +1,105 @@
 "use client"
 
-import * as React from "react"
-import { useAccounts } from "@/hooks/useAccounts"
-import { useFormat } from "@/hooks/useFormat"
-import { cn } from "@/lib/utils"
+import React from "react"
+import Link from "next/link"
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-    SelectSeparator,
 } from "@/components/ui/select"
-import { Plus, Wallet, Loader2 } from "lucide-react"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
+import { Wallet, Loader2, Plus } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface AccountSelectProps {
     value?: string
-    onValueChange: (value: string) => void
+    onValueChange?: (value: string) => void
     placeholder?: string
-    currencyCode?: string
-    excludeId?: string
-    showBalance?: boolean
-    allowAdd?: boolean
-    onAdd?: () => void
-    className?: string
     disabled?: boolean
+    className?: string
+    filter?: (account: any) => boolean
 }
 
 export function AccountSelect({
     value,
     onValueChange,
     placeholder = "Selecciona una cuenta",
-    currencyCode,
-    excludeId,
-    showBalance = true,
-    allowAdd = true,
-    onAdd,
+    disabled = false,
     className,
-    disabled
+    filter,
 }: AccountSelectProps) {
     const { accounts, isLoading } = useAccounts()
     const { formatMoney } = useFormat()
 
     const filteredAccounts = React.useMemo(() => {
-        let list = accounts || []
-        if (currencyCode) {
-            list = list.filter(acc => acc.currencyCode === currencyCode)
+        if (!accounts) return []
+        const active = accounts.filter((a: any) => !a.isArchived)
+        if (filter) {
+            return active.filter(filter)
         }
-        if (excludeId) {
-            list = list.filter(acc => acc.id !== excludeId)
-        }
-        return list
-    }, [accounts, currencyCode, excludeId])
+        return active
+    }, [accounts, filter])
 
-    const handleValueChange = (val: string) => {
-        if (val === "new") {
-            onAdd?.()
-            return
-        }
-        onValueChange(val)
+    if (isLoading) {
+        return (
+            <div className="flex items-center gap-2 h-11 px-3 rounded-2xl border border-border/60 bg-muted/30 text-muted-foreground text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Cargando cuentas...</span>
+            </div>
+        )
+    }
+
+    if (filteredAccounts.length === 0) {
+        return (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-3.5 py-2.5 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                    <Wallet className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="font-semibold text-foreground truncate">
+                        Primero crea una cuenta para continuar
+                    </span>
+                </div>
+                <Link
+                    href="/dashboard/accounts"
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                    <Plus className="h-3 w-3" />
+                    Crear cuenta
+                </Link>
+            </div>
+        )
     }
 
     return (
-        <Select
-            value={value}
-            onValueChange={handleValueChange}
-            disabled={disabled || isLoading}
-        >
-            <SelectTrigger className={cn("w-full h-9 rounded-lg border-input/60 bg-muted/20 hover:bg-muted/40 transition-colors", className)}>
-                <SelectValue placeholder={isLoading ? "Cargando..." : placeholder} />
+        <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+            <SelectTrigger className={cn("w-full min-w-0 h-11 rounded-2xl bg-card border-border/60 shadow-xs focus:ring-primary/20 [&>span]:truncate [&>span]:min-w-0", className)}>
+                <SelectValue placeholder={placeholder} />
             </SelectTrigger>
-            <SelectContent>
-                {allowAdd && (
-                    <>
-                        <SelectItem value="new" className="text-primary font-medium focus:text-primary focus:bg-primary/5">
-                            <div className="flex items-center gap-2">
-                                <div className="flex h-4 w-4 items-center justify-center rounded-sm bg-primary/10">
-                                    <Plus className="h-3 w-3 text-primary" />
-                                </div>
-                                Nueva cuenta
-                            </div>
-                        </SelectItem>
-                        <SelectSeparator />
-                    </>
-                )}
-
-                {isLoading ? (
-                    <div className="flex items-center justify-center p-4">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    </div>
-                ) : filteredAccounts.length === 0 ? (
-                    <div className="p-4 text-xs text-center text-muted-foreground">
-                        No hay cuentas {currencyCode ? `en ${currencyCode}` : ""}
+            <SelectContent className="rounded-2xl border-border/60 shadow-xl max-h-72">
+                {filteredAccounts.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                        No hay cuentas disponibles
                     </div>
                 ) : (
-                    filteredAccounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id} className="focus:bg-primary/5 focus:text-foreground">
-                            <div className="flex items-center justify-between w-full min-w-[200px] gap-4">
-                                <div className="flex items-center gap-2">
+                    filteredAccounts.map((acc: any) => (
+                        <SelectItem
+                            key={acc.id}
+                            value={acc.id}
+                            className="rounded-xl my-0.5 cursor-pointer focus:bg-primary/10 focus:text-primary"
+                        >
+                            <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
                                     <div
-                                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                                        style={{ backgroundColor: acc.color || '#94a3b8' }}
+                                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                                        style={{ backgroundColor: acc.color || "var(--primary)" }}
                                     />
-                                    <span className="font-medium truncate max-w-[120px]">{acc.name}</span>
+                                    <span className="font-medium text-foreground truncate">{acc.name}</span>
                                 </div>
-                                {showBalance && (
-                                    <div className="flex items-center gap-1.5 ml-auto">
-                                        <span className="text-[10px] text-muted-foreground font-semibold px-1 py-0 rounded bg-muted/50">
-                                            {acc.currencyCode}
-                                        </span>
-                                        <span className="text-xs font-bold tabular-nums">
-                                            {formatMoney(acc.currentBalance, acc.currencyCode)}
-                                        </span>
-                                    </div>
-                                )}
+                                <span className="text-xs text-muted-foreground font-mono shrink-0">
+                                    {formatMoney(Number(acc.currentBalance) || 0, acc.currencyCode)}
+                                </span>
                             </div>
                         </SelectItem>
                     ))
@@ -122,3 +108,5 @@ export function AccountSelect({
         </Select>
     )
 }
+
+export default AccountSelect

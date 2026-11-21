@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -12,25 +12,30 @@ import {
     Target,
     ArrowRightLeft,
     HandCoins,
-    Banknote,
     ChevronLeft,
+    ChevronRight,
     Menu,
     LogOut,
-    UserCircle,
-    Bell
+    Sparkles,
+    FileSpreadsheet,
+    Crown,
+    ShieldCheck,
+    CalendarClock,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useSettingsStore } from "@/hooks/useSettingsStore"
-import { Button } from "@/components/ui/button"
+import { useUser } from "@/hooks/useUser"
+import { useSystemBranding } from "@/hooks/useSystemBranding"
+import { useQueryClient } from "@tanstack/react-query"
+import { performSafeSignOut } from "@/lib/auth-cleanup"
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useUser } from "@/hooks/useUser"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 
@@ -40,75 +45,115 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Sidebar({ className, variant = "default" }: SidebarProps) {
     const pathname = usePathname()
-    const { sidebarCollapsed, setSidebarCollapsed } = useSettingsStore()
-    const { profile } = useUser()
+    const { sidebarCollapsed, setSidebarCollapsed, accentColor, hasCustomAccent } = useSettingsStore()
+    const { profile, entitlements } = useUser()
+    const branding = useSystemBranding()
+    const queryClient = useQueryClient()
     const supabase = createClient()
+    const effectiveAccent =
+        (hasCustomAccent ? accentColor : branding.primaryColor) || accentColor || "#7C3AED"
+    const isDefaultViolet = effectiveAccent.toUpperCase() === "#7C3AED"
+
+    const darkLogo = branding.logoDarkUrl || "/icons/icon-dark.png"
+    const whiteLogo = branding.logoWhiteUrl || "/icons/icon-white.png"
+    const brandLabel = (branding.appName || "Lumio Finance").split(" ")[0] || "Lumio"
+
+    const renderLogoMark = () =>
+        isDefaultViolet ? (
+            <img
+                src={darkLogo}
+                alt={branding.appName}
+                className="h-10 w-10 rounded-2xl object-cover shadow-lg ring-1 ring-white/20 group-hover:scale-105 transition-transform shrink-0"
+            />
+        ) : (
+            <div className="h-10 w-10 rounded-2xl bg-white/18 dark:bg-white/12 ring-1 ring-white/30 p-1.5 shadow-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                <img
+                    src={whiteLogo}
+                    alt={branding.appName}
+                    className="h-full w-full object-contain"
+                />
+            </div>
+        )
 
     const handleLogout = async () => {
-        await supabase.auth.signOut()
-        window.location.href = '/login'
+        await performSafeSignOut(supabase, queryClient)
     }
 
     const routes = [
-        { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-sky-500" },
-        { label: "Transacciones", icon: ArrowRightLeft, href: "/dashboard/transactions", color: "text-violet-500" },
-        { label: "Cuentas", icon: Wallet, href: "/dashboard/accounts", color: "text-pink-700" },
-        { label: "Presupuestos", icon: PieChart, href: "/dashboard/budgets", color: "text-orange-700" },
-        { label: "Préstamos", icon: HandCoins, href: "/dashboard/loans", color: "text-amber-600" },
-        { label: "Caja Chica", icon: Banknote, href: "/dashboard/petty-cash", color: "text-emerald-600" },
-        { label: "Planificación", icon: Target, href: "/dashboard/planning", color: "text-cyan-500" },
-        { label: "Metas", icon: Target, href: "/dashboard/savings-goals", color: "text-rose-500" },
-        { label: "Análisis", icon: BarChart3, href: "/dashboard/analysis", color: "text-purple-500" },
+        { label: "Inicio", icon: LayoutDashboard, href: "/dashboard" },
+        { label: "Movimientos", icon: ArrowRightLeft, href: "/dashboard/transactions" },
+        { label: "Programados", icon: CalendarClock, href: "/dashboard/subscriptions" },
+        { label: "Mis cuentas", icon: Wallet, href: "/dashboard/accounts" },
+        { label: "Presupuestos", icon: PieChart, href: "/dashboard/budgets" },
+        { label: "Préstamos", icon: HandCoins, href: "/dashboard/loans" },
+        { label: "Planificación", icon: Sparkles, href: "/dashboard/planning" },
+        { label: "Metas de ahorro", icon: Target, href: "/dashboard/savings-goals" },
+        { label: "Análisis", icon: BarChart3, href: "/dashboard/analysis" },
+        { label: "Reportes", icon: FileSpreadsheet, href: "/dashboard/reports" },
     ]
 
     const configRoutes = [
-        { label: "Configuración", icon: Settings, href: "/dashboard/settings", color: "text-slate-500" },
+        { label: "Suscripción", icon: Crown, href: "/dashboard/billing" },
+        { label: "Ajustes", icon: Settings, href: "/dashboard/settings" },
+        ...(profile?.isAdmin
+            ? [{ label: "Panel Admin", icon: ShieldCheck, href: "/dashboard/admin" }]
+            : []),
     ]
 
     return (
         <motion.div
             initial={false}
-            animate={{ width: sidebarCollapsed ? 80 : 280 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            animate={{ width: sidebarCollapsed && variant !== "flat" ? 84 : 260 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-                // Premium Color Block Style
-                "bg-primary text-primary-foreground dark:bg-[#09090b] dark:text-foreground dark:border-r dark:border-white/10",
-                variant === "default" && "rounded-r-[2.5rem] shadow-2xl",
-                !sidebarCollapsed || variant === "flat" ? "w-72" : "w-[90px]",
+                "relative bg-sidebar text-sidebar-foreground flex flex-col h-screen select-none",
+                variant === "default" &&
+                    "rounded-r-[2.25rem] shadow-2xl shadow-primary/15 dark:border-r dark:border-sidebar-border",
+                !sidebarCollapsed || variant === "flat" ? "w-[260px]" : "w-[84px]",
                 className
             )}
         >
-            {/* --- HEADER --- */}
-            <div className={cn(
-                "flex h-24 items-center transition-all duration-300 z-10",
-                sidebarCollapsed ? "justify-center" : "px-6 justify-between"
-            )}>
-                {/* ... Header content remains ... */}
+            {/* HEADER WITH LOGO & SINGLE INSIDE TOGGLE */}
+            <div
+                className={cn(
+                    "flex items-center transition-all duration-300 z-10",
+                    sidebarCollapsed && variant !== "flat" ? "justify-center py-4" : "h-20 px-5 justify-between"
+                )}
+            >
                 <AnimatePresence mode="wait">
-                    {!sidebarCollapsed ? (
+                    {!sidebarCollapsed || variant === "flat" ? (
                         <motion.div
                             key="expanded-header"
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -10 }}
-                            className="flex items-center justify-between w-full pt-4"
+                            className="flex items-center justify-between gap-2 w-full pt-1"
                         >
-                            <Link className="flex items-center gap-3 group" href="/dashboard">
-                                <div className="relative">
-                                    {/* Logo filter to ensure visibility on primary color */}
-                                    <div className="absolute inset-0 bg-white/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                    <img src="/logo-dark.png" alt="Lumio" className="h-10 w-auto brightness-0 invert relative z-10" />
+                            <Link className="flex items-center gap-3 group min-w-0" href="/dashboard">
+                                {renderLogoMark()}
+                                <div className="flex flex-col min-w-0">
+                                    <span className="font-extrabold text-lg tracking-tight text-sidebar-foreground leading-tight truncate">
+                                        {brandLabel}
+                                    </span>
+                                    <span className="text-[10px] text-sidebar-foreground/75 font-semibold tracking-widest uppercase">
+                                        {entitlements?.isTrial
+                                            ? `Prueba · ${entitlements.trialDaysRemaining}d`
+                                            : entitlements?.isPremium
+                                              ? "Premium"
+                                              : "Básico"}
+                                    </span>
                                 </div>
                             </Link>
-                            {variant !== 'flat' && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
+                            {variant !== "flat" && (
+                                <button
+                                    type="button"
                                     onClick={() => setSidebarCollapsed(true)}
-                                    className="h-8 w-8 rounded-full hover:bg-white/20 text-primary-foreground/70 hover:text-white transition-all"
+                                    aria-label="Retraer menú"
+                                    title="Retraer menú"
+                                    className="hidden lg:flex h-8 w-8 rounded-xl bg-sidebar-foreground/10 hover:bg-sidebar-foreground/20 text-sidebar-foreground/85 hover:text-sidebar-foreground items-center justify-center transition-all active:scale-95 shrink-0 cursor-pointer"
                                 >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
+                                    <ChevronLeft className="h-4 w-4 stroke-[2.5]" />
+                                </button>
                             )}
                         </motion.div>
                     ) : (
@@ -117,54 +162,108 @@ export function Sidebar({ className, variant = "default" }: SidebarProps) {
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.8 }}
-                            className="pt-4"
+                            className="flex flex-col items-center gap-2.5"
                         >
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setSidebarCollapsed(false)}
-                                className="h-10 w-10 rounded-xl hover:bg-white/20 text-primary-foreground transition-all"
+                            <Link
+                                href="/dashboard"
+                                title="Lumio Finance"
+                                aria-label="Ir al inicio"
+                                className="group block"
                             >
-                                <Menu className="h-5 w-5" />
-                            </Button>
+                                {renderLogoMark()}
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setSidebarCollapsed(false)}
+                                aria-label="Ampliar menú"
+                                title="Ampliar menú"
+                                className="hidden lg:flex h-7 w-7 rounded-xl bg-sidebar-foreground/12 hover:bg-sidebar-foreground/22 text-sidebar-foreground items-center justify-center transition-all active:scale-95 cursor-pointer"
+                            >
+                                <ChevronRight className="h-4 w-4 stroke-[2.5]" />
+                            </button>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
 
-            {/* --- NAVIGATION --- */}
-            <ScrollArea className="flex-1 px-3 py-4">
+            {/* NAVIGATION */}
+            <ScrollArea className="flex-1 px-3 py-3">
                 <TooltipProvider delayDuration={0}>
                     <div className="space-y-1">
                         {routes.map((route) => (
-                            <NavItem key={route.href} route={route} collapsed={sidebarCollapsed} pathname={pathname} />
+                            <NavItem
+                                key={route.href}
+                                route={route}
+                                collapsed={sidebarCollapsed && variant !== "flat"}
+                                pathname={pathname}
+                            />
                         ))}
                     </div>
 
-                    <div className="my-4 px-2">
-                        <Separator className="bg-primary-foreground/20" />
+                    <div className="my-4 px-3">
+                        <Separator className="bg-white/15" />
                     </div>
 
                     <div className="space-y-1">
                         {configRoutes.map((route) => (
-                            <NavItem key={route.href} route={route} collapsed={sidebarCollapsed} pathname={pathname} />
+                            <NavItem
+                                key={route.href}
+                                route={route}
+                                collapsed={sidebarCollapsed && variant !== "flat"}
+                                pathname={pathname}
+                            />
                         ))}
                     </div>
                 </TooltipProvider>
             </ScrollArea>
 
-            {/* --- FOOTER (User & Tools) --- */}
-            {/* Darker shade of primary or transparent for footer */}
-            {/* --- FOOTER removed for Header Migration --- */}
+
+            {/* FOOTER / LOGOUT */}
+            <div className="p-3 border-t border-sidebar-border">
+                <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={handleLogout}
+                                className={cn(
+                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-white/15 transition-all text-sm font-semibold",
+                                    sidebarCollapsed && variant !== "flat" && "justify-center px-0"
+                                )}
+                            >
+                                <LogOut className="h-5 w-5" />
+                                {(!sidebarCollapsed || variant === "flat") && (
+                                    <span>Cerrar sesión</span>
+                                )}
+                            </button>
+                        </TooltipTrigger>
+                        {sidebarCollapsed && variant !== "flat" && (
+                            <TooltipContent
+                                side="right"
+                                className="bg-popover text-popover-foreground rounded-xl text-xs px-2.5 py-1"
+                            >
+                                Cerrar sesión
+                            </TooltipContent>
+                        )}
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
         </motion.div>
     )
 }
 
-// Subcomponent for cleaner rendering
-function NavItem({ route, collapsed, pathname }: { route: any, collapsed: boolean, pathname: string | null }) {
-    const isActive = route.href === '/dashboard'
-        ? pathname === '/dashboard'
-        : pathname?.startsWith(route.href!)
+function NavItem({
+    route,
+    collapsed,
+    pathname,
+}: {
+    route: any
+    collapsed: boolean
+    pathname: string | null
+}) {
+    const isActive =
+        route.href === "/dashboard"
+            ? pathname === "/dashboard"
+            : pathname?.startsWith(route.href!)
 
     return (
         <Tooltip>
@@ -172,44 +271,29 @@ function NavItem({ route, collapsed, pathname }: { route: any, collapsed: boolea
                 <Link
                     href={route.href}
                     className={cn(
-                        "group relative flex items-center rounded-xl px-3 py-2.5 font-medium transition-all duration-300 ease-out",
-                        collapsed ? "justify-center w-12 mx-auto" : "w-full justify-start gap-4",
+                        "group relative flex items-center rounded-2xl px-3.5 py-2.5 font-semibold transition-all duration-200",
+                        collapsed ? "justify-center w-11 h-11 mx-auto p-0" : "w-full justify-start gap-3.5",
                         isActive
-                            ? "bg-background text-primary shadow-xl" // Active: White bg (or dark in dark mode), primary text
-                            : "text-primary-foreground/70 hover:bg-white/10 hover:text-white" // Inactive: Transparent, light text
+                            ? "bg-card text-primary shadow-lg shadow-black/10 dark:bg-primary/20 dark:text-white dark:shadow-none"
+                            : "text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-white/15"
                     )}
                 >
-                    {isActive && (
-                        <motion.div
-                            layoutId="activeStrip"
-                            className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-primary" // Strip inside active item
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                        />
-                    )}
+                    <route.icon
+                        className={cn(
+                            "h-5 w-5 flex-shrink-0 transition-transform duration-200",
+                            isActive
+                                ? "scale-105 text-primary dark:text-white"
+                                : "group-hover:scale-105 text-sidebar-foreground/85"
+                        )}
+                    />
 
-                    <route.icon className={cn(
-                        "h-5 w-5 transition-transform duration-300",
-                        isActive ? "scale-110" : "group-hover:scale-110 opacity-80 group-hover:opacity-100"
-                        // Colors handled by parent text color
-                    )} />
-
-                    {!collapsed && (
-                        <motion.span
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="truncate text-sm tracking-wide"
-                        >
-                            {route.label}
-                        </motion.span>
-                    )}
+                    {!collapsed && <span className="truncate text-sm">{route.label}</span>}
                 </Link>
             </TooltipTrigger>
             {collapsed && (
                 <TooltipContent
                     side="right"
-                    className="bg-primary text-primary-foreground font-medium text-xs px-3 py-1.5 rounded-lg ml-2"
+                    className="bg-popover text-popover-foreground font-semibold text-xs px-3 py-1.5 rounded-xl ml-2 shadow-xl border border-border"
                 >
                     {route.label}
                 </TooltipContent>

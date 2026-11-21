@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
+import { getUserEntitlementsServer } from '@/lib/server/entitlements'
 
 const loanSchema = z.object({
     loanType: z.enum(['LENT', 'BORROWED']),
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
         }
 
         return NextResponse.json(loans.map(mapLoan))
-    } catch (error) {
+    } catch (error: any) {
         // Next.js dynamic usage error detection - MUST re-throw immediately and silently
         if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
             throw error;
@@ -98,6 +99,14 @@ export async function POST(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) return new NextResponse('Unauthorized', { status: 401 })
+
+        const { entitlements } = await getUserEntitlementsServer(supabase, user)
+        if (!entitlements.canAccessPremiumWrite) {
+            return NextResponse.json(
+                { error: 'El módulo de préstamos requiere Plan Premium.', code: 'PREMIUM_REQUIRED' },
+                { status: 403 }
+            )
+        }
 
         const body = await req.json()
         const validData = loanSchema.parse(body)
@@ -246,7 +255,7 @@ export async function POST(req: Request) {
             if (txError) console.error('Error creating loan transaction:', txError)
 
             // Update Balance
-            const { data: acc } = await supabase.from('accounts').select('current_balance').eq('id', validData.accountId).single()
+            const { data: acc } = await supabase.from('accounts').select('current_balance').eq('id', validData.accountId).eq('user_id', user.id).single()
             if (acc) {
                 let newBal = Number(acc.current_balance)
                 if (validData.loanType === 'LENT') newBal -= validData.principalAmount
@@ -256,7 +265,7 @@ export async function POST(req: Request) {
         }
 
         return NextResponse.json({ success: true })
-    } catch (error) {
+    } catch (error: any) {
         // Next.js dynamic usage error detection - MUST re-throw immediately and silently
         if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
             throw error;

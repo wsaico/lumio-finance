@@ -1,28 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { useSettingsStore } from "@/hooks/useSettingsStore"
 import {
     MoreHorizontal,
     Edit2,
@@ -30,214 +8,379 @@ import {
     Copy,
     Pause,
     Play,
-    AlertCircle,
+    AlertTriangle,
     CheckCircle2,
+    ShieldAlert,
     TrendingUp,
+    Flame,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { ConfirmAlertModal } from "@/components/ui/confirm-alert-modal"
+import { useFormat } from "@/hooks/useFormat"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 import { cn } from "@/lib/utils"
+
+export type BudgetStatus =
+    | "healthy"
+    | "warning"
+    | "danger"
+    | "critical"
+    | "exceeded"
+    | "goal-achieved"
+
+export function getBudgetStatus(percentage: number, type: "EXPENSE" | "SAVINGS"): BudgetStatus {
+    if (type === "SAVINGS") {
+        if (percentage >= 100) return "goal-achieved"
+        if (percentage >= 65) return "warning"
+        return "healthy"
+    }
+    if (percentage > 100) return "exceeded"
+    if (percentage >= 90) return "critical"
+    if (percentage >= 80) return "danger"
+    if (percentage >= 65) return "warning"
+    return "healthy"
+}
 
 interface BudgetCardPremiumProps {
     budget: any
+    monthProgressPct?: number
+    daysRemainingInMonth?: number
     onEdit?: (budget: any) => void
-    onDelete?: (id: string) => void
-    onDuplicate?: (budget: any) => void
-    onToggleActive?: (id: string, isActive: boolean) => void
-    onRefresh?: () => void
-}
-
-type BudgetStatus = 'healthy' | 'warning' | 'danger' | 'critical' | 'exceeded' | 'goal-achieved'
-
-function getBudgetStatus(percentage: number, type: 'EXPENSE' | 'SAVINGS'): BudgetStatus {
-    if (type === 'EXPENSE') {
-        if (percentage > 100) return 'exceeded'
-        if (percentage >= 90) return 'critical'
-        if (percentage >= 80) return 'danger'
-        if (percentage >= 60) return 'warning'
-        return 'healthy'
-    } else {
-        if (percentage >= 100) return 'goal-achieved'
-        return 'healthy'
-    }
+    onDelete?: (id: string) => Promise<void> | void
+    onDuplicate?: (budget: any) => Promise<void> | void
+    onToggleActive?: (id: string, isActive: boolean) => Promise<void> | void
 }
 
 export function BudgetCardPremium({
     budget,
+    monthProgressPct = 50,
+    daysRemainingInMonth = 1,
     onEdit,
     onDelete,
     onDuplicate,
     onToggleActive,
-    onRefresh
 }: BudgetCardPremiumProps) {
-    const { currencyCode } = useSettingsStore()
+    const { formatMoney } = useFormat()
+    const { currencyCode, isBalanceVisible, budgetTotalType } = useSettingsStore()
+    const showSpentPrimary = budgetTotalType === "spent"
     const [showDeleteDialog, setShowDeleteDialog] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
-    const { stats } = budget
 
-    const symbolMap: Record<string, string> = { 'PEN': 'S/.', 'USD': '$', 'EUR': '€', 'MXN': '$' }
-    const symbol = symbolMap[currencyCode] || '$'
+    const budgetCurrency = budget.currencyCode || currencyCode || "PEN"
+    const money = (val: number) =>
+        isBalanceVisible ? formatMoney(val, budgetCurrency) : "••••••"
 
-    const percentage = stats?.percentage || 0
-    const spent = stats?.spent || 0
-    const remaining = stats?.remaining || 0
-    const limit = Number(budget.amount)
+    const stats = budget.stats || {}
+    const limit = Math.max(0, Number(budget.amount || 0))
+    const spent = Math.max(0, Number(stats.spent ?? budget.spent ?? 0))
+    const percentage =
+        typeof stats.percentage === "number"
+            ? stats.percentage
+            : limit > 0
+              ? (spent / limit) * 100
+              : 0
+    const remaining =
+        typeof stats.remaining === "number" ? stats.remaining : limit - spent
 
-    const status = getBudgetStatus(percentage, budget.type)
+    const isExpense = budget.type !== "SAVINGS"
+    const status = getBudgetStatus(percentage, isExpense ? "EXPENSE" : "SAVINGS")
 
-    // Modern "Finance App" aesthetic colors
-    // We move away from pure "Traffic Light" colors to more sophisticated shades
-    let accentColor = budget.color
+    // Safe daily allowance for active expense budgets
+    const safeDaily =
+        isExpense && remaining > 0 && daysRemainingInMonth > 0
+            ? remaining / daysRemainingInMonth
+            : 0
 
-    // Override color based on critical status, but keep user color if healthy
-    if (budget.type === 'EXPENSE') {
-        if (status === 'exceeded') accentColor = '#ef4444' // Red 500
-        else if (status === 'critical') accentColor = '#f97316' // Orange 500
-        else if (status === 'warning') accentColor = '#eab308' // Yellow 500
-    }
+    // Pace check: spending faster than calendar progress?
+    const isAheadOfPace =
+        isExpense && budget.isActive && percentage > monthProgressPct + 12 && percentage <= 100
 
-    const handleDelete = async () => {
+    const statusMeta = !budget.isActive
+        ? {
+              label: "Pausado",
+              badge: "bg-muted text-muted-foreground border-border/60",
+              barColor: "#94a3b8",
+              icon: Pause,
+          }
+        : status === "exceeded"
+          ? {
+                label: "Excedido",
+                badge: "bg-rose-500/12 text-rose-600 dark:text-rose-400 border-rose-500/25",
+                barColor: "#f43f5e",
+                icon: ShieldAlert,
+            }
+          : status === "critical"
+            ? {
+                  label: "Crítico",
+                  badge: "bg-orange-500/12 text-orange-600 dark:text-orange-400 border-orange-500/25",
+                  barColor: "#f97316",
+                  icon: AlertTriangle,
+              }
+            : status === "danger"
+              ? {
+                    label: "En riesgo",
+                    badge: "bg-amber-500/12 text-amber-600 dark:text-amber-400 border-amber-500/25",
+                    barColor: "#f59e0b",
+                    icon: AlertTriangle,
+                }
+              : status === "warning" && isExpense
+                ? {
+                      label: "Atención",
+                      badge: "bg-yellow-500/12 text-yellow-700 dark:text-yellow-400 border-yellow-500/25",
+                      barColor: "#eab308",
+                      icon: AlertTriangle,
+                  }
+                : status === "goal-achieved"
+                ? {
+                      label: "Meta lograda",
+                      badge: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+                      barColor: "#10b981",
+                      icon: CheckCircle2,
+                  }
+                : {
+                      label: isExpense ? "En control" : "En progreso",
+                      badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+                      barColor: budget.color || "#7C5CFC",
+                      icon: isExpense ? CheckCircle2 : TrendingUp,
+                  }
+
+    const StatusIcon = statusMeta.icon
+
+    const handleConfirmDelete = async () => {
         setIsDeleting(true)
         try {
-            await fetch(`/api/budgets/${budget.id}`, { method: 'DELETE' })
-            onDelete?.(budget.id)
-            onRefresh?.()
-        } catch (error) {
-            // Error handling
+            await onDelete?.(budget.id)
         } finally {
             setIsDeleting(false)
             setShowDeleteDialog(false)
         }
     }
 
-    const handleToggleActive = async () => {
-        try {
-            await fetch(`/api/budgets/${budget.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive: !budget.isActive })
-            })
-            onToggleActive?.(budget.id, !budget.isActive)
-            onRefresh?.()
-        } catch (error) { }
-    }
-
-    const formatMoney = (amount: number) => {
-        return `${symbol}${Math.abs(amount).toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-    }
-
     return (
         <>
-            <Card className={cn(
-                "group relative overflow-hidden transition-all duration-300 hover:shadow-md border-border/50 bg-card/50 backdrop-blur-sm",
-                !budget.isActive && "opacity-60 grayscale-[0.5]"
-            )}>
-                {/* Thin Accent Line - Elegant Indicator */}
+            <div
+                className={cn(
+                    "card-modern p-5 flex flex-col justify-between gap-4 relative overflow-hidden transition-all duration-300",
+                    !budget.isActive && "opacity-65 saturate-50"
+                )}
+            >
+                {/* Top subtle accent stripe */}
                 <div
-                    className="absolute top-0 left-0 w-1 h-full opacity-80 transition-all group-hover:opacity-100"
-                    style={{ backgroundColor: accentColor }}
+                    className="absolute top-0 inset-x-0 h-1"
+                    style={{ backgroundColor: statusMeta.barColor }}
                 />
 
-                <CardContent className="p-5 pl-6 space-y-5">
-                    {/* Header: Name + Actions */}
-                    <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                            <h3 className="font-semibold text-base tracking-tight text-foreground/90 truncate pr-4">
+                {/* HEADER */}
+                <div className="flex items-start justify-between gap-3 pt-1">
+                    <div className="min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                            <span
+                                className="h-2.5 w-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: budget.color || "#7c5cfc" }}
+                            />
+                            <h3 className="text-base font-extrabold text-foreground tracking-tight truncate">
                                 {budget.name}
                             </h3>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground/80 font-medium">
-                                <span className={cn(
-                                    "px-1.5 py-0.5 rounded-[4px] bg-secondary text-secondary-foreground text-[10px] tracking-wide uppercase",
-                                    !budget.isActive && "bg-muted"
-                                )}>
-                                    {budget.isActive ? (budget.period === 'MONTHLY' ? 'Mensual' : 'Personal') : 'Pausado'}
-                                </span>
-                                {status === 'exceeded' && (
-                                    <span className="text-red-500 flex items-center gap-1">
-                                        <AlertCircle className="w-3 h-3" /> Excedido
-                                    </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                                className={cn(
+                                    "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
+                                    statusMeta.badge
                                 )}
-                            </div>
-                        </div>
-
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground/50 hover:text-foreground">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
-                                <DropdownMenuItem onClick={() => onEdit?.(budget)}><Edit2 className="mr-2 h-3.5 w-3.5" /> Editar</DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleToggleActive}>
-                                    {budget.isActive ? <><Pause className="mr-2 h-3.5 w-3.5" /> Pausar</> : <><Play className="mr-2 h-3.5 w-3.5" /> Activar</>}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive focus:text-destructive">
-                                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-
-                    {/* Main Numbers: Left-Aligned for quick scanning */}
-                    <div className="space-y-1">
-                        <div className="flex items-baseline gap-2">
-                            {/* Primary Number: AVAILABLE (Psychological Safety) or SPENT? 
-                                Expert View: "Available" is actionable. "Spent" is historical.
-                                Let's show AVAILABLE big if healthy, OVERSPENT big if not.
-                             */}
-                            <span className={cn(
-                                "text-2xl font-bold tracking-tight title-font",
-                                status === 'exceeded' ? "text-red-500" : "text-foreground"
-                            )}>
-                                {formatMoney(remaining)}
+                            >
+                                <StatusIcon className="h-3 w-3" />
+                                {statusMeta.label}
                             </span>
-                            <span className="text-sm font-medium text-muted-foreground/70">
-                                {remaining >= 0 ? 'disponibles' : 'excedidos'}
+                            <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold">
+                                {budget.period === "MONTHLY" ? "Mensual" : "Personalizado"}
                             </span>
-                        </div>
-
-                        {/* Context: Total Spend */}
-                        <div className="text-xs text-muted-foreground font-medium flex justify-between items-center">
-                            <span>Gastado: {formatMoney(spent)}</span>
-                            <span>Límite: {formatMoney(limit)}</span>
+                            {isAheadOfPace && (
+                                <span
+                                    title="Tu ritmo de gasto va por encima del avance del mes"
+                                    className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold"
+                                >
+                                    <Flame className="h-3 w-3" />
+                                    Ritmo alto
+                                </span>
+                            )}
                         </div>
                     </div>
 
-                    {/* Minimalist Progress Bar */}
-                    <div className="space-y-1.5">
-                        <Progress
-                            value={Math.min(percentage, 100)}
-                            className="h-1.5 bg-secondary" // Ultra thin, classy
-                            indicatorColor={accentColor}
-                        />
-                        <div className="flex justify-between items-center text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
-                            <span>{percentage.toFixed(0)}%</span>
-                            {/* Smart Status Label */}
-                            <span className={cn(
-                                status === 'exceeded' && "text-red-500",
-                                status === 'warning' && "text-amber-500",
-                                status === 'healthy' && "text-emerald-500"
-                            )}>
-                                {status === 'healthy' ? 'En orden' :
-                                    status === 'exceeded' ? 'Atención' :
-                                        status === 'goal-achieved' ? 'Completado' : 'Cuidado'}
-                            </span>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Opciones del presupuesto"
+                                className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-2xl p-1.5 w-44">
+                            <DropdownMenuItem
+                                className="rounded-xl text-xs font-semibold cursor-pointer"
+                                onClick={() => onEdit?.(budget)}
+                            >
+                                <Edit2 className="h-3.5 w-3.5 mr-2" />
+                                Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="rounded-xl text-xs font-semibold cursor-pointer"
+                                onClick={() => onDuplicate?.(budget)}
+                            >
+                                <Copy className="h-3.5 w-3.5 mr-2" />
+                                Duplicar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="rounded-xl text-xs font-semibold cursor-pointer"
+                                onClick={() => onToggleActive?.(budget.id, !budget.isActive)}
+                            >
+                                {budget.isActive ? (
+                                    <>
+                                        <Pause className="h-3.5 w-3.5 mr-2" />
+                                        Pausar
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="h-3.5 w-3.5 mr-2" />
+                                        Reanudar
+                                    </>
+                                )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                className="rounded-xl text-xs font-semibold text-destructive focus:text-destructive cursor-pointer"
+                                onClick={() => setShowDeleteDialog(true)}
+                            >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Eliminar
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
 
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Eliminar presupuesto?</AlertDialogTitle>
-                        <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                {/* MAIN METRIC: REMAINING OR EXCEEDED */}
+                <div className="flex items-end justify-between gap-2">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            {isExpense
+                                ? showSpentPrimary
+                                    ? "Gastado"
+                                    : remaining >= 0
+                                      ? "Disponible"
+                                      : "Excedido por"
+                                : "Acumulado"}
+                        </p>
+                        <p
+                            className={cn(
+                                "text-2xl font-black tracking-tight tabular-nums leading-tight mt-0.5",
+                                isExpense && remaining < 0
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-foreground"
+                            )}
+                        >
+                            {money(
+                                isExpense
+                                    ? showSpentPrimary
+                                        ? spent
+                                        : Math.abs(remaining)
+                                    : spent
+                            )}
+                        </p>
+                    </div>
+
+                    <div className="text-right">
+                        <span
+                            className={cn(
+                                "text-sm font-black tabular-nums",
+                                status === "exceeded"
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : status === "critical"
+                                      ? "text-orange-600 dark:text-orange-400"
+                                      : "text-primary"
+                            )}
+                        >
+                            {Math.round(percentage)}%
+                        </span>
+                        <p className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                            de {money(limit)}
+                        </p>
+                    </div>
+                </div>
+
+                {/* PROGRESS BAR WITH "TODAY" PACE MARKER */}
+                <div className="space-y-2">
+                    <div className="relative h-2.5 w-full rounded-full bg-muted overflow-visible">
+                        <div className="h-full w-full rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-all duration-700"
+                                style={{
+                                    width: `${Math.min(100, Math.max(0, percentage))}%`,
+                                    backgroundColor: statusMeta.barColor,
+                                }}
+                            />
+                        </div>
+                        {/* Calendar Pace Tick ("Hoy") for monthly active expense budgets */}
+                        {isExpense && budget.isActive && budget.period === "MONTHLY" && (
+                            <div
+                                title={`Avance del mes: ${Math.round(monthProgressPct)}%`}
+                                className="absolute top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-full bg-foreground/60 shadow-xs pointer-events-none"
+                                style={{ left: `${Math.min(98, Math.max(2, monthProgressPct))}%` }}
+                            />
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground tabular-nums">
+                        <span>
+                            {isExpense ? (showSpentPrimary ? "Disponible: " : "Gastado: ") : "Meta: "}
+                            <strong className="text-foreground">
+                                {money(
+                                    isExpense
+                                        ? showSpentPrimary
+                                            ? Math.max(0, remaining)
+                                            : spent
+                                        : limit
+                                )}
+                            </strong>
+                        </span>
+                        {isExpense && budget.isActive && remaining > 0 && (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                {money(safeDaily)}/día
+                            </span>
+                        )}
+                        {isExpense && remaining < 0 && (
+                            <span className="text-rose-600 dark:text-rose-400 font-bold">
+                                Límite superado
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <ConfirmAlertModal
+                open={showDeleteDialog}
+                onOpenChange={setShowDeleteDialog}
+                variant="danger"
+                title="¿Eliminar presupuesto?"
+                description={
+                    <>
+                        Esta acción no se puede deshacer. Se eliminará &ldquo;{budget.name}&rdquo;. Tus transacciones no serán afectadas.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                isLoading={isDeleting}
+                onConfirm={handleConfirmDelete}
+            />
         </>
     )
 }

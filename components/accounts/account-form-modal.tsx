@@ -46,6 +46,8 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { useAccounts } from "@/hooks/useAccounts"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import { CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies"
 import { BANK_PRESETS } from "@/lib/constants/banks"
 import { cn } from "@/lib/utils"
 
@@ -65,6 +67,7 @@ interface Account {
     customBankName?: string | null
     lastFourDigits?: string | null
     creditLimit?: any
+    usedBalance?: any
     closingDay?: number | null
     paymentDueDay?: number | null
     cardNetwork?: string | null
@@ -73,23 +76,24 @@ interface Account {
 }
 
 const formSchema = z.object({
-    name: z.string().min(1, "El nombre es requerido"),
+    name: z.string().trim().min(1, "Ponle un nombre a tu cuenta para reconocerla fácil"),
     type: z.enum(["CASH", "BANK", "DIGITAL", "INVESTMENT", "PETTY_CASH", "CREDIT_CARD"]),
-    currency: z.string().length(3, "Código de moneda de 3 letras"),
-    balance: z.string().refine((val) => !isNaN(Number(val)), {
-        message: "Debe ser un número válido",
+    currency: z.string().length(3, "Elige la moneda de esta cuenta"),
+    balance: z.string().refine((val) => val === "" || !isNaN(Number(val)), {
+        message: "Escribe un monto válido, por ejemplo 150.50",
     }).optional(),
+    usedBalance: z.string().optional(),
     fixedFund: z.string().optional(),
     color: z.string().optional(),
     icon: z.string().optional(),
     bankName: z.string().optional(),
-    accountNumber: z.string().optional().refine((val) => !val || val.length === 4, {
-        message: "Debe tener exactamente 4 dígitos"
+    accountNumber: z.string().optional().refine((val) => !val || /^\d{4}$/.test(val), {
+        message: "Son solo 4 dígitos, sin letras ni espacios"
     }),
     customBankName: z.string().optional(),
     // Credit Card fields
-    lastFourDigits: z.string().optional().refine((val) => !val || val.length === 4, {
-        message: "Debe tener exactamente 4 dígitos"
+    lastFourDigits: z.string().optional().refine((val) => !val || /^\d{4}$/.test(val), {
+        message: "Son solo 4 dígitos, sin letras ni espacios"
     }),
     creditLimit: z.string().optional(),
     closingDay: z.string().optional(),
@@ -97,15 +101,28 @@ const formSchema = z.object({
     cardNetwork: z.enum(["VISA", "MASTERCARD", "AMEX", "DISCOVER", "OTHER"]).optional(),
     interestRate: z.string().optional(),
     minPaymentPercent: z.string().optional()
-}).refine((data) => {
-    // If bankName is "custom", customBankName is required
-    if (data.bankName === "custom") {
-        return data.customBankName && data.customBankName.trim().length > 0
+}).superRefine((data, ctx) => {
+    if (data.bankName === "custom" && !(data.customBankName && data.customBankName.trim().length > 0)) {
+        ctx.addIssue({ code: "custom", path: ["customBankName"], message: "Escribe el nombre de tu banco" })
     }
-    return true
-}, {
-    message: "El nombre del banco personalizado es requerido",
-    path: ["customBankName"]
+    if (data.type === "CREDIT_CARD") {
+        const limit = Number(data.creditLimit)
+        if (!data.creditLimit || isNaN(limit) || limit <= 0) {
+            ctx.addIssue({ code: "custom", path: ["creditLimit"], message: "Indica la línea de crédito de tu tarjeta" })
+        }
+        const used = data.usedBalance ? Number(data.usedBalance) : 0
+        if (isNaN(used) || used < 0) {
+            ctx.addIssue({ code: "custom", path: ["usedBalance"], message: "La deuda no puede ser negativa" })
+        } else if (!isNaN(limit) && limit > 0 && used > limit) {
+            ctx.addIssue({ code: "custom", path: ["usedBalance"], message: "La deuda no puede superar tu línea de crédito" })
+        }
+        for (const key of ["closingDay", "paymentDueDay"] as const) {
+            const v = data[key]
+            if (v && (!Number.isInteger(Number(v)) || Number(v) < 1 || Number(v) > 31)) {
+                ctx.addIssue({ code: "custom", path: [key], message: "Elige un día entre 1 y 31" })
+            }
+        }
+    }
 })
 
 interface AccountFormModalProps {
@@ -124,6 +141,8 @@ export function AccountFormModal({ account, trigger, open: controlledOpen, onOpe
     const [openCombobox, setOpenCombobox] = useState(false)
 
     const { createAccount, updateAccount } = useAccounts()
+    const { currencyCode: baseCurrency } = useSettingsStore()
+    const defaultCurrency = baseCurrency || DEFAULT_CURRENCY
     const isEdit = !!account
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -131,8 +150,9 @@ export function AccountFormModal({ account, trigger, open: controlledOpen, onOpe
         defaultValues: {
             name: "",
             type: "BANK",
-            currency: "PEN",
+            currency: defaultCurrency,
             balance: "0",
+            usedBalance: "",
             fixedFund: "0",
             color: "#0ea5e9",
             icon: "wallet",
@@ -152,7 +172,8 @@ export function AccountFormModal({ account, trigger, open: controlledOpen, onOpe
                 name: account.name,
                 type: account.accountType as any,
                 currency: account.currencyCode,
-                balance: account.initialBalance.toString(),
+                balance: account.initialBalance?.toString() ?? "0",
+                usedBalance: account.usedBalance ? account.usedBalance.toString() : "",
                 fixedFund: account.fixedFundAmount ? account.fixedFundAmount.toString() : "0",
                 color: account.color,
                 icon: account.icon,
@@ -171,12 +192,9 @@ export function AccountFormModal({ account, trigger, open: controlledOpen, onOpe
             form.reset({
                 name: "",
                 type: "BANK",
-                currency: "PEN",
+                currency: defaultCurrency,
                 balance: "0",
-                fixedFund: "0",
-                color: "#0ea5e9",
-                icon: "wallet",
-                bankName: undefined,
+                usedBalance: "",
                 accountNumber: "",
                 customBankName: undefined,
                 lastFourDigits: "",

@@ -1,28 +1,25 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AccountSelect } from "@/components/accounts/account-select"
+import { Textarea } from "@/components/ui/textarea"
 import { useAccounts } from "@/hooks/useAccounts"
 import { useFormat } from "@/hooks/useFormat"
 import { useBalanceValidation } from "@/hooks/useBalanceValidation"
-import { BalanceAlert } from "@/components/ui/balance-alert"
-import { BalancePreview } from "@/components/ui/balance-preview"
-import { DollarSign, Wallet, AlertCircle, CheckCircle2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { getCurrencySymbol } from "@/lib/currencies"
+import { cn, formatAccountPillName } from "@/lib/utils"
+import { DollarSign, Wallet, AlertCircle, Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { showAppToast } from "@/components/ui/app-alert-toast"
 
 interface PaymentModalProps {
     open: boolean
@@ -34,7 +31,7 @@ interface PaymentModalProps {
         outstandingBalance: number
         totalPendingAmount?: number
         currencyCode: string
-        type: 'RECEIVABLE' | 'PAYABLE'
+        type: "RECEIVABLE" | "PAYABLE"
         paymentFrequency?: string
         nextInstallment?: {
             number: number
@@ -52,408 +49,458 @@ export interface PaymentFormData {
     principalAmount: number
     interestAmount: number
     accountId: string
-    paymentMethod?: 'CASH' | 'TRANSFER' | 'CHECK' | 'CARD' | 'OTHER'
+    paymentMethod?: "CASH" | "TRANSFER" | "CHECK" | "CARD" | "OTHER"
     notes?: string
+}
+
+const PAYMENT_METHODS = [
+    { id: "TRANSFER", label: "Transferencia" },
+    { id: "CASH", label: "Efectivo" },
+    { id: "CARD", label: "Tarjeta" },
+    { id: "OTHER", label: "Otro" },
+] as const
+
+function inferMethodFromAccount(acc?: any): "CASH" | "TRANSFER" | "CARD" | "OTHER" {
+    const type = String(acc?.accountType || "").toUpperCase()
+    if (type === "CASH" || type === "WALLET" || type === "PETTY_CASH") return "CASH"
+    if (type === "CREDIT_CARD" || type === "DEBIT_CARD" || type === "CARD") return "CARD"
+    return "TRANSFER"
 }
 
 export function PaymentModal({ open, onClose, onSubmit, loan, isLoading }: PaymentModalProps) {
     const { formatMoney } = useFormat()
-    const { accounts, isLoading: accountsLoading } = useAccounts()
+    const { accounts = [] } = useAccounts()
+    const initializedKeyRef = useRef<string | null>(null)
+    const userPickedMethodRef = useRef(false)
 
     const [formData, setFormData] = useState<PaymentFormData>({
         paymentAmount: 0,
         principalAmount: 0,
         interestAmount: 0,
-        accountId: '',
-        paymentMethod: 'TRANSFER',
-        notes: '',
+        accountId: "",
+        paymentMethod: "TRANSFER",
+        notes: "",
     })
 
-    const [showDetails, setShowDetails] = useState(false)
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    // Reset form when modal opens/closes or loan changes
+    const filteredAccounts = (accounts as any[]).filter(
+        (acc) => acc.currencyCode === loan?.currencyCode
+    )
+    const displayAccounts = filteredAccounts.length > 0 ? filteredAccounts : (accounts as any[])
+
+    // Initialize ONCE per modal open + loan.id (never resets on parent re-render or isLoading change!)
     useEffect(() => {
-        if (open && loan) {
-            // Smart Logic: If there is a next installment, suggest that amount
-            // Otherwise, suggest full balance
-            const suggestedAmount = loan.nextInstallment
-                ? loan.nextInstallment.amount
-                : loan.outstandingBalance
-
-            setFormData({
-                paymentAmount: suggestedAmount,
-                principalAmount: loan.nextInstallment ? loan.nextInstallment.principal : loan.outstandingBalance,
-                interestAmount: loan.nextInstallment ? loan.nextInstallment.interest : 0,
-                accountId: '',
-                paymentMethod: 'TRANSFER',
-                notes: loan.nextInstallment ? `Cuota #${loan.nextInstallment.number}` : '',
-            })
-            setShowDetails(false)
-            setErrors({})
+        if (!open) {
+            initializedKeyRef.current = null
+            userPickedMethodRef.current = false
+            return
         }
-    }, [open, loan])
+        if (!loan) return
 
-    // Balance validation (only for PAYABLE - when paying debt, balance decreases)
-    // For RECEIVABLE (collecting), balance increases so no validation needed
+        const key = `${loan.id}:${loan.nextInstallment?.number ?? "none"}:${loan.outstandingBalance}`
+        if (initializedKeyRef.current === key) return
+        initializedKeyRef.current = key
+        userPickedMethodRef.current = false
+
+        const suggestedAmount = loan.nextInstallment
+            ? loan.nextInstallment.amount
+            : loan.outstandingBalance
+        const matchingAcc =
+            (accounts as any[]).find((acc) => acc.currencyCode === loan.currencyCode) ||
+            (accounts as any[])[0]
+
+        setFormData({
+            paymentAmount: suggestedAmount,
+            principalAmount: loan.nextInstallment
+                ? loan.nextInstallment.principal
+                : loan.outstandingBalance,
+            interestAmount: loan.nextInstallment ? loan.nextInstallment.interest : 0,
+            accountId: matchingAcc?.id || "",
+            paymentMethod: inferMethodFromAccount(matchingAcc),
+            notes: loan.nextInstallment ? `Cuota #${loan.nextInstallment.number}` : "",
+        })
+        setErrors({})
+    }, [open, loan, accounts])
+
+    // If accounts load slightly after modal opens and no accountId was selected yet
+    useEffect(() => {
+        if (open && loan && !formData.accountId && (accounts as any[]).length > 0) {
+            const matchingAcc =
+                (accounts as any[]).find((acc) => acc.currencyCode === loan.currencyCode) ||
+                (accounts as any[])[0]
+            if (matchingAcc) {
+                setFormData((prev) => ({
+                    ...prev,
+                    accountId: matchingAcc.id,
+                    paymentMethod: userPickedMethodRef.current
+                        ? prev.paymentMethod
+                        : inferMethodFromAccount(matchingAcc),
+                }))
+            }
+        }
+    }, [open, loan, formData.accountId, accounts])
+
     const balanceValidation = useBalanceValidation(
-        loan && loan.type !== 'RECEIVABLE' ? formData.accountId : undefined,
-        loan && loan.type !== 'RECEIVABLE' ? formData.paymentAmount : 0,
-        accounts?.map((a: any) => ({
+        loan && loan.type !== "RECEIVABLE" ? formData.accountId : undefined,
+        loan && loan.type !== "RECEIVABLE" ? formData.paymentAmount : 0,
+        (accounts as any[]).map((a) => ({
             id: a.id,
             name: a.name,
-            balance: a.currentBalance,
-            currencyCode: a.currencyCode
+            currentBalance: Number(a.currentBalance ?? 0),
+            accountType: a.accountType || "BANK",
+            creditLimit: a.creditLimit,
+            usedBalance: a.usedBalance,
+            currencyCode: a.currencyCode,
         }))
     )
 
     if (!loan) return null
 
-    const isReceivable = loan.type === 'RECEIVABLE'
+    const isReceivable = loan.type === "RECEIVABLE"
+    const symbol = getCurrencySymbol(loan.currencyCode)
+    const selectedAccount = (accounts as any[]).find((a) => a.id === formData.accountId)
+    const currentAccBal = Number(selectedAccount?.currentBalance ?? 0)
+    const projectedAccBal = isReceivable
+        ? currentAccBal + formData.paymentAmount
+        : currentAccBal - formData.paymentAmount
+    const remainingAfterPayment = Math.max(
+        0,
+        loan.outstandingBalance - (formData.principalAmount || 0)
+    )
 
-    // Get selected account for preview
-    const selectedAccount = accounts?.find((a: any) => a.id === formData.accountId)
+    const setAmountSmart = (val: number, customPrincipal?: number, customInterest?: number) => {
+        const safe = Math.max(0, Number(val) || 0)
+        setFormData((prev) => ({
+            ...prev,
+            paymentAmount: safe,
+            principalAmount:
+                customPrincipal !== undefined
+                    ? customPrincipal
+                    : Math.min(safe, loan.outstandingBalance),
+            interestAmount:
+                customInterest !== undefined
+                    ? customInterest
+                    : Math.max(0, safe - loan.outstandingBalance),
+        }))
+        setErrors((prev) => ({ ...prev, paymentAmount: "" }))
+    }
 
-    // Validation
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {}
 
         if (formData.paymentAmount <= 0) {
-            newErrors.paymentAmount = 'El monto debe ser mayor a 0'
+            newErrors.paymentAmount = "El monto debe ser mayor a 0"
         }
 
-        // Fix: Allow paymentAmount to exceed outstandingBalance IF it's due to interest.
-        // The real limit is: Principal Component <= Outstanding Balance
         const principalComponent = formData.principalAmount || formData.paymentAmount
-
-        if (principalComponent > (loan.outstandingBalance + 0.01)) { // Small buffer
-            newErrors.paymentAmount = 'El abono a capital excede el saldo pendiente'
+        if (principalComponent > loan.outstandingBalance + 0.01) {
+            newErrors.paymentAmount = "El abono a capital excede el saldo pendiente"
         }
 
         if (!formData.accountId) {
-            newErrors.accountId = 'Debes seleccionar una cuenta'
+            newErrors.accountId = "Selecciona una cuenta"
         }
 
-        // Balance validation for PAYABLE (paying debt)
         if (!isReceivable && balanceValidation && !balanceValidation.valid) {
-            newErrors.paymentAmount = balanceValidation.message || 'Saldo insuficiente'
+            newErrors.paymentAmount = balanceValidation.message || "Saldo insuficiente"
         }
 
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
 
-    const handleSubmit = async () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (accounts.length === 0) {
+            showAppToast.warning({
+                title: "Primero crea una cuenta",
+                description: "Necesitas al menos una cuenta activa para registrar un pago.",
+                actionLabel: "Crear cuenta",
+                onAction: () => {
+                    onClose()
+                    if (typeof window !== "undefined") window.location.href = "/dashboard/accounts"
+                },
+            })
+            return
+        }
         if (!formData.accountId) {
-            toast.error("Por favor selecciona una cuenta")
-            setErrors(prev => ({ ...prev, accountId: "Por favor selecciona una cuenta" }));
+            showAppToast.warning({
+                title: "Selecciona una cuenta",
+                description: "Elige la cuenta donde se aplicará este pago.",
+            })
             return
         }
-
-        if (formData.paymentAmount <= 0) {
-            toast.error("El monto debe ser mayor a 0")
-            setErrors(prev => ({ ...prev, paymentAmount: "El monto debe ser mayor a 0" }));
-            return
-        }
-
         if (validate()) {
             onSubmit(formData)
         }
     }
 
-    const isFullPayment = formData.paymentAmount === loan.outstandingBalance
-    // Fix: Remaining balance should strictly subtract PRINCIPAL, not total payment (which may include interest)
-    const remainingAfterPayment = loan.outstandingBalance - (formData.principalAmount || 0)
-
-    // Filter accounts by currency
-    const filteredAccounts = (accounts as any)?.filter((acc: any) => acc.currencyCode === loan.currencyCode) || []
-
     return (
-        <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-0 shadow-2xl bg-zinc-50 dark:bg-zinc-950 flex flex-col max-h-[90vh]">
-                <DialogHeader className={cn(
-                    "p-6 text-white bg-gradient-to-r shrink-0",
-                    isReceivable
-                        ? "from-blue-600 to-cyan-600"
-                        : "from-orange-500 to-amber-600"
-                )}>
-                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                        {isReceivable ? <Wallet className="h-6 w-6" /> : <DollarSign className="h-6 w-6" />}
-                        {isReceivable ? 'Registrar Cobro' : 'Registrar Pago'}
-                    </DialogTitle>
-                    <DialogDescription className="text-blue-100/90 text-sm mt-1">
-                        {isReceivable
-                            ? `Registrando ingreso de ${loan.contactName}`
-                            : `Registrando egreso para ${loan.contactName}`
-                        }
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="p-6 space-y-6 overflow-y-auto flex-1">
-
-                    {/* Smart Context Banner */}
-                    {loan.paymentFrequency && loan.paymentFrequency !== 'SINGLE' && (
-                        <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 p-3 rounded-xl flex items-center justify-between mb-2">
-                            <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400">Frecuencia de Pago</span>
-                                <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                                    {loan.paymentFrequency === 'WEEKLY' ? 'Semanal' :
-                                        loan.paymentFrequency === 'BIWEEKLY' ? 'Quincenal' :
-                                            loan.paymentFrequency === 'MONTHLY' ? 'Mensual' : loan.paymentFrequency}
-                                </span>
-                            </div>
-                            {loan.nextInstallment && (
-                                <div className="text-right">
-                                    <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block">Siguiente Cuota</span>
-                                    <Badge className="bg-emerald-500 hover:bg-emerald-600 border-0">
-                                        Cuota #{loan.nextInstallment.number}
-                                    </Badge>
-                                </div>
-                            )}
-                        </div>
+        <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+            <DialogContent className="sm:max-w-[470px] p-0 overflow-hidden border-0 shadow-2xl bg-card rounded-[1.75rem] max-h-[90dvh] flex flex-col">
+                {/* Gradient Header */}
+                <div
+                    className={cn(
+                        "p-5 text-white shrink-0 bg-gradient-to-br",
+                        isReceivable
+                            ? "from-indigo-600 via-blue-600 to-indigo-700"
+                            : "from-amber-500 via-orange-500 to-rose-500"
                     )}
+                >
+                    <DialogHeader className="text-left">
+                        <div className="flex items-center gap-1.5 text-white/80 text-[11px] font-bold uppercase tracking-wider mb-1">
+                            {isReceivable ? (
+                                <Wallet className="h-3.5 w-3.5" />
+                            ) : (
+                                <DollarSign className="h-3.5 w-3.5" />
+                            )}
+                            {isReceivable ? "Cobro de préstamo" : "Pago de deuda"}
+                        </div>
+                        <DialogTitle className="text-xl font-black tracking-tight text-white truncate">
+                            {loan.contactName}
+                        </DialogTitle>
+                        <DialogDescription className="text-white/85 text-xs mt-0.5">
+                            Saldo pendiente:{" "}
+                            <strong className="text-white">
+                                {formatMoney(loan.outstandingBalance, loan.currencyCode)}
+                            </strong>
+                        </DialogDescription>
+                    </DialogHeader>
+                </div>
 
-                    {/* Amount Input Section */}
-                    <div className="space-y-4">
+                {/* Form Body */}
+                <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+                    {/* Amount Input + Quick Chips */}
+                    <div className="space-y-2">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                            Monto a {isReceivable ? "cobrar" : "pagar"} ({loan.currencyCode})
+                        </Label>
                         <div className="relative">
-                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1 mb-1.5 flex justify-between">
-                                <span>Monto a {isReceivable ? 'Cobrar' : 'Pagar'}</span>
-                                {loan.nextInstallment && (
-                                    <span className="text-primary font-bold animate-pulse">
-                                        Cuota #{loan.nextInstallment.number}
-                                    </span>
-                                )}
-                            </Label>
-                            <div className="relative group">
-                                <span className={cn(
-                                    "absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold transition-colors",
-                                    isReceivable ? "text-blue-600" : "text-orange-500"
-                                )}>
-                                    {loan.currencyCode === 'PEN' ? 'S/.' : loan.currencyCode === 'USD' ? '$' : loan.currencyCode === 'EUR' ? '€' : '$'}
-                                </span>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max={loan.outstandingBalance * 2}
-                                    value={formData.paymentAmount || ''}
-                                    onChange={(e) => {
-                                        const val = parseFloat(e.target.value) || 0
-                                        setFormData({
-                                            ...formData,
-                                            paymentAmount: val,
-                                            principalAmount: Math.min(val, loan.outstandingBalance),
-                                            interestAmount: Math.max(0, val - loan.outstandingBalance)
-                                        })
-                                    }}
-                                    className="pl-12 h-16 text-3xl font-bold bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm focus-visible:ring-0 focus-visible:border-primary transition-all rounded-xl"
-                                    placeholder="0.00"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    // Use totalPendingAmount if available, else standard balance
-                                    // 50% of the TOTAL DEBT (Principal + Interest)
-                                    const baseAmount = loan.totalPendingAmount || loan.outstandingBalance
-                                    const amount = parseFloat((baseAmount / 2).toFixed(2))
-
-                                    setFormData({
-                                        ...formData,
-                                        paymentAmount: amount,
-                                        principalAmount: Math.min(amount, loan.outstandingBalance),
-                                        interestAmount: Math.max(0, parseFloat((amount - loan.outstandingBalance).toFixed(2)))
-                                    })
-                                }}
-                                className="flex-1 rounded-lg border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground text-muted-foreground font-medium"
-                            >
-                                50%
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    // Total Payment covers EVERYTHING (Principal + Interest)
-                                    const totalAmount = loan.totalPendingAmount || loan.outstandingBalance
-
-                                    setFormData({
-                                        ...formData,
-                                        paymentAmount: totalAmount,
-                                        principalAmount: Math.min(totalAmount, loan.outstandingBalance),
-                                        interestAmount: Math.max(0, parseFloat((totalAmount - loan.outstandingBalance).toFixed(2)))
-                                    })
-                                }}
+                            <span
                                 className={cn(
-                                    "flex-1 rounded-lg border-zinc-200 dark:border-zinc-800 font-medium transition-colors",
-                                    (formData.paymentAmount === (loan.totalPendingAmount || loan.outstandingBalance))
-                                        ? isReceivable ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-orange-50 text-orange-700 border-orange-200"
-                                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground"
+                                    "absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black pointer-events-none",
+                                    isReceivable ? "text-indigo-600" : "text-amber-500"
                                 )}
                             >
-                                Pago Total
-                            </Button>
-                        </div>
-
-                        {/* Advanced Toggle */}
-                        <div className="flex justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setShowDetails(!showDetails)}
-                                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 group"
-                            >
-                                {showDetails ? 'Ocultar desglose' : 'Opciones avanzadas'}
-                                <div className={cn("w-1.5 h-1.5 rounded-full transition-colors", showDetails ? "bg-primary" : "bg-muted-foreground group-hover:bg-primary")} />
-                            </button>
-                        </div>
-
-                        {/* Expert Fields */}
-                        {showDetails && (
-                            <div className="grid grid-cols-2 gap-3 p-3 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50 animate-in slide-in-from-top-2">
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground pl-1">Abono a Capital</Label>
-                                    <Input
-                                        type="number"
-                                        value={formData.principalAmount}
-                                        onChange={(e) => setFormData({ ...formData, principalAmount: parseFloat(e.target.value) || 0 })}
-                                        className="h-9 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 font-semibold"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground pl-1">Interés / Ganancia</Label>
-                                    <Input
-                                        type="number"
-                                        value={formData.interestAmount}
-                                        onChange={(e) => setFormData({ ...formData, interestAmount: parseFloat(e.target.value) || 0 })}
-                                        className="h-9 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 font-semibold text-emerald-600"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Cuenta</Label>
-                            <AccountSelect
-                                value={formData.accountId}
-                                onValueChange={(value) => setFormData({ ...formData, accountId: value })}
-                                currencyCode={loan.currencyCode}
-                                className="h-11 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
-                                allowAdd={false}
+                                {symbol}
+                            </span>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={formData.paymentAmount || ""}
+                                onChange={(e) => setAmountSmart(parseFloat(e.target.value) || 0)}
+                                placeholder="0.00"
+                                className="pl-12 h-14 text-2xl font-black tabular-nums rounded-2xl bg-muted/40 border-border/60"
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Método</Label>
-                                <Select
-                                    value={formData.paymentMethod}
-                                    onValueChange={(value: any) => setFormData({ ...formData, paymentMethod: value })}
+                        {/* Quick Chips */}
+                        <div className="flex flex-wrap gap-1.5">
+                            {loan.nextInstallment && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setAmountSmart(
+                                            loan.nextInstallment!.amount,
+                                            loan.nextInstallment!.principal,
+                                            loan.nextInstallment!.interest
+                                        )
+                                    }
+                                    className="px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors tabular-nums"
                                 >
-                                    <SelectTrigger className="h-10 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="CASH">Efectivo</SelectItem>
-                                        <SelectItem value="TRANSFER">Transferencia</SelectItem>
-                                        <SelectItem value="CHECK">Cheque</SelectItem>
-                                        <SelectItem value="CARD">Tarjeta</SelectItem>
-                                        <SelectItem value="OTHER">Otro</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    Cuota #{loan.nextInstallment.number} (
+                                    {formatMoney(loan.nextInstallment.amount, loan.currencyCode)})
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setAmountSmart(
+                                        Math.round((loan.outstandingBalance / 2) * 100) / 100
+                                    )
+                                }
+                                className="px-3 py-1 rounded-full text-xs font-bold bg-muted/60 hover:bg-muted text-foreground/80 transition-colors"
+                            >
+                                50%
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setAmountSmart(
+                                        loan.outstandingBalance,
+                                        loan.outstandingBalance,
+                                        0
+                                    )
+                                }
+                                className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/12 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors tabular-nums"
+                            >
+                                Liquidar todo
+                            </button>
+                        </div>
+
+                        {errors.paymentAmount && (
+                            <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                {errors.paymentAmount}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Account Pills */}
+                    <div className="space-y-2">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Wallet className="h-3.5 w-3.5 text-primary" />
+                            {isReceivable ? "Cuenta donde ingresa" : "Cuenta desde donde pagas"}
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5">
+                            {displayAccounts.map((acc: any) => {
+                                const selected = formData.accountId === acc.id
+                                return (
+                                    <button
+                                        key={acc.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                accountId: acc.id,
+                                                paymentMethod: userPickedMethodRef.current
+                                                    ? prev.paymentMethod
+                                                    : inferMethodFromAccount(acc),
+                                            }))
+                                            setErrors((prev) => ({ ...prev, accountId: "" }))
+                                        }}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-full text-xs font-bold border transition-all active:scale-95",
+                                            selected
+                                                ? isReceivable
+                                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                                    : "bg-amber-500 text-white border-amber-500 shadow-sm"
+                                                : "bg-muted/40 text-foreground border-border/60 hover:border-primary/40"
+                                        )}
+                                    >
+                                        {formatAccountPillName(acc.name, acc.currencyCode)}
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        {selectedAccount && (
+                            <div className="rounded-2xl bg-muted/40 border border-border/60 px-3.5 py-2.5 flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground font-semibold">
+                                    Saldo: {formatMoney(currentAccBal, selectedAccount.currencyCode)}
+                                </span>
+                                <span className="font-black tabular-nums">
+                                    Proyectado:{" "}
+                                    <span
+                                        className={
+                                            projectedAccBal < 0 ? "text-rose-500" : "text-primary"
+                                        }
+                                    >
+                                        {formatMoney(projectedAccBal, selectedAccount.currencyCode)}
+                                    </span>
+                                </span>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Nota</Label>
-                                <Input
-                                    placeholder="Opcional..."
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="h-10 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
-                                />
-                            </div>
+                        )}
+                    </div>
+
+                    {/* Payment Method Pills */}
+                    <div className="space-y-1.5">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                            Método
+                        </Label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {PAYMENT_METHODS.map((m) => (
+                                <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => {
+                                        userPickedMethodRef.current = true
+                                        setFormData((prev) => ({ ...prev, paymentMethod: m.id }))
+                                    }}
+                                    className={cn(
+                                        "py-2 rounded-xl text-[11px] font-bold border transition-all",
+                                        formData.paymentMethod === m.id
+                                            ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                            : "bg-muted/40 text-muted-foreground border-border/50 hover:text-foreground"
+                                    )}
+                                >
+                                    {m.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Summary Ticket */}
-                    {formData.paymentAmount > 0 && (
-                        <div className={cn(
-                            "relative overflow-hidden rounded-xl border p-4 transition-all duration-300",
-                            isFullPayment
-                                ? "bg-emerald-50/50 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/50"
-                                : "bg-zinc-50 border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800"
-                        )}>
-                            {isFullPayment && (
-                                <div className="absolute right-0 top-0 p-2">
-                                    <CheckCircle2 className="h-12 w-12 text-emerald-500/20" />
-                                </div>
+                    {/* Notes */}
+                    <div className="space-y-1.5">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                            Nota (opcional)
+                        </Label>
+                        <Textarea
+                            value={formData.notes || ""}
+                            onChange={(e) =>
+                                setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                            }
+                            placeholder="Referencia del cobro/pago..."
+                            rows={2}
+                            className="rounded-2xl bg-muted/40 border-border/60 resize-none text-sm"
+                        />
+                    </div>
+
+                    {/* Remaining Loan Preview */}
+                    <div className="p-3 rounded-2xl bg-muted/40 border border-border/60 flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground font-semibold">
+                            Saldo restante del préstamo
+                        </span>
+                        <span className="font-black text-foreground tabular-nums">
+                            {remainingAfterPayment <= 0.01
+                                ? "Liquidado 🎉"
+                                : formatMoney(remainingAfterPayment, loan.currencyCode)}
+                        </span>
+                    </div>
+
+                    {/* Footer Buttons */}
+                    <div className="flex gap-2.5 pt-1">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onClose}
+                            disabled={isLoading}
+                            className="h-11 rounded-2xl font-bold flex-1"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={Boolean(
+                                isLoading ||
+                                    formData.paymentAmount <= 0 ||
+                                    !formData.accountId ||
+                                    (!isReceivable && balanceValidation && !balanceValidation.valid)
                             )}
-
-                            <div className="space-y-1 relative z-10">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-muted-foreground">Saldo Pendiente (Capital)</span>
-                                    <span className="font-medium text-foreground">{formatMoney(loan.outstandingBalance, loan.currencyCode)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-muted-foreground">
-                                        {formData.principalAmount < formData.paymentAmount ? "Abono a Capital" : "Nuevo Pago"}
-                                    </span>
-                                    <span className={cn(
-                                        "font-bold",
-                                        isReceivable ? "text-blue-600" : "text-orange-600"
-                                    )}>
-                                        - {formatMoney(formData.principalAmount, loan.currencyCode)}
-                                    </span>
-                                </div>
-
-                                {formData.interestAmount > 0 && (
-                                    <div className="flex justify-between items-center text-xs opacity-70 mt-1 pl-2 border-l-2 border-emerald-500/30">
-                                        <span className="text-muted-foreground">Interés / Ganancia</span>
-                                        <span className="text-emerald-600 font-medium">
-                                            {formatMoney(formData.interestAmount, loan.currencyCode)}
-                                        </span>
-                                    </div>
-                                )}
-
-                                <div className="my-2 border-t border-dashed border-zinc-300 dark:border-zinc-700" />
-                                <div className="flex justify-between items-center">
-                                    <span className="font-semibold text-sm">Saldo Restante</span>
-                                    <span className={cn(
-                                        "text-lg font-black",
-                                        remainingAfterPayment <= 0.01 ? "text-emerald-600" : "text-foreground"
-                                    )}>
-                                        {formatMoney(remainingAfterPayment, loan.currencyCode)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <DialogFooter className="p-6 pt-2 gap-2 sm:gap-0 shrink-0 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm z-10">
-                    <Button variant="ghost" onClick={onClose} disabled={isLoading} className="rounded-xl h-12">
-                        Cancelar
-                    </Button>
-                    <Button
-                        onClick={() => handleSubmit({ preventDefault: () => { } } as React.FormEvent)}
-                        disabled={isLoading || (!isReceivable && balanceValidation && !balanceValidation.valid) || false}
-                        className={cn(
-                            "flex-1 rounded-xl h-12 text-base font-semibold shadow-lg transition-all hover:scale-[1.02]",
-                            isReceivable
-                                ? "bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-blue-500/25"
-                                : "bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 shadow-orange-500/25"
-                        )}
-                    >
-                        {isLoading ? 'Procesando...' : isFullPayment ? 'Confirmar Pago Total' : 'Registrar Pago'}
-                    </Button>
-                </DialogFooter>
+                            className={cn(
+                                "h-11 rounded-2xl font-black flex-[1.6] text-white shadow-lg gap-1.5",
+                                isReceivable
+                                    ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25"
+                                    : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/25"
+                            )}
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Procesando...
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="h-4 w-4 stroke-[3]" />
+                                    {isReceivable ? "Confirmar cobro" : "Confirmar pago"}
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </form>
             </DialogContent>
-        </Dialog >
+        </Dialog>
     )
 }

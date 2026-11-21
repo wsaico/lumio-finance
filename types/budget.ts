@@ -1,20 +1,17 @@
-// Budget Types with Advanced Filtering
+// Budget Types
 
 export type TransactionFilterMode =
-  | 'DEFAULT'          // Por defecto - todas las transacciones normales
-  | 'EXPENSE'          // Solo gastos
-  | 'INCOME'           // Solo ingresos
-  | 'LOANED'           // Solo pr\u00e9stamos (prestados/pedidos)
-  | 'ADDED_TO_BUDGETS' // Agregado a otros presupuestos
-  | 'ADDED_TO_GOAL'    // Agregado al objetivo (savings goal)
-  | 'BALANCE_CORRECTION' // Corrección de saldo
+  | 'DEFAULT'
+  | 'LOANED'
+  | 'ADDED_TO_GOAL'
+  | 'BALANCE_CORRECTION'
 
 export type BudgetScope =
   | 'GLOBAL'           // Global (Todas las cuentas)
   | 'ACCOUNT'          // Cuenta Específica
 
 export type BudgetType = 'EXPENSE' | 'SAVINGS'
-export type BudgetPeriod = 'MONTHLY' | 'CUSTOM'
+export type BudgetPeriod = 'MONTHLY'
 
 export interface BudgetFormData {
   // Basic Info
@@ -25,9 +22,9 @@ export interface BudgetFormData {
   color: string
   currencyCode: string
 
-  // Date Range
-  startDate: Date
-  endDate: Date
+  // Period
+  budgetYear?: number
+  budgetMonth?: number
 
   // Transaction Filters
   transactionFilterMode: TransactionFilterMode
@@ -52,8 +49,10 @@ export interface Budget extends BudgetFormData {
   userId: string
   spent: number
   isActive: boolean
-  createdAt: Date
-  updatedAt: Date
+  isZbbControlled?: boolean
+  zbbAllocationId?: string | null
+  createdAt: string | Date
+  updatedAt?: string | Date
   stats?: {
     spent: number
     remaining: number
@@ -61,17 +60,14 @@ export interface Budget extends BudgetFormData {
   }
 }
 
-// Filter options for UI
-// Filter options for UI
 export type FilterCategory = 'NEEDS' | 'WANTS' | 'SAVINGS' | 'NEUTRAL' | 'MIXED'
 
 export interface TransactionFilterOption {
   value: TransactionFilterMode
   label: string
   description: string
-  icon?: string
   checked?: boolean
-  filterCategory?: FilterCategory // For 50/30/20 Tags
+  filterCategory?: FilterCategory
 }
 
 export const TRANSACTION_FILTER_OPTIONS: TransactionFilterOption[] = [
@@ -80,19 +76,19 @@ export const TRANSACTION_FILTER_OPTIONS: TransactionFilterOption[] = [
     label: 'Gastos Reales',
     description: 'Tus gastos del día a día (Comida, Servicios, Transporte). Lo que realmente consumes.',
     checked: true,
-    filterCategory: 'MIXED' // 50% Needs / 30% Wants
+    filterCategory: 'MIXED'
   },
   {
     value: 'LOANED',
     label: 'Préstamos a Terceros',
     description: 'Dinero que prestas y esperas recuperar. No es una pérdida real, es una cuenta por cobrar.',
-    filterCategory: 'NEUTRAL' // Cashflow
+    filterCategory: 'NEUTRAL'
   },
   {
     value: 'ADDED_TO_GOAL',
     label: 'Ahorro para Metas',
     description: 'Dinero que envías a tus metas. Técnicamente no lo "gastaste", te lo "pagaste" a tu futuro.',
-    filterCategory: 'SAVINGS' // 20% Savings
+    filterCategory: 'SAVINGS'
   },
   {
     value: 'BALANCE_CORRECTION',

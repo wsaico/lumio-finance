@@ -172,25 +172,31 @@ export function useAddContribution() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async (contributionData: Partial<GoalContribution>) => {
+        mutationFn: async (contributionData: any) => {
+            const payload = {
+                goalId: contributionData.goalId || contributionData.goal_id,
+                amount: Number(contributionData.amount),
+                date: contributionData.date || contributionData.contribution_date,
+                notes: contributionData.notes,
+                transactionId: contributionData.transactionId ?? contributionData.transaction_id ?? null,
+            }
             const res = await fetch('/api/savings-goals/contribute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(contributionData)
+                body: JSON.stringify(payload)
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Error al agregar contribución')
             return data
         },
         onSuccess: (data) => {
-            toast.success('Contribución agregada', {
-                description: `S/ ${data.contribution.amount} - ${data.milestoneAchieved ? '🎉 ¡Hito alcanzado!' : ''}`
+            toast.success('Aporte registrado', {
+                description: data.milestoneAchieved ? '🎉 ¡Hito alcanzado!' : 'Tu progreso se ha actualizado.'
             })
-            // Invalidate all savings goals queries (list and individual goals)
             queryClient.invalidateQueries({ queryKey: ['savings-goals'] })
             queryClient.invalidateQueries({ queryKey: ['savings-goal'] })
+            queryClient.invalidateQueries({ queryKey: ['savings-goals-analytics'] })
             queryClient.invalidateQueries({ queryKey: ['goal-contributions'] })
-            // Also invalidate accounts and transactions in case the contribution affected them
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
         },
@@ -216,12 +222,11 @@ export function useTransferAndContribute() {
             if (!res.ok) throw new Error(data.error || 'Error al transferir y contribuir')
             return data
         },
-        onSuccess: (data) => {
-            toast.success('Transferencia y contribución exitosa', {
-                description: `S/ ${data.contribution.amount} transferidos a tu meta`
-            })
+        onSuccess: () => {
+            toast.success('Transferencia y aporte registrados')
             queryClient.invalidateQueries({ queryKey: ['savings-goals'] })
             queryClient.invalidateQueries({ queryKey: ['savings-goal'] })
+            queryClient.invalidateQueries({ queryKey: ['savings-goals-analytics'] })
             queryClient.invalidateQueries({ queryKey: ['goal-contributions'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })

@@ -4,9 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '@/lib/constants/default-categories'
-import { updateBudgetsForTransactions } from '@/lib/budget-manager'
+
 import { mapTransaction } from '@/lib/mappers'
 import { TransactionService } from '@/lib/services/transaction-service'
+import { getMonthDateRangeInTimezone, getDayDateRangeInTimezone } from '@/lib/timezone'
+import { getUserEntitlementsServer } from '@/lib/server/entitlements'
 
 const transactionSchema = z.object({
     type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'SAVINGS_DEPOSIT', 'SAVINGS_WITHDRAWAL']),
@@ -18,14 +20,15 @@ const transactionSchema = z.object({
     categoryId: z.string().uuid().optional().or(z.literal('')),
     subcategoryId: z.string().uuid().optional().or(z.literal('')),
     date: z.string().datetime(),
-    description: z.string().optional(),
+    description: z.string().trim().min(1, "La descripción es obligatoria"),
     notes: z.string().optional(),
+    tags: z.array(z.string()).optional(),
     metadata: z.any().optional(),
     savingsGoalId: z.string().uuid().optional(),
     loanId: z.string().uuid().optional(),
     recurringRuleId: z.string().uuid().optional(),
     recurrence: z.string().optional(), // 'MONTHLY', 'WEEKLY'
-    recurrenceEndDate: z.string().datetime().optional(),
+    recurrenceEndDate: z.string().optional().nullable(),
     attachmentUrl: z.string().url().optional().or(z.literal('')),
 })
 
@@ -92,21 +95,21 @@ export async function GET(req: Request) {
             .order('transaction_date', { ascending: false })
 
         if (month && year) {
-            let startDay = 1
-            let endDay = new Date(Number(year), Number(month), 0).getDate()
-
-            if (day) {
-                startDay = Number(day)
-                endDay = Number(day)
-            }
-
-            const startDate = new Date(Number(year), Number(month) - 1, startDay).toISOString()
-            const endDate = new Date(Number(year), Number(month) - 1, endDay, 23, 59, 59).toISOString()
-            query = query.gte('transaction_date', startDate).lte('transaction_date', endDate)
+            const { timezone } = await getUserEntitlementsServer(supabase, user)
+            const m = Number(month)
+            const y = Number(year)
+            const range = day
+                ? getDayDateRangeInTimezone(y, m, Number(day), timezone)
+                : getMonthDateRangeInTimezone(y, m, timezone)
+            query = query.gte('transaction_date', range.startIso).lte('transaction_date', range.endIso)
         }
 
         if (accountId) {
-            query = query.eq('account_id', accountId)
+            if (/^[0-9a-f-]{36}$/i.test(accountId)) {
+                query = query.or(`account_id.eq.${accountId},transfer_to_account_id.eq.${accountId}`)
+            } else {
+                query = query.eq('account_id', accountId)
+            }
         }
 
         if (type) {
@@ -114,19 +117,21 @@ export async function GET(req: Request) {
         }
 
         if (search) {
-            // Fetch matching categories first to enable searching by category name
+            // Fetch matching categories strictly scoped to system OR current user
             const { data: expenseCats } = await supabase
                 .from('expense_categories')
                 .select('id')
+                .or(`user_id.is.null,user_id.eq.${user.id}`)
                 .ilike('name', `%${search}%`)
 
             const { data: incomeCats } = await supabase
                 .from('income_categories')
                 .select('id')
+                .or(`user_id.is.null,user_id.eq.${user.id}`)
                 .ilike('name', `%${search}%`)
 
-            const expenseIds = expenseCats?.map(c => c.id) || []
-            const incomeIds = incomeCats?.map(c => c.id) || []
+            const expenseIds = expenseCats?.map((c: { id: string }) => c.id) || []
+            const incomeIds = incomeCats?.map((c: { id: string }) => c.id) || []
 
             let orConditions = [`description.ilike.%${search}%`, `notes.ilike.%${search}%`]
 
@@ -191,31 +196,39 @@ export async function POST(req: Request) {
             )
         }
 
-        // VALIDATION: Block PETTY_CASH accounts - must use dedicated Petty Cash module
-        const { data: selectedAccount } = await supabase
-            .from('accounts')
-            .select('account_type, name')
-            .eq('id', validData.accountId)
-            .single()
-
-        if (selectedAccount?.account_type === 'PETTY_CASH') {
-            return new NextResponse(
-                JSON.stringify({
-                    error: 'Cuenta de Caja Chica no permitida',
-                    details: `La cuenta "${selectedAccount.name}" es una Caja Chica. Los gastos de caja chica deben registrarse exclusivamente desde el módulo de Caja Chica (Fondo Fijo) para mantener el control interno, ciclo de liquidación y trazabilidad de comprobantes.`,
-                    redirectTo: '/dashboard/petty-cash',
-                    accountType: 'PETTY_CASH'
-                }),
-                { status: 400, headers: { 'Content-Type': 'application/json' } }
-            )
+        // Enforce subscription entitlement if creating a subscription/recurring rule
+        if (metadata.mode === 'SUBSCRIPTION' || metadata.mode === 'RECURRING') {
+            const { entitlements } = await getUserEntitlementsServer(supabase, user)
+            if (!entitlements.canCreateRecurring) {
+                return NextResponse.json(
+                    {
+                        error: 'Suscripciones y recurrentes requieren Plan Premium',
+                        code: 'PREMIUM_REQUIRED',
+                    },
+                    { status: 403 }
+                )
+            }
         }
 
-        // VALIDATION: Check balance for EXPENSE and TRANSFER (balance decreases)
-        if ((validData.type === 'EXPENSE' || validData.type === 'TRANSFER') && metadata.mode !== 'SCHEDULED') {
+        const isPendingScheduledOnly =
+            (metadata.mode === 'UPCOMING' ||
+                metadata.mode === 'SCHEDULED' ||
+                metadata.mode === 'SUBSCRIPTION' ||
+                metadata.mode === 'RECURRING') &&
+            metadata.initialPaymentState === 'PENDING'
+
+        // VALIDATION: Check balance for EXPENSE and TRANSFER only when immediately paid today
+        if (
+            (validData.type === 'EXPENSE' || validData.type === 'TRANSFER') &&
+            !isPendingScheduledOnly &&
+            metadata.mode !== 'SCHEDULED' &&
+            metadata.mode !== 'UPCOMING'
+        ) {
             const { data: account } = await supabase
                 .from('accounts')
                 .select('current_balance, name, account_type, credit_limit, used_balance')
                 .eq('id', validData.accountId)
+                .eq('user_id', user.id)
                 .single()
 
             if (account) {
@@ -224,7 +237,7 @@ export async function POST(req: Request) {
                 // Validar límites para cuentas de tipo CREDIT_CARD
                 if (account.account_type === 'CREDIT_CARD') {
                     const creditLimit = Number(account.credit_limit || 0)
-                    const usedBalance = Number(account.used_balance || 0)
+                    const usedBalance = Math.abs(Number(account.used_balance || 0))
                     const availableCredit = creditLimit - usedBalance
 
                     if (requestedAmount > availableCredit) {
@@ -256,7 +269,71 @@ export async function POST(req: Request) {
             }
         }
 
-        // 1. Process Transaction via Service (handles Categories & Balances)
+        // Enforce domain validation: transfer destination & category presence
+        if (validData.type === 'TRANSFER') {
+            if (!validData.transferToAccountId) {
+                return NextResponse.json({ error: 'La cuenta de destino es obligatoria para transferencias' }, { status: 400 })
+            }
+            if (validData.transferToAccountId === validData.accountId) {
+                return NextResponse.json({ error: 'La cuenta de origen y destino deben ser diferentes' }, { status: 400 })
+            }
+        } else if ((validData.type === 'EXPENSE' || validData.type === 'INCOME') && !metadata?.isBalanceAdjustment && !validData.categoryId) {
+            return NextResponse.json({ error: 'La categoría es obligatoria' }, { status: 400 })
+        }
+
+        // 1. If mode is UPCOMING/SCHEDULED or SUBSCRIPTION/RECURRING with initialPaymentState === 'PENDING' (Cashew style: does not deduct balance until marked as Paid), store in recurring_rules queue!
+        const isAuto = metadata.isAutoExecute === true || metadata.scheduledType === 'AUTO'
+        const reminderDays = Number.isFinite(Number(metadata.reminderDays))
+            ? Number(metadata.reminderDays)
+            : 3
+        const resolvedFreq =
+            (validData.recurrence && validData.recurrence !== 'NONE' ? validData.recurrence : null) ||
+            (metadata.recurrence && metadata.recurrence !== 'NONE' ? metadata.recurrence : null) ||
+            'MONTHLY'
+        const resolvedInterval = Math.max(1, Number(metadata.recurrenceInterval || 1))
+        const resolvedDueDate = metadata.dueDate || validData.date
+
+        if (isPendingScheduledOnly || metadata.mode === 'UPCOMING' || metadata.mode === 'SCHEDULED') {
+            const ruleMode =
+                metadata.mode === 'SUBSCRIPTION'
+                    ? 'SUBSCRIPTION'
+                    : metadata.mode === 'RECURRING'
+                      ? 'RECURRING'
+                      : 'UPCOMING'
+            const execCode = `${ruleMode}|${isAuto ? 'AUTO' : 'MANUAL'}|${reminderDays}`
+
+            const createdRule = await TransactionService.createRecurringRule(supabase, {
+                userId: user.id,
+                accountId: validData.accountId,
+                transactionType: validData.type,
+                amount: Number(validData.amount),
+                currencyCode: validData.currency,
+                frequency: resolvedFreq,
+                interval: resolvedInterval,
+                startDate: resolvedDueDate,
+                nextOccurrence: resolvedDueDate,
+                endDate: validData.recurrenceEndDate || metadata.recurrenceEndDate || null,
+                description: validData.description,
+                expenseCategoryId: validData.type === 'EXPENSE' ? validData.categoryId : null,
+                incomeCategoryId: validData.type === 'INCOME' ? validData.categoryId : null,
+                subcategoryId: validData.subcategoryId,
+                executionMethod: execCode,
+                metadata,
+            })
+
+            return NextResponse.json({
+                id: createdRule?.id || crypto.randomUUID(),
+                scheduledRule: true,
+                rule: createdRule,
+                description: validData.description,
+                amount: Number(validData.amount),
+                currencyCode: validData.currency,
+                dueDate: resolvedDueDate,
+                mode: ruleMode,
+            })
+        }
+
+        // 2. Otherwise process immediate Transaction via Service (paid today)
         const transaction = await TransactionService.processTransaction(supabase, {
             userId: user.id,
             type: validData.type,
@@ -266,6 +343,7 @@ export async function POST(req: Request) {
             transactionDate: validData.date,
             description: validData.description,
             notes: validData.notes,
+            tags: validData.tags,
             metadata: metadata,
             categoryId: validData.categoryId,
             subcategoryId: validData.subcategoryId,
@@ -277,27 +355,41 @@ export async function POST(req: Request) {
             attachmentUrl: validData.attachmentUrl
         })
 
-        // 2. Create Recurring Rule if Auto-Execute is enabled OR if it's a Manual Recurrence (for reminders)
-        if ((metadata.mode === 'SUBSCRIPTION' || metadata.mode === 'RECURRING') && (metadata.scheduledType === 'AUTO' || metadata.scheduledType === 'MANUAL')) {
-            await TransactionService.createRecurringRule(supabase, {
+        // 3. Create Recurring Rule for SUBSCRIPTION or RECURRING for subsequent cycles
+        if (metadata.mode === 'SUBSCRIPTION' || metadata.mode === 'RECURRING') {
+            const ruleMode = metadata.mode === 'SUBSCRIPTION' ? 'SUBSCRIPTION' : 'RECURRING'
+            const execCode = `${ruleMode}|${isAuto ? 'AUTO' : 'MANUAL'}|${reminderDays}`
+
+            const createdRule = await TransactionService.createRecurringRule(supabase, {
                 userId: user.id,
                 accountId: validData.accountId,
                 transactionType: validData.type,
                 amount: Number(validData.amount),
-                frequency: validData.recurrence || 'MONTHLY', // Default to MONTHLY if not specified
+                currencyCode: validData.currency,
+                frequency: resolvedFreq,
+                interval: resolvedInterval,
                 startDate: validData.date,
-                endDate: validData.recurrenceEndDate, // Assuming this comes from validData
+                nextOccurrence: metadata.nextDueDate || undefined,
+                endDate: validData.recurrenceEndDate || metadata.recurrenceEndDate || null,
                 description: validData.description,
-                expenseCategoryId: validData.categoryId,
-                incomeCategoryId: validData.categoryId,
+                expenseCategoryId: validData.type === 'EXPENSE' ? validData.categoryId : null,
+                incomeCategoryId: validData.type === 'INCOME' ? validData.categoryId : null,
                 subcategoryId: validData.subcategoryId,
-                executionMethod: metadata.scheduledType === 'AUTO' ? 'AUTO' : 'MANUAL',
-                metadata: metadata
+                executionMethod: execCode,
+                metadata: { ...metadata, initialPaymentState: 'PAID_TODAY' },
             })
+
+            if (createdRule?.id && transaction?.id) {
+                await supabase
+                    .from('transactions')
+                    .update({ recurring_rule_id: createdRule.id })
+                    .eq('id', transaction.id)
+                    .eq('user_id', user.id)
+            }
         }
 
         // 3. Update Budgets (Background)
-        updateBudgetsForTransactions(user.id).catch(console.error)
+
 
         return NextResponse.json(transaction)
 
@@ -321,12 +413,88 @@ export async function PATCH(req: Request) {
         const body = await req.json()
         const { id, ...updates } = body
         if (!id) return new NextResponse('Transaction ID required', { status: 400 })
+        if (updates.description !== undefined && !String(updates.description).trim()) {
+            return NextResponse.json({ error: 'La descripción es obligatoria' }, { status: 400 })
+        }
+        if (typeof updates.description === 'string') {
+            updates.description = updates.description.trim()
+        }
+
+        // Validate balance / credit limit delta on PATCH before modifying
+        const { data: oldTx } = await supabase
+            .from('transactions')
+            .select('amount, account_id, transaction_type, metadata, currency_code')
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .single()
+
+        if (oldTx) {
+            const effectiveType = updates.type || oldTx.transaction_type
+            const effectiveAccountId = updates.accountId || oldTx.account_id
+            const effectiveAmount = updates.amount !== undefined ? Number(updates.amount) : Number(oldTx.amount)
+            const effectiveMode = updates.metadata?.mode ?? oldTx.metadata?.mode
+            const oldMode = oldTx.metadata?.mode
+
+            const wasOldApplied =
+                (oldTx.transaction_type === 'EXPENSE' || oldTx.transaction_type === 'TRANSFER') &&
+                oldMode !== 'SCHEDULED' &&
+                oldMode !== 'UPCOMING'
+
+            if (
+                (effectiveType === 'EXPENSE' || effectiveType === 'TRANSFER') &&
+                effectiveMode !== 'SCHEDULED' &&
+                effectiveMode !== 'UPCOMING'
+            ) {
+                const { data: targetAcc } = await supabase
+                    .from('accounts')
+                    .select('current_balance, name, account_type, credit_limit, used_balance, currency_code')
+                    .eq('id', effectiveAccountId)
+                    .single()
+
+                if (targetAcc) {
+                    const sameAccountApplied = wasOldApplied && effectiveAccountId === oldTx.account_id
+                    const additionalRequired = sameAccountApplied
+                        ? Math.max(0, effectiveAmount - Number(oldTx.amount || 0))
+                        : effectiveAmount
+
+                    const currencyLabel = updates.currency || oldTx.currency_code || targetAcc.currency_code || ''
+
+                    if (targetAcc.account_type === 'CREDIT_CARD') {
+                        const creditLimit = Number(targetAcc.credit_limit || 0)
+                        const usedBalance = Math.abs(Number(targetAcc.used_balance || 0))
+                        const availableCredit = creditLimit - usedBalance
+                        if (additionalRequired > availableCredit) {
+                            const shortage = additionalRequired - availableCredit
+                            return NextResponse.json(
+                                {
+                                    error: 'Límite de crédito excedido',
+                                    details: `La tarjeta "${targetAcc.name}" tiene un crédito disponible de ${availableCredit.toFixed(2)} y el cambio requiere ${additionalRequired.toFixed(2)} adicional(es). Excedes el límite por ${shortage.toFixed(2)} ${currencyLabel}`.trim(),
+                                },
+                                { status: 400 }
+                            )
+                        }
+                    } else {
+                        const currentBalance = Number(targetAcc.current_balance || 0)
+                        if (additionalRequired > currentBalance) {
+                            const shortage = additionalRequired - currentBalance
+                            return NextResponse.json(
+                                {
+                                    error: 'Saldo insuficiente',
+                                    details: `La cuenta "${targetAcc.name}" tiene un saldo de ${currentBalance.toFixed(2)} y el cambio requiere ${additionalRequired.toFixed(2)} adicional(es). Faltan ${shortage.toFixed(2)} ${currencyLabel}`.trim(),
+                                },
+                                { status: 400 }
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // Process Update via Service (handles Reversal & Re-apply)
         const updatedTransaction = await TransactionService.updateTransaction(supabase, id, user.id, updates)
 
         // Update Budgets (Background)
-        updateBudgetsForTransactions(user.id).catch(console.error)
+
 
         return NextResponse.json(updatedTransaction)
     } catch (error: any) {
@@ -353,7 +521,7 @@ export async function DELETE(req: Request) {
         await TransactionService.deleteTransaction(supabase, id, user.id)
 
         // Update Budgets (Background)
-        updateBudgetsForTransactions(user.id).catch(console.error)
+
 
         return NextResponse.json({ success: true })
     } catch (error: any) {

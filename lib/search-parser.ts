@@ -1,162 +1,229 @@
-import { startOfMonth, endOfMonth, format } from "date-fns";
-import { es } from "date-fns/locale";
-
-export type SearchExample = {
-    keyword: string;
-    description: string;
-}
-
 export type SearchResult = {
-    id: string;
-    type: 'NAVIGATION' | 'ACTION' | 'FILTER' | 'AI_GENERATED';
-    title: string;
-    subtitle?: string;
-    icon?: any;
-    url: string;
-    score: number; // Relevance score
-};
-
-export type SearchContext = {
-    categories: any[];
-    accounts: any[];
+    id: string
+    type: "NAVIGATION" | "ACTION" | "FILTER"
+    title: string
+    subtitle?: string
+    url: string
+    score: number
 }
 
-const MONTHS = [
-    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-];
+export const normalizeText = (text: string) =>
+    text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
 
-const normalizeText = (text: string) =>
-    text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+const MODULE_INDEX: Array<{
+    id: string
+    title: string
+    subtitle: string
+    url: string
+    keywords: string[]
+}> = [
+    {
+        id: "mod-dashboard",
+        title: "Inicio",
+        subtitle: "Resumen financiero y métricas del mes",
+        url: "/dashboard",
+        keywords: ["inicio", "dashboard", "resumen", "home", "panel"],
+    },
+    {
+        id: "mod-transactions",
+        title: "Movimientos",
+        subtitle: "Historial completo de ingresos, gastos y transferencias",
+        url: "/dashboard/transactions",
+        keywords: ["movimientos", "transacciones", "historial", "operaciones"],
+    },
+    {
+        id: "mod-accounts",
+        title: "Mis cuentas y tarjetas",
+        subtitle: "Saldos, bancos, efectivo y tarjetas de crédito",
+        url: "/dashboard/accounts",
+        keywords: ["cuentas", "bancos", "tarjetas", "credito", "efectivo", "patrimonio", "saldo"],
+    },
+    {
+        id: "mod-budgets",
+        title: "Presupuestos",
+        subtitle: "Límites de gasto por categoría",
+        url: "/dashboard/budgets",
+        keywords: ["presupuestos", "limites", "topes", "control"],
+    },
+    {
+        id: "mod-loans",
+        title: "Préstamos",
+        subtitle: "Por cobrar, por pagar y cuotas",
+        url: "/dashboard/loans",
+        keywords: ["prestamos", "deudas", "cuotas", "cobrar", "pagar"],
+    },
+    {
+        id: "mod-planning",
+        title: "Planificación (Base Cero)",
+        subtitle: "Asigna cada sol de tus ingresos (ZBB)",
+        url: "/dashboard/planning",
+        keywords: ["planificacion", "zbb", "base cero", "planificar", "asignar"],
+    },
+    {
+        id: "mod-goals",
+        title: "Metas de ahorro",
+        subtitle: "Objetivos y aportes acumulados",
+        url: "/dashboard/savings-goals",
+        keywords: ["metas", "ahorro", "objetivos", "alcancia"],
+    },
+    {
+        id: "mod-analysis",
+        title: "Análisis Financiero",
+        subtitle: "Gráficos avanzados y salud financiera",
+        url: "/dashboard/analysis",
+        keywords: ["analisis", "graficos", "estadisticas", "salud", "tendencias"],
+    },
+    {
+        id: "mod-reports",
+        title: "Reportes (Excel y PDF)",
+        subtitle: "Exportar reporte ejecutivo y detalle de movimientos",
+        url: "/dashboard/reports",
+        keywords: ["reportes", "informes", "excel", "pdf", "exportar", "descargar"],
+    },
+    {
+        id: "mod-settings",
+        title: "Ajustes y Apariencia",
+        subtitle: "Color de marca, modo oscuro, moneda y perfil",
+        url: "/dashboard/settings",
+        keywords: ["ajustes", "configuracion", "tema", "color", "oscuro", "perfil", "moneda"],
+    },
+]
 
 export function parseSmartQuery(query: string): SearchResult[] {
-    const rawLower = query.toLowerCase().trim();
-    if (!rawLower) return [];
+    const q = normalizeText(query)
+    if (!q) return []
 
-    const results: SearchResult[] = [];
+    const results: SearchResult[] = []
 
-    // --- NAVEGACIÓN Y ACCIONES DEL SISTEMA ---
-
-    // Transacciones y Filtros Básicos
-    if (rawLower.includes('transacc') || rawLower.includes('movimien') || rawLower.includes('ver todo')) {
+    // 1. Natural quick-entry detection e.g. "gasto 50 almuerzo" or "ingreso 1200 sueldo"
+    const quickExpenseMatch = q.match(/^(?:gasto|gastar|pague|pago)\s+(\d+(?:[.,]\d+)?)(?:\s+(.+))?$/)
+    if (quickExpenseMatch) {
+        const amt = quickExpenseMatch[1]
+        const concept = quickExpenseMatch[2]?.trim()
         results.push({
-            id: 'nav-transactions',
-            type: 'NAVIGATION',
-            title: 'Ver Transacciones',
-            subtitle: 'Historial completo de movimientos',
-            url: '/dashboard/transactions',
-            score: 90
-        });
+            id: "act-quick-expense-nlp",
+            type: "ACTION",
+            title: concept
+                ? `Registrar gasto de ${amt} — ${concept}`
+                : `Registrar gasto de ${amt}`,
+            subtitle: "Ir directo al registro de gasto",
+            url: "/dashboard/transactions/new?type=EXPENSE",
+            score: 140,
+        })
     }
 
-    if (rawLower.includes('gasto')) {
+    const quickIncomeMatch = q.match(/^(?:ingreso|cobre|sueldo|recibi)\s+(\d+(?:[.,]\d+)?)(?:\s+(.+))?$/)
+    if (quickIncomeMatch) {
+        const amt = quickIncomeMatch[1]
+        const concept = quickIncomeMatch[2]?.trim()
         results.push({
-            id: 'act-new-expense',
-            type: 'ACTION',
-            title: 'Registrar Nuevo Gasto',
-            subtitle: 'Abrir formulario de egreso',
-            url: '/dashboard/transactions?new=true&type=expense',
-            score: 100
-        });
+            id: "act-quick-income-nlp",
+            type: "ACTION",
+            title: concept
+                ? `Registrar ingreso de ${amt} — ${concept}`
+                : `Registrar ingreso de ${amt}`,
+            subtitle: "Ir directo al registro de ingreso",
+            url: "/dashboard/transactions/new?type=INCOME",
+            score: 140,
+        })
     }
 
-    if (rawLower.includes('ingres')) {
+    // 2. Quick action intents
+    if (q.includes("gast") || q.includes("egres") || q.includes("compra")) {
         results.push({
-            id: 'act-new-income',
-            type: 'ACTION',
-            title: 'Registrar Nuevo Ingreso',
-            subtitle: 'Abrir formulario de entrada',
-            url: '/dashboard/transactions?new=true&type=income',
-            score: 100
-        });
+            id: "act-new-expense",
+            type: "ACTION",
+            title: "Registrar Nuevo Gasto",
+            subtitle: "Abrir registro rápido de egreso",
+            url: "/dashboard/transactions/new?type=EXPENSE",
+            score: 115,
+        })
     }
 
-    if (rawLower.includes('presupuesto')) {
+    if (q.includes("ingres") || q.includes("sueldo") || q.includes("cobr")) {
         results.push({
-            id: 'nav-budget',
-            type: 'NAVIGATION',
-            title: 'Ir a Presupuestos',
-            subtitle: 'Gestión y control de gastos',
-            url: '/dashboard/budgets',
-            score: 80
-        });
-        if (rawLower.includes('crear') || rawLower.includes('nuevo')) {
+            id: "act-new-income",
+            type: "ACTION",
+            title: "Registrar Nuevo Ingreso",
+            subtitle: "Abrir registro rápido de entrada",
+            url: "/dashboard/transactions/new?type=INCOME",
+            score: 115,
+        })
+    }
+
+    if (q.includes("pagar tarjeta") || q.includes("tarjeta")) {
+        results.push({
+            id: "act-pay-card",
+            type: "ACTION",
+            title: "Pagar Tarjeta de Crédito",
+            subtitle: "Registrar transferencia hacia tu tarjeta",
+            url: "/dashboard/transactions/new?type=TRANSFER",
+            score: 120,
+        })
+    }
+
+    if (q.includes("transfer") || q.includes("mover")) {
+        results.push({
+            id: "act-transfer",
+            type: "ACTION",
+            title: "Nueva Transferencia",
+            subtitle: "Mover saldo entre cuentas o pagar tarjeta",
+            url: "/dashboard/transactions/new?type=TRANSFER",
+            score: 110,
+        })
+    }
+
+    if (q.includes("excel") || q.includes("pdf") || q.includes("export") || q.includes("report")) {
+        results.push({
+            id: "act-export-reports",
+            type: "ACTION",
+            title: "Exportar Reportes (Excel / PDF)",
+            subtitle: "Genera tu reporte financiero por rango de fechas",
+            url: "/dashboard/reports",
+            score: 118,
+        })
+    }
+
+    if ((q.includes("nuev") || q.includes("crear")) && q.includes("meta")) {
+        results.push({
+            id: "act-new-goal",
+            type: "ACTION",
+            title: "Crear Nueva Meta de Ahorro",
+            subtitle: "Define un objetivo financiero",
+            url: "/dashboard/savings-goals/new",
+            score: 120,
+        })
+    }
+
+    // 3. System Modules
+    for (const mod of MODULE_INDEX) {
+        const titleNorm = normalizeText(mod.title)
+        const matchesKeyword = mod.keywords.some((k) => k.includes(q) || q.includes(k))
+        const matchesTitle = titleNorm.includes(q)
+        if (matchesTitle || matchesKeyword) {
             results.push({
-                id: 'act-budget-new',
-                type: 'ACTION',
-                title: 'Crear Nuevo Presupuesto',
-                subtitle: 'Configurar límite de gasto',
-                url: '/dashboard/budgets?new=true',
-                score: 110
-            });
+                id: mod.id,
+                type: "NAVIGATION",
+                title: mod.title,
+                subtitle: mod.subtitle,
+                url: mod.url,
+                score: matchesTitle ? 105 : 85,
+            })
         }
     }
 
-    if (rawLower.includes('transfer')) {
-        results.push({
-            id: 'act-transfer',
-            type: 'ACTION',
-            title: 'Nueva Transferencia',
-            subtitle: 'Mover dinero entre cuentas',
-            url: '/dashboard/transactions?transfer=true',
-            score: 95
-        });
+    // Deduplicate by url keeping highest score
+    const deduped = new Map<string, SearchResult>()
+    for (const item of results) {
+        const existing = deduped.get(item.id)
+        if (!existing || item.score > existing.score) {
+            deduped.set(item.id, item)
+        }
     }
 
-    if (rawLower.includes('meta') || rawLower.includes('ahorro')) {
-        results.push({
-            id: 'nav-goals',
-            type: 'NAVIGATION',
-            title: 'Metas de Ahorro',
-            subtitle: 'Seguimiento de objetivos financieros',
-            url: '/dashboard/savings-goals',
-            score: 80
-        });
-    }
-
-    if (rawLower.includes('caja chica')) {
-        results.push({
-            id: 'nav-petty',
-            type: 'NAVIGATION',
-            title: 'Caja Chica',
-            subtitle: 'Administración de gastos menores',
-            url: '/dashboard/petty-cash',
-            score: 80
-        });
-    }
-
-    if (rawLower.includes('prestam') || rawLower.includes('deuda') || rawLower.includes('credito')) {
-        results.push({
-            id: 'nav-loans',
-            type: 'NAVIGATION',
-            title: 'Préstamos y Deudas',
-            subtitle: 'Control de créditos y pagos',
-            url: '/dashboard/loans',
-            score: 80
-        });
-    }
-
-    if (rawLower.includes('configur') || rawLower.includes('ajuste') || rawLower.includes('perfil')) {
-        results.push({
-            id: 'nav-settings',
-            type: 'NAVIGATION',
-            title: 'Configuraciones',
-            subtitle: 'Personalizar app y perfil',
-            url: '/dashboard/settings',
-            score: 70
-        });
-    }
-
-    if (rawLower.includes('analisis') || rawLower.includes('grafic') || rawLower.includes('reporte')) {
-        results.push({
-            id: 'nav-reports',
-            type: 'NAVIGATION',
-            title: 'Reportes e Informes',
-            subtitle: 'Gráficos avanzados y estadísticas',
-            url: '/dashboard/reports',
-            score: 70
-        });
-    }
-
-    return results.sort((a, b) => b.score - a.score);
+    return Array.from(deduped.values()).sort((a, b) => b.score - a.score)
 }

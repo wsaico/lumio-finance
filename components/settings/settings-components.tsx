@@ -1,4 +1,3 @@
-
 "use client"
 
 import React from "react"
@@ -23,16 +22,34 @@ interface SettingsSectionProps {
 
 export function SettingsSection({ title, children, className }: SettingsSectionProps) {
     return (
-        <section className={cn("space-y-3", className)}>
+        <section className={cn("space-y-2.5", className)}>
             {title && (
-                <h3 className="text-sm font-bold text-primary px-1 uppercase tracking-wide opacity-90">
+                <h3 className="text-xs font-extrabold text-primary px-1 tracking-wide">
                     {title}
                 </h3>
             )}
-            <div className="space-y-1">
-                {children}
-            </div>
+            <div className="space-y-2">{children}</div>
         </section>
+    )
+}
+
+// --- TARJETA AGRUPADA ESTILO CASHEW ---
+export function SettingsGroupCard({
+    children,
+    className,
+}: {
+    children: React.ReactNode
+    className?: string
+}) {
+    return (
+        <div
+            className={cn(
+                "rounded-3xl bg-card border border-border/60 divide-y divide-border/50 overflow-hidden shadow-xs",
+                className
+            )}
+        >
+            {children}
+        </div>
     )
 }
 
@@ -45,71 +62,100 @@ interface SettingsRowProps {
     onClick?: () => void
     className?: string
     variant?: "default" | "danger"
+    grouped?: boolean
 }
 
-export function SettingsRow({ icon: Icon, title, description, action, onClick, className, variant = "default" }: SettingsRowProps) {
+export function SettingsRow({
+    icon: Icon,
+    title,
+    description,
+    action,
+    onClick,
+    className,
+    variant = "default",
+    grouped = false,
+}: SettingsRowProps) {
     return (
         <div
             onClick={onClick}
             className={cn(
-                "flex items-center justify-between p-3 rounded-xl transition-all duration-200",
-                "hover:bg-accent/40 active:scale-[0.99] cursor-pointer bg-card/40 backdrop-blur-sm border border-transparent hover:border-border/30",
-                onClick ? "cursor-pointer" : "cursor-default",
+                "flex items-center justify-between px-4 py-3.5 transition-all duration-150",
+                !grouped && "rounded-2xl bg-card border border-border/60 hover:border-border hover:shadow-sm",
+                grouped && "hover:bg-muted/35",
+                variant === "danger" && grouped && "bg-rose-500/8 hover:bg-rose-500/15",
+                onClick ? "cursor-pointer active:scale-[0.995]" : "cursor-default",
                 className
             )}
         >
-            <div className="flex items-center gap-4 flex-1 overflow-hidden">
+            <div className="flex items-center gap-3.5 flex-1 min-w-0">
                 {Icon && (
-                    <div className={cn(
-                        "h-10 w-10 flex-shrink-0 rounded-full flex items-center justify-center transition-colors",
-                        variant === "danger" ? "bg-red-500/10 text-red-500" : "bg-primary/10 text-primary"
-                    )}>
-                        <Icon className="h-5 w-5" />
+                    <div
+                        className={cn(
+                            "h-9 w-9 flex-shrink-0 rounded-[var(--icon-radius,0.85rem)] flex items-center justify-center transition-colors",
+                            variant === "danger"
+                                ? "bg-rose-500/12 text-rose-500"
+                                : "bg-primary/10 text-primary"
+                        )}
+                    >
+                        <Icon className="h-[18px] w-[18px]" />
                     </div>
                 )}
-                <div className="flex flex-col gap-0.5 overflow-hidden">
-                    <span className={cn(
-                        "font-medium text-[15px] truncate",
-                        variant === "danger" ? "text-red-500" : "text-foreground"
-                    )}>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                    <span
+                        className={cn(
+                            "font-semibold text-sm leading-snug truncate",
+                            variant === "danger" ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+                        )}
+                    >
                         {title}
                     </span>
                     {description && (
-                        <span className="text-xs text-muted-foreground break-words leading-tight line-clamp-2">
+                        <span className="text-xs text-muted-foreground leading-snug line-clamp-2">
                             {description}
                         </span>
                     )}
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 pl-3">
+            <div className="flex items-center gap-2 pl-3 shrink-0">
                 {action}
                 {onClick && !action && (
-                    <ChevronRight className="h-5 w-5 text-muted-foreground/40" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
                 )}
             </div>
         </div>
     )
 }
 
-// --- CONTROL SELECT ---
+// --- PÍLDORA SELECTORA ESTILO CASHEW ---
 interface SettingsSelectProps {
     value: string
     onValueChange: (val: string) => void
-    options: { label: string, value: string }[]
+    options: { label: string; value: string }[]
     placeholder?: string
-    disabled?: boolean
+    className?: string
 }
 
-export function SettingsSelect({ value, onValueChange, options, placeholder, disabled }: SettingsSelectProps) {
+export function SettingsSelect({
+    value,
+    onValueChange,
+    options,
+    placeholder,
+    className,
+}: SettingsSelectProps) {
     return (
-        <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-            <SelectTrigger className="h-8 w-auto gap-2 border-none bg-muted/50 hover:bg-muted text-xs font-medium px-3 rounded-lg focus:ring-0 focus:ring-offset-0">
+        <Select value={value} onValueChange={onValueChange}>
+            <SelectTrigger
+                className={cn(
+                    "min-w-[130px] max-w-[200px] h-9 text-xs font-bold rounded-xl border-primary/20 bg-primary/10 text-primary hover:bg-primary/15",
+                    className
+                )}
+            >
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent className="rounded-2xl max-h-72">
                 {options.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs rounded-lg">
                         {opt.label}
                     </SelectItem>
                 ))}
@@ -122,14 +168,19 @@ export function SettingsSelect({ value, onValueChange, options, placeholder, dis
 interface SettingsSwitchProps {
     checked: boolean
     onCheckedChange: (checked: boolean) => void
+    label?: string
+    id?: string
 }
 
-export function SettingsSwitch({ checked, onCheckedChange }: SettingsSwitchProps) {
+export function SettingsSwitch({ checked, onCheckedChange, label, id }: SettingsSwitchProps) {
     return (
-        <Switch
-            checked={checked}
-            onCheckedChange={onCheckedChange}
-            className="data-[state=checked]:bg-primary"
-        />
+        <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+            <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+            {label && (
+                <Label htmlFor={id} className="text-xs cursor-pointer">
+                    {label}
+                </Label>
+            )}
+        </div>
     )
 }

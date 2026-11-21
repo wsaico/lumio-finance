@@ -1,3 +1,4 @@
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
 export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
 
         // Fetch rates Map early
         const rateMap = await getExchangeRatesMap(supabase)
-        const targetCurrency = user.user_metadata?.currency || 'PEN'
+        const targetCurrency = user.user_metadata?.currency || DEFAULT_CURRENCY
 
         // 1. Get current total balance of all accounts
         const { data: accounts, error: accountsError } = await supabase
@@ -71,7 +72,7 @@ export async function GET(req: Request) {
 
             txsAfter.forEach(tx => {
                 const rawAmount = Number(tx.amount)
-                const currency = tx.currency_code || accountCurrencyMap[tx.account_id] || 'PEN'
+                const currency = tx.currency_code || accountCurrencyMap[tx.account_id] || DEFAULT_CURRENCY
                 const amount = convertAmount(rawAmount, currency, targetCurrency, rateMap)
 
                 if (tx.transaction_type === 'INCOME') totalIncomeAfter += amount

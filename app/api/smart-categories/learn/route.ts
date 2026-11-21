@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       .trim()
       .replace(/[^a-z0-9\s]/g, '')
       .split(/\s+/)
-      .filter((word: string) => word.length > 2)
+      .filter((word: string) => word.length >= 3 && !['de','del','la','el','los','las','un','una','en','por','para','con','sin','mi','mis','compra','compras','comprar','pago','pagos','pagar','gasto','gastos','ingreso','ingresos','abono','cobro'].includes(word))
       .slice(0, 10);
 
     if (keywords.length === 0) {

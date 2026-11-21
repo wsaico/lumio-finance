@@ -48,13 +48,52 @@ export async function GET() {
         const expenseCategories = processCategories(expenseResult.data, 'EXPENSE')
         const incomeCategories = processCategories(incomeResult.data, 'INCOME')
 
-        // OPTIONAL: Filter duplicates if shadowing is a problem. 
-        // For now, we return all satisfy "System + User" request.
+        // Deduplicate categories by normalized name (user category shadows system category, merges subcategories)
+        const deduplicateList = (items: any[]) => {
+            const map = new Map<string, any>()
+            for (const cat of items) {
+                const key = cat.name.trim().toLowerCase()
+                if (!map.has(key)) {
+                    map.set(key, { ...cat, alias_ids: [cat.id] })
+                } else {
+                    const existing = map.get(key)
+                    existing.alias_ids = Array.from(new Set([...(existing.alias_ids || [existing.id]), cat.id]))
+
+                    if (existing.isSystem && !cat.isSystem) {
+                        const mergedSubcategories = [...(cat.subcategories || [])]
+                        const subNames = new Set(mergedSubcategories.map((s: any) => s.name.trim().toLowerCase()))
+                        for (const sub of (existing.subcategories || [])) {
+                            if (!subNames.has(sub.name.trim().toLowerCase())) {
+                                mergedSubcategories.push(sub)
+                                subNames.add(sub.name.trim().toLowerCase())
+                            }
+                        }
+                        map.set(key, {
+                            ...cat,
+                            alias_ids: existing.alias_ids,
+                            subcategories: mergedSubcategories
+                        })
+                    } else {
+                        const subNames = new Set((existing.subcategories || []).map((s: any) => s.name.trim().toLowerCase()))
+                        for (const sub of (cat.subcategories || [])) {
+                            if (!subNames.has(sub.name.trim().toLowerCase())) {
+                                existing.subcategories.push(sub)
+                                subNames.add(sub.name.trim().toLowerCase())
+                            }
+                        }
+                    }
+                }
+            }
+            return Array.from(map.values())
+        }
+
+        const dedupedExpense = deduplicateList(expenseCategories)
+        const dedupedIncome = deduplicateList(incomeCategories)
 
         return NextResponse.json({
-            expense: expenseCategories,
-            income: incomeCategories,
-            all: [...expenseCategories, ...incomeCategories]
+            expense: dedupedExpense,
+            income: dedupedIncome,
+            all: [...dedupedExpense, ...dedupedIncome]
         })
     } catch (error) {
         // Next.js dynamic usage error detection - MUST re-throw immediately and silently
@@ -173,7 +212,7 @@ export async function PUT(req: Request) {
         // Try to update in Expense first
         let isExpense = targetId.startsWith('e')
         if (!isExpense) {
-            const { data: expCheck } = await supabase.from('expense_categories').select('id').eq('id', targetId).single()
+            const { data: expCheck } = await supabase.from('expense_categories').select('id').eq('id', targetId).eq('user_id', user.id).single()
             if (expCheck) isExpense = true
         }
 
@@ -262,7 +301,7 @@ export async function DELETE(req: Request) {
         // Try Delete in Expense
         let isExpense = targetId.startsWith('e')
         if (!isExpense) {
-            const { data: expCheck } = await supabase.from('expense_categories').select('id').eq('id', targetId).single()
+            const { data: expCheck } = await supabase.from('expense_categories').select('id').eq('id', targetId).eq('user_id', user.id).single()
             if (expCheck) isExpense = true
         }
 

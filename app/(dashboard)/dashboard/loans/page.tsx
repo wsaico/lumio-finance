@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Plus, RefreshCw, ArrowUpRight, ArrowDownLeft } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Plus, ArrowUpRight, ArrowDownLeft } from "lucide-react"
 import { LoanCardReceivable } from "@/components/loans/loan-card-receivable"
 import { LoanCardPayable } from "@/components/loans/loan-card-payable"
 import { LoansSummary } from "@/components/loans/loans-summary"
@@ -13,18 +13,32 @@ import { LoanDetailsModal } from "@/components/loans/loan-details-modal"
 import { useAccountsReceivable, useUpdateAccountReceivable } from "@/hooks/useAccountsReceivable"
 import { useAccountsPayable, useUpdateAccountPayable } from "@/hooks/useAccountsPayable"
 import { useSettingsStore } from "@/hooks/useSettingsStore"
-import { toast } from "sonner"
+import { useExchangeRates } from "@/hooks/useExchangeRates"
 import { cn } from "@/lib/utils"
+import { PremiumPreviewGate } from "@/components/billing/premium-preview-gate"
 import type { AccountReceivable, AccountPayable } from "@/types/loans"
 
-type LoanType = 'RECEIVABLE' | 'PAYABLE'
+type LoanType = "RECEIVABLE" | "PAYABLE"
+type StatusFilter = "ACTIVE" | "OVERDUE" | "COMPLETED" | "ALL"
+
+const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
+    { id: "ACTIVE", label: "Activos" },
+    { id: "OVERDUE", label: "Vencidos" },
+    { id: "COMPLETED", label: "Liquidados" },
+    { id: "ALL", label: "Todos" },
+]
 
 export default function LoansPage() {
     const { currencyCode } = useSettingsStore()
-    const [activeTab, setActiveTab] = useState<'receivable' | 'payable'>('receivable')
+    const { convert } = useExchangeRates()
+
+    const [activeTab, setActiveTab] = useState<"receivable" | "payable">("receivable")
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("ACTIVE")
     const [createLoanModalOpen, setCreateLoanModalOpen] = useState(false)
     const [paymentModalOpen, setPaymentModalOpen] = useState(false)
     const [detailModalOpen, setDetailModalOpen] = useState(false)
+    const [mounted, setMounted] = useState(false)
+
     const [selectedLoan, setSelectedLoan] = useState<{
         id: string
         contactName: string
@@ -42,76 +56,142 @@ export default function LoansPage() {
         } | null
     } | null>(null)
 
-    const [selectedFullLoan, setSelectedFullLoan] = useState<(AccountReceivable | AccountPayable) & { type: LoanType } | null>(null)
+    const [selectedDetailRef, setSelectedDetailRef] = useState<{
+        id: string
+        type: LoanType
+    } | null>(null)
 
-    // Fetch data
-    const {
-        data: receivables = [],
-        isLoading: receivablesLoading,
-        refetch: refetchReceivables
-    } = useAccountsReceivable()
+    useEffect(() => setMounted(true), [])
 
-    const {
-        data: payables = [],
-        isLoading: payablesLoading,
-        refetch: refetchPayables
-    } = useAccountsPayable()
+    const { data: receivables = [], isLoading: receivablesLoading } = useAccountsReceivable()
+    const { data: payables = [], isLoading: payablesLoading } = useAccountsPayable()
 
-    // Mutations
     const updateReceivable = useUpdateAccountReceivable()
     const updatePayable = useUpdateAccountPayable()
 
-    // Handle payment registration
+    // Multi-currency converted summary (fixes raw PEN+USD addition bug!)
+    const summary = useMemo(() => {
+        const toPrimary = (amount: number, fromCurrency?: string) => {
+            const cur = fromCurrency || currencyCode
+            if (cur === currencyCode) return Number(amount || 0)
+            return convert(Number(amount || 0), cur, currencyCode)
+        }
+
+        const isActive = (status: string) =>
+            status !== "PAID" && status !== "COLLECTED" && status !== "CANCELLED"
+
+        const activeRec = receivables.filter((r: AccountReceivable) => isActive(r.status))
+        const activePay = payables.filter((p: AccountPayable) => isActive(p.status))
+
+        return {
+            totalReceivable: activeRec.reduce(
+                (sum: number, r: AccountReceivable) =>
+                    sum + toPrimary(r.outstandingBalance, r.currencyCode),
+                0
+            ),
+            totalPayable: activePay.reduce(
+                (sum: number, p: AccountPayable) =>
+                    sum + toPrimary(p.outstandingBalance, p.currencyCode),
+                0
+            ),
+            overdueReceivable: receivables
+                .filter((r: AccountReceivable) => r.status === "OVERDUE")
+                .reduce(
+                    (sum: number, r: AccountReceivable) =>
+                        sum + toPrimary(r.outstandingBalance, r.currencyCode),
+                    0
+                ),
+            overduePayable: payables
+                .filter((p: AccountPayable) => p.status === "OVERDUE")
+                .reduce(
+                    (sum: number, p: AccountPayable) =>
+                        sum + toPrimary(p.outstandingBalance, p.currencyCode),
+                    0
+                ),
+            activeReceivableCount: activeRec.length,
+            activePayableCount: activePay.length,
+            currencyCode,
+        }
+    }, [receivables, payables, currencyCode, convert])
+
+    const filterByStatus = <T extends { status: string }>(list: T[]) => {
+        if (statusFilter === "ALL") return list
+        if (statusFilter === "OVERDUE") return list.filter((x) => x.status === "OVERDUE")
+        if (statusFilter === "COMPLETED") {
+            return list.filter((x) => x.status === "PAID" || x.status === "COLLECTED")
+        }
+        return list.filter(
+            (x) => x.status !== "PAID" && x.status !== "COLLECTED" && x.status !== "CANCELLED"
+        )
+    }
+
+    const filteredReceivables = useMemo(
+        () => filterByStatus(receivables),
+        [receivables, statusFilter]
+    )
+    const filteredPayables = useMemo(() => filterByStatus(payables), [payables, statusFilter])
+
+    const selectedFullLoan = useMemo(() => {
+        if (!selectedDetailRef) return null
+        const found =
+            selectedDetailRef.type === "RECEIVABLE"
+                ? receivables.find((r: AccountReceivable) => r.id === selectedDetailRef.id)
+                : payables.find((p: AccountPayable) => p.id === selectedDetailRef.id)
+        if (!found) return null
+        return {
+            ...found,
+            type: selectedDetailRef.type,
+        } as (AccountReceivable | AccountPayable) & { type: LoanType }
+    }, [selectedDetailRef, receivables, payables])
+
     const handleRegisterPayment = (id: string) => {
-        const loan = activeTab === 'receivable'
-            ? receivables.find((r: AccountReceivable) => r.id === id)
-            : payables.find((p: AccountPayable) => p.id === id)
+        const loan =
+            activeTab === "receivable"
+                ? receivables.find((r: AccountReceivable) => r.id === id)
+                : payables.find((p: AccountPayable) => p.id === id)
 
         if (!loan) return
 
-        // Calculate smart defaults (Same logic as LoanDetailsModal)
-        const installments = ((loan as any).installments || [])
-            .sort((a: any, b: any) => a.installmentNumber - b.installmentNumber)
-
-        const nextPendingInstallment = installments.find((i: any) =>
-            i.status !== 'PAID' && i.status !== 'CANCELLED'
+        const installments = [...((loan as any).installments || [])].sort(
+            (a: any, b: any) => a.installmentNumber - b.installmentNumber
         )
 
-        // Calculate total payable amount (Principal + Interest of all pending installments)
-        const totalPendingAmount = installments
-            .filter((i: any) => i.status !== 'PAID' && i.status !== 'CANCELLED')
-            .reduce((sum: number, i: any) => sum + Number(i.totalAmount), 0) || loan.outstandingBalance
+        const nextPendingInstallment = installments.find(
+            (i: any) => i.status !== "PAID" && i.status !== "CANCELLED"
+        )
+
+        const totalPendingAmount =
+            installments
+                .filter((i: any) => i.status !== "PAID" && i.status !== "CANCELLED")
+                .reduce((sum: number, i: any) => sum + Number(i.totalAmount), 0) ||
+            loan.outstandingBalance
 
         setSelectedLoan({
             id: loan.id,
             contactName: loan.contactName,
             outstandingBalance: loan.outstandingBalance,
-            totalPendingAmount, // New Field
+            totalPendingAmount,
             currencyCode: loan.currencyCode,
-            type: activeTab === 'receivable' ? 'RECEIVABLE' : 'PAYABLE',
+            type: activeTab === "receivable" ? "RECEIVABLE" : "PAYABLE",
             paymentFrequency: (loan as any).paymentFrequency,
-            nextInstallment: nextPendingInstallment ? {
-                number: nextPendingInstallment.installmentNumber,
-                amount: nextPendingInstallment.totalAmount,
-                dueDate: nextPendingInstallment.dueDate,
-                principal: nextPendingInstallment.principalAmount,
-                interest: nextPendingInstallment.interestAmount,
-            } : null
+            nextInstallment: nextPendingInstallment
+                ? {
+                      number: nextPendingInstallment.installmentNumber,
+                      amount: nextPendingInstallment.totalAmount,
+                      dueDate: nextPendingInstallment.dueDate,
+                      principal: nextPendingInstallment.principalAmount,
+                      interest: nextPendingInstallment.interestAmount,
+                  }
+                : null,
         })
         setPaymentModalOpen(true)
     }
 
     const handleViewDetails = (id: string) => {
-        const loan = activeTab === 'receivable'
-            ? receivables.find((r: AccountReceivable) => r.id === id)
-            : payables.find((p: AccountPayable) => p.id === id)
-
-        if (!loan) return
-
-        setSelectedFullLoan({
-            ...loan,
-            type: activeTab === 'receivable' ? 'RECEIVABLE' : 'PAYABLE' as LoanType
-        } as (AccountReceivable | AccountPayable) & { type: LoanType })
+        setSelectedDetailRef({
+            id,
+            type: activeTab === "receivable" ? "RECEIVABLE" : "PAYABLE",
+        })
         setDetailModalOpen(true)
     }
 
@@ -119,189 +199,164 @@ export default function LoansPage() {
         if (!selectedLoan) return
 
         try {
-            if (selectedLoan.type === 'RECEIVABLE') {
-                await updateReceivable.mutateAsync({
-                    id: selectedLoan.id,
-                    ...data
-                })
+            if (selectedLoan.type === "RECEIVABLE") {
+                await updateReceivable.mutateAsync({ id: selectedLoan.id, ...data })
             } else {
-                await updatePayable.mutateAsync({
-                    id: selectedLoan.id,
-                    ...data
-                })
+                await updatePayable.mutateAsync({ id: selectedLoan.id, ...data })
             }
-
             setPaymentModalOpen(false)
             setSelectedLoan(null)
         } catch (error) {
-            console.error('Error registering payment:', error)
+            console.error("Error registering payment:", error)
         }
     }
 
-    const handleRefresh = () => {
-        refetchReceivables()
-        refetchPayables()
-    }
-
-    // Calculate summary
-    const summary = {
-        totalReceivable: receivables.reduce((sum: number, r: AccountReceivable) =>
-            sum + r.outstandingBalance, 0),
-        totalPayable: payables.reduce((sum: number, p: AccountPayable) =>
-            sum + p.outstandingBalance, 0),
-        overdueReceivable: receivables
-            .filter((r: AccountReceivable) => r.status === 'OVERDUE')
-            .reduce((sum: number, r: AccountReceivable) => sum + r.outstandingBalance, 0),
-        overduePayable: payables
-            .filter((p: AccountPayable) => p.status === 'OVERDUE')
-            .reduce((sum: number, p: AccountPayable) => sum + p.outstandingBalance, 0),
-        currencyCode,
-    }
-
-    const isLoading = receivablesLoading || payablesLoading
-
-    const [mounted, setMounted] = useState(false)
-
-    // Prevent hydration mismatch
-    useEffect(() => {
-        setMounted(true)
-    }, [])
-
     if (!mounted) {
-        return <div className="container mx-auto py-6 space-y-6">
+        return (
             <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <div className="h-9 w-48 bg-muted/20 rounded-lg animate-pulse mb-2"></div>
-                        <div className="h-5 w-96 bg-muted/20 rounded-lg animate-pulse"></div>
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-32 rounded-xl bg-muted/20 animate-pulse" />
+                <Skeleton className="h-48 w-full rounded-[1.75rem]" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-52 rounded-3xl" />
                     ))}
                 </div>
             </div>
-        </div>
+        )
     }
 
+    const activeList = activeTab === "receivable" ? filteredReceivables : filteredPayables
+    const isListLoading = activeTab === "receivable" ? receivablesLoading : payablesLoading
+
     return (
-        <div className="container mx-auto py-6 space-y-6 animate-in fade-in duration-500">
-            {/* Header Toolbar */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-end gap-2">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleRefresh}
-                        disabled={isLoading}
-                        className={cn(isLoading && "animate-spin")}
+        <PremiumPreviewGate moduleName="Préstamos">
+        <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+            {/* EXECUTIVE HERO SUMMARY */}
+            <LoansSummary summary={summary} onCreateLoan={() => setCreateLoanModalOpen(true)} />
+
+            {/* SEGMENTED TABS + STATUS FILTER CHIPS */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                {/* Primary Direction Switcher */}
+                <div className="grid grid-cols-2 p-1 rounded-2xl bg-muted/50 border border-border/60 w-full sm:w-auto gap-1">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("receivable")}
+                        className={cn(
+                            "px-4 py-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all",
+                            activeTab === "receivable"
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
                     >
-                        <RefreshCw className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        onClick={() => setCreateLoanModalOpen(true)}
-                        className="gap-2 shadow-md hover:shadow-lg transition-all"
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                        <span>Por Cobrar ({receivables.length})</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab("payable")}
+                        className={cn(
+                            "px-4 py-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all",
+                            activeTab === "payable"
+                                ? "bg-amber-500 text-white shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
                     >
-                        <Plus className="h-4 w-4" /> Nuevo Préstamo
-                    </Button>
+                        <ArrowDownLeft className="h-3.5 w-3.5" />
+                        <span>Por Pagar ({payables.length})</span>
+                    </button>
                 </div>
 
-                {/* Summary Cards */}
-                <LoansSummary summary={summary} />
+                {/* Status Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    {STATUS_FILTERS.map((f) => {
+                        const active = statusFilter === f.id
+                        return (
+                            <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => setStatusFilter(f.id)}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-full text-xs font-bold border transition-all shrink-0",
+                                    active
+                                        ? "bg-card text-foreground border-primary/40 shadow-xs"
+                                        : "bg-transparent text-muted-foreground border-border/50 hover:text-foreground"
+                                )}
+                            >
+                                {f.label}
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
 
-            {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'receivable' | 'payable')}>
-                <TabsList className="grid w-full max-w-md grid-cols-2">
-                    <TabsTrigger value="receivable" className="gap-2">
-                        <ArrowUpRight className="h-4 w-4" />
-                        Por Cobrar ({receivables.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="payable" className="gap-2">
-                        <ArrowDownLeft className="h-4 w-4" />
-                        Por Pagar ({payables.length})
-                    </TabsTrigger>
-                </TabsList>
+            {/* LOANS GRID */}
+            {isListLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-52 rounded-3xl" />
+                    ))}
+                </div>
+            ) : activeList.length === 0 ? (
+                <div className="card-modern p-10 sm:p-14 text-center flex flex-col items-center justify-center max-w-lg mx-auto">
+                    <div
+                        className={cn(
+                            "h-16 w-16 rounded-3xl flex items-center justify-center mb-4",
+                            activeTab === "receivable"
+                                ? "bg-indigo-500/12 text-indigo-600 dark:text-indigo-400"
+                                : "bg-amber-500/12 text-amber-600 dark:text-amber-400"
+                        )}
+                    >
+                        {activeTab === "receivable" ? (
+                            <ArrowUpRight className="h-8 w-8" />
+                        ) : (
+                            <ArrowDownLeft className="h-8 w-8" />
+                        )}
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black tracking-tight text-foreground">
+                        Sin préstamos{" "}
+                        {activeTab === "receivable" ? "por cobrar" : "por pagar"}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 mb-6 max-w-sm">
+                        {activeTab === "receivable"
+                            ? "Registra los préstamos que has otorgado para controlar cobros y cuotas."
+                            : "Registra tus deudas u obligaciones para mantener tus pagos al día."}
+                    </p>
+                    <Button
+                        onClick={() => setCreateLoanModalOpen(true)}
+                        className="rounded-full h-11 px-6 font-extrabold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 gap-2"
+                    >
+                        <Plus className="h-4 w-4 stroke-[2.5]" />
+                        {activeTab === "receivable" ? "Registrar Préstamo" : "Registrar Deuda"}
+                    </Button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    {activeTab === "receivable"
+                        ? filteredReceivables.map((receivable: AccountReceivable) => (
+                              <LoanCardReceivable
+                                  key={receivable.id}
+                                  receivable={receivable}
+                                  onRegisterPayment={handleRegisterPayment}
+                                  onViewDetails={handleViewDetails}
+                              />
+                          ))
+                        : filteredPayables.map((payable: AccountPayable) => (
+                              <LoanCardPayable
+                                  key={payable.id}
+                                  payable={payable}
+                                  onRegisterPayment={handleRegisterPayment}
+                                  onViewDetails={handleViewDetails}
+                              />
+                          ))}
+                </div>
+            )}
 
-                {/* Accounts Receivable Tab */}
-                <TabsContent value="receivable" className="space-y-4 mt-6">
-                    {receivablesLoading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {[1, 2, 3].map(i => (
-                                <div key={i} className="h-80 rounded-xl bg-muted/20 animate-pulse" />
-                            ))}
-                        </div>
-                    ) : receivables.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed rounded-xl bg-gradient-to-br from-blue-50/50 to-blue-100/30">
-                            <div className="p-4 rounded-full bg-gradient-to-br from-blue-500/20 to-blue-600/10 mb-4">
-                                <ArrowUpRight className="h-10 w-10 text-blue-600" />
-                            </div>
-                            <h3 className="text-xl font-semibold">No tienes cuentas por cobrar</h3>
-                            <p className="text-muted-foreground text-center max-w-sm mt-2 mb-6">
-                                Registra los préstamos que has otorgado para mantener un control financiero completo.
-                            </p>
-                            <Button onClick={() => setCreateLoanModalOpen(true)} className="shadow-lg">
-                                <Plus className="mr-2 h-4 w-4" /> Registrar Préstamo
-                            </Button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {receivables.map((receivable: AccountReceivable) => (
-                                <LoanCardReceivable
-                                    key={receivable.id}
-                                    receivable={receivable}
-                                    onRegisterPayment={handleRegisterPayment}
-                                    onViewDetails={handleViewDetails}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </TabsContent>
-
-                {/* Accounts Payable Tab */}
-                <TabsContent value="payable" className="space-y-4 mt-6">
-                    {payablesLoading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {[1, 2, 3].map(i => (
-                                <div key={i} className="h-80 rounded-xl bg-muted/20 animate-pulse" />
-                            ))}
-                        </div>
-                    ) : payables.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed rounded-xl bg-gradient-to-br from-orange-50/50 to-orange-100/30">
-                            <div className="p-4 rounded-full bg-gradient-to-br from-orange-500/20 to-orange-600/10 mb-4">
-                                <ArrowDownLeft className="h-10 w-10 text-orange-600" />
-                            </div>
-                            <h3 className="text-xl font-semibold">No tienes cuentas por pagar</h3>
-                            <p className="text-muted-foreground text-center max-w-sm mt-2 mb-6">
-                                Registra los préstamos que has recibido para llevar un control de tus obligaciones.
-                            </p>
-                            <Button onClick={() => setCreateLoanModalOpen(true)} className="shadow-lg">
-                                <Plus className="mr-2 h-4 w-4" /> Registrar Deuda
-                            </Button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {payables.map((payable: AccountPayable) => (
-                                <LoanCardPayable
-                                    key={payable.id}
-                                    payable={payable}
-                                    onRegisterPayment={handleRegisterPayment}
-                                    onViewDetails={handleViewDetails}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </TabsContent>
-            </Tabs>
-
-            {/* Create Loan Modal */}
+            {/* Modals */}
             <CreateLoanModal
                 open={createLoanModalOpen}
                 onClose={() => setCreateLoanModalOpen(false)}
+                defaultType={activeTab === "receivable" ? "RECEIVABLE" : "PAYABLE"}
             />
 
-            {/* Payment Modal */}
             <PaymentModal
                 open={paymentModalOpen}
                 onClose={() => {
@@ -313,15 +368,15 @@ export default function LoansPage() {
                 isLoading={updateReceivable.isPending || updatePayable.isPending}
             />
 
-            {/* View Details Modal */}
             <LoanDetailsModal
                 open={detailModalOpen}
                 onClose={() => {
                     setDetailModalOpen(false)
-                    setSelectedFullLoan(null)
+                    setSelectedDetailRef(null)
                 }}
                 loan={selectedFullLoan}
             />
         </div>
+        </PremiumPreviewGate>
     )
 }

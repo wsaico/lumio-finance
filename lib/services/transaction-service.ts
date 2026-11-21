@@ -21,6 +21,8 @@ export interface ProcessTransactionParams {
     loanId?: string
     recurringRuleId?: string
     attachmentUrl?: string
+    tags?: string[]
+    isDemo?: boolean
 }
 
 export class TransactionService {
@@ -78,28 +80,35 @@ export class TransactionService {
         }
 
         // 2. Create Transaction Record
+        const cleanTags = Array.isArray(params.tags)
+            ? Array.from(new Set(params.tags.map((t) => String(t).trim()).filter(Boolean)))
+            : []
+
+        const insertPayload: Record<string, any> = {
+            user_id: userId,
+            transaction_type: type,
+            account_id: accountId,
+            transfer_to_account_id: this.sanitizeUuid(params.transferToAccountId),
+            credit_card_id: this.sanitizeUuid(params.creditCardId),
+            amount: amount,
+            currency_code: params.currency,
+            expense_category_id: this.sanitizeUuid(expenseCategoryId),
+            income_category_id: this.sanitizeUuid(incomeCategoryId),
+            subcategory_id: this.sanitizeUuid(params.subcategoryId),
+            transaction_date: params.transactionDate,
+            description: params.description,
+            notes: params.notes,
+            tags: cleanTags,
+            metadata: params.isDemo ? { ...metadata, is_demo: true } : metadata,
+            savings_goal_id: this.sanitizeUuid(params.savingsGoalId),
+            loan_id: this.sanitizeUuid(params.loanId),
+            recurring_rule_id: this.sanitizeUuid(params.recurringRuleId),
+            attachment_url: params.attachmentUrl
+        }
+
         const { data: newTransaction, error: txError } = await supabase
             .from('transactions')
-            .insert({
-                user_id: userId,
-                transaction_type: type,
-                account_id: accountId,
-                transfer_to_account_id: this.sanitizeUuid(params.transferToAccountId),
-                credit_card_id: this.sanitizeUuid(params.creditCardId),
-                amount: amount,
-                currency_code: params.currency,
-                expense_category_id: this.sanitizeUuid(expenseCategoryId),
-                income_category_id: this.sanitizeUuid(incomeCategoryId),
-                subcategory_id: this.sanitizeUuid(params.subcategoryId),
-                transaction_date: params.transactionDate,
-                description: params.description,
-                notes: params.notes,
-                metadata: metadata,
-                savings_goal_id: this.sanitizeUuid(params.savingsGoalId),
-                loan_id: this.sanitizeUuid(params.loanId),
-                recurring_rule_id: this.sanitizeUuid(params.recurringRuleId),
-                attachment_url: params.attachmentUrl
-            })
+            .insert(insertPayload)
             .select(`
                 *,
                 account:accounts!transactions_account_id_fkey(name, icon, color, currency_code),
@@ -126,7 +135,7 @@ export class TransactionService {
         const mode = metadata?.mode
         const loanStatus = metadata?.loanStatus
 
-        if (mode === 'SCHEDULED' || loanStatus === 'PENDING') return
+        if (mode === 'SCHEDULED' || mode === 'UPCOMING' || loanStatus === 'PENDING') return
 
         // 1. Reverse Legacy Credit Card impact (table: credit_cards)
         if (credit_card_id) {
@@ -263,6 +272,9 @@ export class TransactionService {
                 transaction_date: updates.transactionDate || oldTx.transaction_date,
                 description: updates.description !== undefined ? updates.description : oldTx.description,
                 notes: updates.notes !== undefined ? updates.notes : oldTx.notes,
+                tags: updates.tags !== undefined
+                    ? Array.from(new Set(updates.tags.map((t) => String(t).trim()).filter(Boolean)))
+                    : oldTx.tags,
                 metadata: { ...(oldTx.metadata || {}), ...(updates.metadata || {}) },
                 savings_goal_id: updates.savingsGoalId !== undefined ? this.sanitizeUuid(updates.savingsGoalId) : oldTx.savings_goal_id,
                 loan_id: updates.loanId !== undefined ? this.sanitizeUuid(updates.loanId) : oldTx.loan_id,
@@ -293,7 +305,7 @@ export class TransactionService {
     private static async applyTransactionImpact(supabase: SupabaseClient, transaction: any) {
         const { amount, transaction_type: type, account_id: accountId, transfer_to_account_id, credit_card_id, metadata } = transaction
 
-        if (metadata?.mode === 'SCHEDULED' || metadata?.loanStatus === 'PENDING') return
+        if (metadata?.mode === 'SCHEDULED' || metadata?.mode === 'UPCOMING' || metadata?.loanStatus === 'PENDING') return
 
         // 1. Legacy Credit Card impact (table: credit_cards)
         if (credit_card_id) {
@@ -356,39 +368,96 @@ export class TransactionService {
     }
 
     /**
-     * Creates a Recurring Rule for auto-execution.
+     * Calculates the next occurrence date based on frequency and interval.
+     */
+    static calculateNextOccurrence(fromDate: Date, frequency: string, interval = 1): Date {
+        const next = new Date(fromDate)
+        const step = Math.max(1, Number(interval || 1))
+        switch ((frequency || 'MONTHLY').toUpperCase()) {
+            case 'DAILY':
+                next.setDate(next.getDate() + step)
+                break
+            case 'WEEKLY':
+                next.setDate(next.getDate() + step * 7)
+                break
+            case 'BIWEEKLY':
+                next.setDate(next.getDate() + step * 14)
+                break
+            case 'YEARLY':
+                next.setFullYear(next.getFullYear() + step)
+                break
+            case 'MONTHLY':
+            default:
+                next.setMonth(next.getMonth() + step)
+                break
+        }
+        return next
+    }
+
+    /**
+     * Creates a Recurring Rule for auto-execution or reminders.
      */
     static async createRecurringRule(supabase: SupabaseClient, params: {
         userId: string,
         accountId: string,
         transactionType: string,
         amount: number,
-        frequency: string, // MONTHLY, WEEKLY, DAILY
+        currencyCode?: string,
+        frequency: string, // DAILY, WEEKLY, BIWEEKLY, MONTHLY, YEARLY
+        interval?: number,
         startDate: string,
-        endDate?: string,
+        nextOccurrence?: string,
+        endDate?: string | null,
         description?: string,
         expenseCategoryId?: string | null,
         incomeCategoryId?: string | null,
         subcategoryId?: string | null,
-        executionMethod?: 'AUTO' | 'MANUAL',
+        executionMethod?: string,
         metadata?: any
     }) {
+        const parsedStart = new Date(params.startDate)
+        const safeStart = isNaN(parsedStart.getTime()) ? new Date() : parsedStart
+        const freq = (params.frequency && params.frequency !== 'NONE' ? params.frequency : 'MONTHLY').toUpperCase()
+        const step = Math.max(1, Number(params.interval || params.metadata?.recurrenceInterval || 1))
+
+        const toDateOnly = (d: Date) =>
+            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+        const nextDateStr = params.nextOccurrence
+            ? params.nextOccurrence.split('T')[0]
+            : toDateOnly(this.calculateNextOccurrence(safeStart, freq, step))
+
+        const endDateStr = params.endDate
+            ? params.endDate.split('T')[0]
+            : params.metadata?.recurrenceEndDate
+              ? String(params.metadata.recurrenceEndDate).split('T')[0]
+              : null
+
+        const isExpense = params.transactionType === 'EXPENSE'
+        const isIncome = params.transactionType === 'INCOME'
+
+        const resolvedExec = params.executionMethod || 'SUBSCRIPTION|AUTO|3'
+
         const { data, error } = await supabase
             .from('recurring_rules')
             .insert({
                 user_id: params.userId,
+                rule_name: (params.description || 'Pago recurrente').slice(0, 120),
                 account_id: params.accountId,
                 transaction_type: params.transactionType,
                 amount: params.amount,
-                frequency: params.frequency,
-                start_date: params.startDate,
-                end_date: params.endDate,
-                description: params.description,
-                expense_category_id: this.sanitizeUuid(params.expenseCategoryId),
-                income_category_id: this.sanitizeUuid(params.incomeCategoryId),
+                currency_code: params.currencyCode || 'PEN',
+                frequency: freq,
+                interval: step,
+                start_date: toDateOnly(safeStart),
+                end_date: endDateStr,
+                next_occurrence: nextDateStr,
+                description: params.description || null,
+                expense_category_id: isExpense ? this.sanitizeUuid(params.expenseCategoryId) : null,
+                income_category_id: isIncome ? this.sanitizeUuid(params.incomeCategoryId) : null,
                 subcategory_id: this.sanitizeUuid(params.subcategoryId),
-                last_executed_date: params.startDate, // Mark first execution as done
-                execution_method: params.executionMethod || 'AUTO',
+                last_executed_at: params.metadata?.initialPaymentState === 'PAID_TODAY' ? safeStart.toISOString() : null,
+                execution_method: resolvedExec,
                 is_active: true
             })
             .select()
@@ -396,7 +465,6 @@ export class TransactionService {
 
         if (error) {
             console.error('[CREATE_RECURRING_RULE]', error)
-            // Non-blocking error - we log but don't fail the main transaction
         }
 
         return data

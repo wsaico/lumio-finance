@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { getUserEntitlementsServer } from '@/lib/server/entitlements'
 
 // Validation schemas
 const createGoalSchema = z.object({
@@ -143,6 +144,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
+        const { entitlements } = await getUserEntitlementsServer(supabase, user)
+        if (!entitlements.canAccessPremiumWrite) {
+            return NextResponse.json(
+                { error: 'Las metas de ahorro requieren Plan Premium.', code: 'PREMIUM_REQUIRED' },
+                { status: 403 }
+            )
+        }
+
         const body = await request.json()
         const validatedData = createGoalSchema.parse(body)
 
@@ -217,6 +226,14 @@ export async function PATCH(request: NextRequest) {
 
         if (!user) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        }
+
+        const { entitlements } = await getUserEntitlementsServer(supabase, user)
+        if (!entitlements.canAccessPremiumWrite) {
+            return NextResponse.json(
+                { error: 'Las metas de ahorro requieren Plan Premium.', code: 'PREMIUM_REQUIRED' },
+                { status: 403 }
+            )
         }
 
         const body = await request.json()

@@ -1,12 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getExchangeRatesMap, getEffectiveRate } from '@/lib/currency'
 
-// POST: Convert amount from one currency to another
+// POST: Convert amount between any two currencies (direct, inverse, or cross via USD hub)
 export async function POST(req: Request) {
     try {
         const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
 
         if (!user) {
             return new NextResponse('Unauthorized', { status: 401 })
@@ -16,83 +19,46 @@ export async function POST(req: Request) {
         const { amount, from, to } = body
 
         if (amount === undefined || !from || !to) {
-            return new NextResponse('Missing required fields: amount, from, to', { status: 400 })
+            return NextResponse.json(
+                { error: 'Missing required fields: amount, from, to' },
+                { status: 400 }
+            )
         }
 
-        // Same currency, no conversion needed
-        if (from === to) {
+        const numericAmount = Number(amount)
+        const fromCode = String(from).toUpperCase()
+        const toCode = String(to).toUpperCase()
+
+        if (fromCode === toCode) {
             return NextResponse.json({
-                amount,
-                from,
-                to,
-                converted: amount,
-                rate: 1
+                amount: numericAmount,
+                from: fromCode,
+                to: toCode,
+                converted: numericAmount,
+                rate: 1,
+                isFallback: false,
             })
         }
 
-        // Get latest exchange rate
-        const { data: rates, error } = await supabase
-            .from('exchange_rates')
-            .select('*')
-            .eq('from_currency', from)
-            .eq('to_currency', to)
-            .order('effective_date', { ascending: false })
-            .limit(1)
-
-        if (error) throw error
-
-        if (!rates || rates.length === 0) {
-            // Try inverse rate
-            const { data: inverseRates, error: inverseError } = await supabase
-                .from('exchange_rates')
-                .select('*')
-                .eq('from_currency', to)
-                .eq('to_currency', from)
-                .order('effective_date', { ascending: false })
-                .limit(1)
-
-            if (inverseError) throw inverseError
-
-            if (!inverseRates || inverseRates.length === 0) {
-                return new NextResponse(`No exchange rate found for ${from} to ${to}`, { status: 404 })
-            }
-
-            // Use inverse rate
-            const inverseRate = Number(inverseRates[0].rate)
-            const rate = 1 / inverseRate
-            const converted = Number(amount) * rate
-
-            return NextResponse.json({
-                amount: Number(amount),
-                from,
-                to,
-                converted,
-                rate,
-                rateDate: inverseRates[0].effective_date,
-                source: inverseRates[0].source,
-                isInverse: true
-            })
-        }
-
-        // Direct rate found
-        const rate = Number(rates[0].rate)
-        const converted = Number(amount) * rate
+        const rateMap = await getExchangeRatesMap(supabase)
+        const { rate, isFallback } = getEffectiveRate(fromCode, toCode, rateMap)
+        const converted = numericAmount * rate
 
         return NextResponse.json({
-            amount: Number(amount),
-            from,
-            to,
+            amount: numericAmount,
+            from: fromCode,
+            to: toCode,
             converted,
             rate,
-            rateDate: rates[0].effective_date,
-            source: rates[0].source,
-            isInverse: false
+            isFallback,
         })
-
     } catch (error: any) {
-        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
-        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
-            throw error;
+        if (
+            error &&
+            (error.digest === 'DYNAMIC_SERVER_USAGE' ||
+                String(error).includes('Dynamic server usage'))
+        ) {
+            throw error
         }
 
         console.error('[EXCHANGE_RATES_CONVERT]', error)

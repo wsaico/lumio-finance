@@ -100,7 +100,7 @@ export function ReallocationModal({ cycleId, allocations, onSuccess, trigger }: 
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 {trigger ? trigger : (
-                    <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                    <Button variant="outline" className="gap-2 border-indigo-200 text-primary hover:bg-primary/10">
                         <ArrowRightLeft className="w-4 h-4" /> Mover Dinero
                     </Button>
                 )}
@@ -108,7 +108,7 @@ export function ReallocationModal({ cycleId, allocations, onSuccess, trigger }: 
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <div className="bg-indigo-100 p-2 rounded-full text-indigo-600">
+                        <div className="bg-primary/10 p-2 rounded-full text-primary">
                             <ArrowRightLeft className="w-5 h-5" />
                         </div>
                         Mover Dinero (Reasignar)

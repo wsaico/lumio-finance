@@ -1,3 +1,4 @@
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
 export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
             getExchangeRatesMap(supabase),
             supabase.from('accounts').select('id, currency_code').eq('user_id', user.id)
         ])
-        const targetCurrency = user.user_metadata?.currency || 'PEN'
+        const targetCurrency = user.user_metadata?.currency || DEFAULT_CURRENCY
 
         const accounts = accountsRes.data || []
         const accountCurrencyMap: Record<string, string> = {}
@@ -71,7 +72,7 @@ export async function GET(req: Request) {
 
         transactions?.forEach((tx: any) => {
             const rawAmount = Number(tx.amount)
-            const currency = tx.currency_code || accountCurrencyMap[tx.account_id] || 'PEN'
+            const currency = tx.currency_code || accountCurrencyMap[tx.account_id] || DEFAULT_CURRENCY
             const amount = convertAmount(rawAmount, currency, targetCurrency, rateMap)
 
             total += amount

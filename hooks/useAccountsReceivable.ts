@@ -1,16 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { AccountReceivable, CreateAccountReceivableDTO, LoansSummary } from '@/types/loans'
+import type { AccountReceivable, CreateAccountReceivableDTO, PaymentMethod } from '@/types/loans'
 import { toast } from 'sonner'
-
-// ============================================
-// FETCH Functions
-// ============================================
 
 async function fetchAccountsReceivable(status?: string): Promise<AccountReceivable[]> {
     const params = new URLSearchParams()
     if (status && status !== 'ALL') params.append('status', status)
 
-    const res = await fetch(`/api/accounts-receivable?${params}`)
+    const qs = params.toString()
+    const res = await fetch(qs ? `/api/accounts-receivable?${qs}` : '/api/accounts-receivable')
     if (!res.ok) throw new Error('Error al cargar cuentas por cobrar')
     return res.json()
 }
@@ -23,21 +20,24 @@ async function createAccountReceivable(data: CreateAccountReceivableDTO): Promis
     })
 
     if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Error al crear cuenta por cobrar')
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.details || error.error || 'Error al crear cuenta por cobrar')
     }
 
     return res.json()
 }
 
-async function registerPayment(data: {
+export interface RegisterLoanPaymentPayload {
     id: string
     paymentAmount: number
     accountId: string
     principalAmount?: number
     interestAmount?: number
+    paymentMethod?: PaymentMethod
     notes?: string
-}): Promise<AccountReceivable> {
+}
+
+async function registerPayment(data: RegisterLoanPaymentPayload): Promise<AccountReceivable> {
     const res = await fetch('/api/accounts-receivable', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -45,22 +45,18 @@ async function registerPayment(data: {
     })
 
     if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Error al registrar pago')
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.details || error.error || 'Error al registrar cobro')
     }
 
     return res.json()
 }
 
-// ============================================
-// HOOKS
-// ============================================
-
 export function useAccountsReceivable(status?: string) {
     return useQuery({
         queryKey: ['accounts-receivable', status],
         queryFn: () => fetchAccountsReceivable(status),
-        staleTime: 30000, // 30 seconds
+        staleTime: 30000,
     })
 }
 
@@ -71,8 +67,9 @@ export function useCreateAccountReceivable() {
         mutationFn: createAccountReceivable,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts-receivable'] })
-            queryClient.invalidateQueries({ queryKey: ['accounts'] }) // Update account balance
+            queryClient.invalidateQueries({ queryKey: ['accounts'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            queryClient.invalidateQueries({ queryKey: ['budgets'] })
             toast.success('Préstamo otorgado registrado')
         },
         onError: (error: Error) => {
@@ -85,44 +82,21 @@ export function useUpdateAccountReceivable() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: (data: { id: string; paymentAmount: number; accountId: string; principalAmount?: number; interestAmount?: number; notes?: string }) =>
-            registerPayment(data),
+        mutationFn: registerPayment,
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['accounts-receivable'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            queryClient.invalidateQueries({ queryKey: ['budgets'] })
 
             if (data.status === 'COLLECTED') {
                 toast.success('¡Préstamo cobrado completamente!')
             } else {
-                toast.success('Pago parcial registrado')
+                toast.success('Cobro parcial registrado')
             }
         },
         onError: (error: Error) => {
             toast.error(error.message)
         },
     })
-}
-
-// ============================================
-// SUMMARY HOOK (Statistics)
-// ============================================
-
-export function useReceivablesSummary() {
-    const { data: receivables } = useAccountsReceivable()
-
-    if (!receivables) return null
-
-    const summary = {
-        total: receivables.length,
-        pending: receivables.filter(r => r.status === 'PENDING').length,
-        partial: receivables.filter(r => r.status === 'PARTIAL').length,
-        overdue: receivables.filter(r => r.status === 'OVERDUE').length,
-        collected: receivables.filter(r => r.status === 'COLLECTED').length,
-        totalAmount: receivables.reduce((sum, r) => sum + r.originalAmount, 0),
-        totalOutstanding: receivables.filter(r => r.status !== 'COLLECTED' && r.status !== 'CANCELLED')
-            .reduce((sum, r) => sum + r.outstandingBalance, 0),
-    }
-
-    return summary
 }

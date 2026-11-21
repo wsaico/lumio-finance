@@ -1,69 +1,100 @@
-export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { startOfMonth, endOfMonth, subMonths, format, differenceInDays, endOfDay, startOfDay } from 'date-fns'
-import { expandCategoryIds } from '@/lib/category-utils'
-import { getExchangeRatesMap, convertAmount } from '@/lib/currency'
+export const dynamic = "force-dynamic"
+
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+import {
+    startOfMonth,
+    endOfMonth,
+    subMonths,
+    subDays,
+    format,
+    differenceInDays,
+    endOfDay,
+    startOfDay,
+} from "date-fns"
+import { es } from "date-fns/locale"
+import { expandCategoryIds } from "@/lib/category-utils"
+import { getExchangeRatesMap, convertAmount } from "@/lib/currency"
+import { getServiceRoleClient } from "@/lib/server/system-settings"
 
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
-        const categoriesFilter = searchParams.get('categories')?.split(',').filter(Boolean) || []
-        const accountsFilter = searchParams.get('accounts')?.split(',').filter(Boolean) || []
-        const typeParam = searchParams.get('type') || 'ALL'
-        const periodParam = searchParams.get('period') || '6m'
-        const startDateParam = searchParams.get('startDate')
-        const endDateParam = searchParams.get('endDate')
+        const categoriesFilter = searchParams.get("categories")?.split(",").filter(Boolean) || []
+        const accountsFilter = searchParams.get("accounts")?.split(",").filter(Boolean) || []
+        const typeParam = searchParams.get("type") || "ALL"
+        const periodParam = searchParams.get("period") || "6m"
+        const startDateParam = searchParams.get("startDate")
+        const endDateParam = searchParams.get("endDate")
 
         const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
 
         if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
+        const db = getServiceRoleClient() || supabase
         const now = new Date()
-        const targetCurrency = searchParams.get('currency') || user.user_metadata?.currency || 'PEN' // Helper param
+        const targetCurrency =
+            searchParams.get("currency") || user.user_metadata?.currency || "PEN"
 
-        // ... auth check
-
-        // 0. Fetch Categories explicitly (Robust Split queries)
-        // 0. Fetch Data Parallel
-        const [rateMap, accountsRes] = await Promise.all([
-            getExchangeRatesMap(supabase),
-            supabase.from('accounts').select('id, currency_code, current_balance, account_type').eq('user_id', user.id)
+        // 0. Fetch Exchange Rates, Accounts, and Categories in parallel
+        const [rateMap, accountsRes, userExp, sysExp, userInc, sysInc] = await Promise.all([
+            getExchangeRatesMap(db),
+            db
+                .from("accounts")
+                .select(
+                    "id, name, currency_code, current_balance, credit_limit, used_balance, account_type, is_active, exclude_from_stats"
+                )
+                .eq("user_id", user.id)
+                .eq("is_active", true),
+            db.from("expense_categories").select("*").eq("user_id", user.id),
+            db.from("expense_categories").select("*").is("user_id", null),
+            db.from("income_categories").select("*").eq("user_id", user.id),
+            db.from("income_categories").select("*").is("user_id", null),
         ])
 
-        const accounts = accountsRes.data || []
+        const accounts = (accountsRes.data || []).filter((a: any) => !a.exclude_from_stats)
         const accountCurrencyMap: Record<string, string> = {}
-        accounts.forEach(acc => {
+        accounts.forEach((acc: any) => {
             accountCurrencyMap[acc.id] = acc.currency_code
         })
 
-        // Helper to convert inline - DEFINED EARLY
-        const toBase = (amount: number, currency: string) => {
-            return convertAmount(amount, currency, targetCurrency, rateMap)
+        const toBase = (amount: number, currency?: string) => {
+            return convertAmount(Number(amount || 0), currency || targetCurrency, targetCurrency, rateMap)
         }
 
-        const [userExp, sysExp, userInc, sysInc] = await Promise.all([
-            supabase.from('expense_categories').select('*').eq('user_id', user.id),
-            supabase.from('expense_categories').select('*').is('user_id', null),
-            supabase.from('income_categories').select('*').eq('user_id', user.id),
-            supabase.from('income_categories').select('*').is('user_id', null)
-        ])
-
         const allCategories = [
-            ...(userExp.data || []).map(c => ({ ...c, type: 'EXPENSE', parent_id: c.parent_category_id })),
-            ...(sysExp.data || []).map(c => ({ ...c, type: 'EXPENSE', parent_id: c.parent_category_id })),
-            ...(userInc.data || []).map(c => ({ ...c, type: 'INCOME', parent_id: c.parent_category_id })),
-            ...(sysInc.data || []).map(c => ({ ...c, type: 'INCOME', parent_id: c.parent_category_id }))
+            ...(userExp.data || []).map((c: any) => ({
+                ...c,
+                type: "EXPENSE",
+                parent_id: c.parent_category_id,
+            })),
+            ...(sysExp.data || []).map((c: any) => ({
+                ...c,
+                type: "EXPENSE",
+                parent_id: c.parent_category_id,
+            })),
+            ...(userInc.data || []).map((c: any) => ({
+                ...c,
+                type: "INCOME",
+                parent_id: c.parent_category_id,
+            })),
+            ...(sysInc.data || []).map((c: any) => ({
+                ...c,
+                type: "INCOME",
+                parent_id: c.parent_category_id,
+            })),
         ]
 
         const idToCategory: Record<string, any> = {}
         const categoriesByName: Record<string, string[]> = {}
-        const normalize = (n: string) => n ? n.trim().toLowerCase() : ''
+        const normalize = (n: string) => (n ? n.trim().toLowerCase() : "")
 
-        allCategories.forEach(c => {
+        allCategories.forEach((c) => {
             idToCategory[c.id] = c
             if (c.name) {
                 const key = normalize(c.name)
@@ -72,420 +103,645 @@ export async function GET(request: Request) {
             }
         })
 
-        // Determine analytical range
-        let analyticsStart: string
-        let analyticsEnd: string
+        // 1. Coherent Analytical Period Window
+        let analyticsStartDate: Date
+        let analyticsEndDate: Date = endOfDay(now)
+        let monthsInPeriod = 1
+        let trendMonthsCount = 6
 
-        if (periodParam === '1m') {
-            const thirtyDaysAgo = startOfDay(subMonths(now, 1))
-            analyticsStart = thirtyDaysAgo.toISOString()
-            analyticsEnd = endOfDay(now).toISOString()
-        } else if (periodParam === 'custom' && startDateParam && endDateParam) {
-            analyticsStart = startOfDay(new Date(startDateParam)).toISOString()
-            analyticsEnd = endOfDay(new Date(endDateParam)).toISOString()
+        if (periodParam === "this_month") {
+            analyticsStartDate = startOfMonth(now)
+            analyticsEndDate = endOfDay(now)
+            monthsInPeriod = 1
+            trendMonthsCount = 6
+        } else if (periodParam === "1m") {
+            analyticsStartDate = startOfDay(subDays(now, 29))
+            analyticsEndDate = endOfDay(now)
+            monthsInPeriod = 1
+            trendMonthsCount = 6
+        } else if (periodParam === "3m") {
+            analyticsStartDate = startOfMonth(subMonths(now, 2))
+            analyticsEndDate = endOfDay(now)
+            monthsInPeriod = 3
+            trendMonthsCount = 3
+        } else if (periodParam === "12m") {
+            analyticsStartDate = startOfMonth(subMonths(now, 11))
+            analyticsEndDate = endOfDay(now)
+            monthsInPeriod = 12
+            trendMonthsCount = 12
+        } else if (periodParam === "custom" && startDateParam && endDateParam) {
+            analyticsStartDate = startOfDay(new Date(startDateParam))
+            analyticsEndDate = endOfDay(new Date(endDateParam))
+            const diffD = Math.max(1, differenceInDays(analyticsEndDate, analyticsStartDate) + 1)
+            monthsInPeriod = Math.max(1, Math.round((diffD / 30) * 10) / 10)
+            trendMonthsCount = 6
         } else {
-            analyticsStart = startOfMonth(now).toISOString()
-            analyticsEnd = endOfMonth(now).toISOString()
+            // Default "6m"
+            analyticsStartDate = startOfMonth(subMonths(now, 5))
+            analyticsEndDate = endOfDay(now)
+            monthsInPeriod = 6
+            trendMonthsCount = 6
         }
 
+        const analyticsStart = analyticsStartDate.toISOString()
+        const analyticsEnd = analyticsEndDate.toISOString()
+        const elapsedDaysInPeriod = Math.max(
+            1,
+            differenceInDays(analyticsEndDate, analyticsStartDate) + 1
+        )
+
+        const thisMonthStart = startOfMonth(now).toISOString()
+        const thisMonthEnd = endOfMonth(now).toISOString()
         const prevMonthStart = startOfMonth(subMonths(now, 1)).toISOString()
         const prevMonthEnd = endOfMonth(subMonths(now, 1)).toISOString()
 
-        // Helper to apply common filters
+        // Earliest date needed for both trend and period analysis in a SINGLE batch query
+        const trendStartDate = startOfMonth(subMonths(now, Math.max(trendMonthsCount, 2) - 1))
+        const batchFetchStart =
+            analyticsStartDate < trendStartDate
+                ? analyticsStartDate.toISOString()
+                : trendStartDate.toISOString()
+
         const applyCommonFilters = (query: any) => {
-            let q = query.eq('user_id', user.id)
+            let q = query.eq("user_id", user.id)
             if (categoriesFilter.length > 0) {
-                q = q.or(`expense_category_id.in.(${categoriesFilter.join(',')}),income_category_id.in.(${categoriesFilter.join(',')})`)
+                q = q.or(
+                    `expense_category_id.in.(${categoriesFilter.join(",")}),income_category_id.in.(${categoriesFilter.join(",")})`
+                )
             }
             if (accountsFilter.length > 0) {
-                q = q.in('account_id', accountsFilter)
+                q = q.in("account_id", accountsFilter)
             }
-            if (typeParam !== 'ALL') {
-                q = q.eq('transaction_type', typeParam)
+            if (typeParam !== "ALL") {
+                q = q.eq("transaction_type", typeParam)
             }
             return q
         }
 
-        // Helper specifically for stats - DEFINED BEFORE USAGE
-        const getStatsForRange = async (start: string, end: string) => {
-            let q = supabase
-                .from('transactions')
-                .select('amount, transaction_type, currency_code, account_id')
-                .gte('transaction_date', start)
-                .lte('transaction_date', end)
-
-            q = applyCommonFilters(q)
-            const { data: txs, error: rangeError } = await q
-            if (rangeError) throw rangeError
-
-            let inc = 0
-            let exp = 0
-            txs?.forEach(tx => {
-                const rawAmount = Number(tx.amount)
-                const currency = tx.currency_code || accountCurrencyMap[tx.account_id]
-                const amt = toBase(rawAmount, currency)
-
-                if (tx.transaction_type === 'INCOME') inc += amt
-                if (tx.transaction_type === 'EXPENSE') exp += amt
-            })
-            return { income: inc, expense: exp }
-        }
-
-        // 1. Multi-month Trend
-        const trend = []
-        const monthsCount = periodParam === '12m' ? 12 : periodParam === '3m' ? 3 : 6
-
-        for (let i = monthsCount - 1; i >= 0; i--) {
-            const mData = await getStatsForRange(
-                startOfMonth(subMonths(now, i)).toISOString(),
-                endOfMonth(subMonths(now, i)).toISOString()
+        // Single batch query for all transactions in the analytical & trend window
+        let txQuery = db
+            .from("transactions")
+            .select(
+                "id, amount, transaction_type, currency_code, account_id, expense_category_id, income_category_id, subcategory_id, transaction_date, description, savings_goal_id, loan_id, metadata"
             )
-            trend.push({
-                name: format(subMonths(now, i), 'MMM'),
-                income: mData.income,
-                expense: mData.expense
-            })
+            .gte("transaction_date", batchFetchStart)
+            .lte("transaction_date", thisMonthEnd)
+
+        txQuery = applyCommonFilters(txQuery)
+        const { data: allWindowTxs, error: txError } = await txQuery
+        if (txError) {
+            console.error("[FinancialHealth] Batch Tx Query Error:", txError)
         }
 
-        const current = await getStatsForRange(analyticsStart, analyticsEnd)
-        const previous = await getStatsForRange(prevMonthStart, prevMonthEnd)
+        const windowTxs = allWindowTxs || []
 
-        // 3. Category Analysis & 50/30/20
-        let catQuery = supabase
-            .from('transactions')
-            .select('*, account_id')
-            .gte('transaction_date', analyticsStart)
-            .lte('transaction_date', analyticsEnd)
+        // 2. Build Multi-Month Trend in memory (Spanish labels, zero sequential round-trips)
+        const trendBuckets: Record<
+            string,
+            { key: string; name: string; income: number; expense: number; net: number }
+        > = {}
+        const trendOrder: string[] = []
 
-        catQuery = applyCommonFilters(catQuery)
-        const { data: catTxs, error: catError } = await catQuery
-        if (catError) console.error('[FinancialHealth] Category Query Error:', catError)
+        for (let i = trendMonthsCount - 1; i >= 0; i--) {
+            const mDate = subMonths(now, i)
+            const key = format(mDate, "yyyy-MM")
+            const rawLabel = format(mDate, "MMM", { locale: es }).replace(".", "")
+            const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
+            trendBuckets[key] = { key, name: label, income: 0, expense: 0, net: 0 }
+            trendOrder.push(key)
+        }
 
-        const categorySpending: Record<string, { id: string, name: string, amount: number, color: string }> = {}
+        let periodIncome = 0
+        let periodExpense = 0
+        let thisMonthIncome = 0
+        let thisMonthExpense = 0
+        let prevMonthIncome = 0
+        let prevMonthExpense = 0
+
+        const periodTxs: any[] = []
+
+        for (const tx of windowTxs) {
+            const rawAmount = Number(tx.amount || 0)
+            const currency = tx.currency_code || accountCurrencyMap[tx.account_id] || targetCurrency
+            const amt = toBase(rawAmount, currency)
+            const txIso = new Date(tx.transaction_date).toISOString()
+            const monthKey = format(new Date(tx.transaction_date), "yyyy-MM")
+
+            if (trendBuckets[monthKey]) {
+                if (tx.transaction_type === "INCOME") trendBuckets[monthKey].income += amt
+                else if (tx.transaction_type === "EXPENSE") trendBuckets[monthKey].expense += amt
+                trendBuckets[monthKey].net =
+                    trendBuckets[monthKey].income - trendBuckets[monthKey].expense
+            }
+
+            if (txIso >= analyticsStart && txIso <= analyticsEnd) {
+                periodTxs.push({ ...tx, convertedAmount: amt })
+                if (tx.transaction_type === "INCOME") periodIncome += amt
+                else if (tx.transaction_type === "EXPENSE") periodExpense += amt
+            }
+
+            if (txIso >= thisMonthStart && txIso <= thisMonthEnd) {
+                if (tx.transaction_type === "INCOME") thisMonthIncome += amt
+                else if (tx.transaction_type === "EXPENSE") thisMonthExpense += amt
+            } else if (txIso >= prevMonthStart && txIso <= prevMonthEnd) {
+                if (tx.transaction_type === "INCOME") prevMonthIncome += amt
+                else if (tx.transaction_type === "EXPENSE") prevMonthExpense += amt
+            }
+        }
+
+        const trend = trendOrder.map((k) => ({
+            name: trendBuckets[k].name,
+            income: Math.round(trendBuckets[k].income * 100) / 100,
+            expense: Math.round(trendBuckets[k].expense * 100) / 100,
+            net: Math.round(trendBuckets[k].net * 100) / 100,
+        }))
+
+        // 3. Category Breakdown & 50/30/20 Rule on Period Transactions
+        const categorySpending: Record<
+            string,
+            {
+                id: string
+                name: string
+                amount: number
+                color: string
+                icon?: string
+                count: number
+                percent: number
+                rule: string
+            }
+        > = {}
         let needsVal = 0
         let wantsVal = 0
         let savingsVal = 0
 
-        catTxs?.forEach((tx: any) => {
-            const rawAmount = Number(tx.amount)
-            const currency = tx.currency_code || accountCurrencyMap[tx.account_id]
-            const amt = toBase(rawAmount, currency)
+        for (const tx of periodTxs) {
+            const amt = tx.convertedAmount
             const type = tx.transaction_type
 
-            // 1. Income Logic - EXCLUDED: This report is for expenses only.
-            if (type === 'INCOME') return
+            if (type === "INCOME") continue
 
-            // 2. Expense/Outflow Logic
-            // Check for Debt/Loan payments first (part of 20% Financial Freedom)
-            const hasLoan = !!tx.loan_id
-            const isDebt = type === 'LOAN_PAYMENT' || type === 'DEBT_PAYMENT'
-
-            if (hasLoan || isDebt) {
+            // Transfer or movement linked to a savings goal counts toward 20% Savings/Freedom
+            if (tx.savings_goal_id) {
                 savingsVal += amt
-                // Add to detailed breakdown as Debt Repayment
-                const debtKey = 'debt-repayment'
+                continue
+            }
+
+            if (type === "TRANSFER") continue
+
+            // Debt / Loan payments count toward 20% Financial Freedom
+            if (tx.loan_id || tx.metadata?.isLoanMovement) {
+                savingsVal += amt
+                const debtKey = "debt-repayment"
                 if (!categorySpending[debtKey]) {
-                    categorySpending[debtKey] = { id: debtKey, name: 'Pago de Deuda', amount: 0, color: '#10b981' } // Emerald color
+                    categorySpending[debtKey] = {
+                        id: debtKey,
+                        name: "Pago de Deuda",
+                        amount: 0,
+                        color: "#10B981",
+                        icon: "hand-coins",
+                        count: 0,
+                        percent: 0,
+                        rule: "SAVINGS",
+                    }
                 }
                 categorySpending[debtKey].amount += amt
-                return
+                categorySpending[debtKey].count += 1
+                continue
             }
 
-            // 3. Regular Categorized Expenses
-            const catId = tx.expense_category_id
-            const cat = catId ? idToCategory[catId] : null
-            const rule = cat?.budget_rule
+            const catId = tx.expense_category_id || "uncategorized"
+            const cat = tx.expense_category_id ? idToCategory[tx.expense_category_id] : null
+            const rule = cat?.budget_rule || "WANT"
 
-            if (rule === 'NEED') needsVal += amt
-            else if (rule === 'SAVINGS') savingsVal += amt
-            else wantsVal += amt // Default to WANT
+            if (rule === "NEED") needsVal += amt
+            else if (rule === "SAVINGS") savingsVal += amt
+            else wantsVal += amt
 
-            if (catId) {
-                if (!categorySpending[catId]) {
-                    categorySpending[catId] = { id: catId, name: cat?.name || 'Otros Gastos', amount: 0, color: cat?.color || '#888' }
-                }
-                categorySpending[catId].amount += amt
-            }
-        })
-
-        // Add explicit savings deposits (Transaction Type)
-        const { data: explicitSavings } = await applyCommonFilters(
-            supabase.from('transactions')
-                .select('amount')
-                .eq('transaction_type', 'SAVINGS_DEPOSIT')
-                .gte('transaction_date', analyticsStart)
-                .lte('transaction_date', analyticsEnd)
-        )
-        const explicitSavingsTotal = explicitSavings?.reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
-        savingsVal += explicitSavingsTotal
-
-        // Add Savings Goals Contributions (STRICT MODE: Only Wealth-Building Goals)
-        // 1. Get IDs of goals that qualify as TRUE SAVINGS (Emergency, Investment, Debt)
-        const { data: strictSavingsGoals } = await supabase
-            .from('savings_goals')
-            .select('id')
-            .in('goal_type', ['EMERGENCY', 'INVESTMENT', 'DEBT']) // Strict Rule: Travel/Purchase are deferred spending, not savings.
-            .eq('user_id', user.id)
-
-        const strictGoalIds = new Set(strictSavingsGoals?.map(g => g.id))
-
-        const { data: goalContributions } = await supabase
-            .from('goal_contributions')
-            .select('amount, transaction_id, goal_id')
-            .gte('contribution_date', analyticsStart)
-            .lte('contribution_date', analyticsEnd)
-            .eq('user_id', user.id)
-
-        // Only add contributions that are NOT already linked to a transaction 
-        // OR if they are linked, ensure we don't double count if the transaction was already counted above.
-        // Simplified approach: matched by transaction_id in the previously fetched `catTxs`
-        const catTxIds = new Set(catTxs?.map((t: any) => t.id))
-
-        goalContributions?.forEach((contribution: any) => {
-            // STRICT MODE CHECK: Does this contribution belong to a "Wealth Building" goal?
-            if (!strictGoalIds.has(contribution.goal_id)) {
-                return // Skip Travel, Purchase, etc.
-            }
-
-            const amt = Number(contribution.amount)
-            savingsVal += amt
-
-            // Double Counting Adjustment: 
-            // If this contribution came from a transaction that we already counted in Needs/Wants/Savings loop above,
-            // we must "move" it from that bucket to Savings (or remove double count if already in Savings).
-            if (contribution.transaction_id) {
-                const linkedTx = catTxs?.find((t: any) => t.id === contribution.transaction_id)
-                if (linkedTx) {
-                    const cat = linkedTx.expense_category_id ? idToCategory[linkedTx.expense_category_id] : null
-                    const rule = cat?.budget_rule
-                    // If the original transaction was categorized as...
-                    if (rule === 'NEED') needsVal -= amt
-                    else if (rule === 'WANT') wantsVal -= amt // Default was WANT
-                    else if (rule === 'SAVINGS') savingsVal -= amt // It was already credited to Savings above, so we remove the duplicate.
-                    else wantsVal -= amt // Fallback default
+            if (!categorySpending[catId]) {
+                categorySpending[catId] = {
+                    id: catId,
+                    name: cat?.name || "Sin categoría",
+                    amount: 0,
+                    color: cat?.color || "#94A3B8",
+                    icon: cat?.icon || "tag",
+                    count: 0,
+                    percent: 0,
+                    rule,
                 }
             }
-        })
-
-        const ruleBase = current.income > 0 ? current.income : (needsVal + wantsVal + savingsVal)
-        const budgetRule = {
-            needs: {
-                amount: needsVal,
-                percent: ruleBase > 0 ? (needsVal / ruleBase) * 100 : 0,
-                target: 50,
-                status: (needsVal / ruleBase) * 100 > 50 ? 'WARNING' : 'OK'
-            },
-            wants: {
-                amount: wantsVal,
-                percent: ruleBase > 0 ? (wantsVal / ruleBase) * 100 : 0,
-                target: 30,
-                status: (wantsVal / ruleBase) * 100 > 30 ? 'WARNING' : 'OK'
-            },
-            savings: {
-                amount: savingsVal,
-                percent: ruleBase > 0 ? (savingsVal / ruleBase) * 100 : 0,
-                target: 20,
-                status: (savingsVal / ruleBase) * 100 < 20 ? 'WARNING' : 'OK'
-            }
+            categorySpending[catId].amount += amt
+            categorySpending[catId].count += 1
         }
 
-        // 4. Final KPIs
-        const savingsRate = current.income > 0
-            ? ((current.income - current.expense) / current.income) * 100
-            : 0
+        // Include positive net retained savings in the 20% bucket when income exceeds expenses
+        const netRetained = Math.max(0, periodIncome - periodExpense)
+        if (netRetained > savingsVal) {
+            savingsVal = netRetained
+        }
 
-        const daysInRange = differenceInDays(new Date(analyticsEnd), new Date(analyticsStart)) + 1
-        const burnRate = current.expense / (periodParam === 'custom' ? daysInRange : now.getDate())
-
-        // 5. Executive Suite: Health Score, Runway, & Forecast
-        // Fix: Use correct column 'current_balance' and filter by user/type (exclude CREDIT_CARD) to get true liquidity.
-        // Already fetched 'accounts' at the top!
-        // Filter here for liquidity
-        const liquidityAccounts = accounts.filter((acc: any) => acc.account_type !== 'CREDIT_CARD')
-        const totalLiquidity = liquidityAccounts?.reduce((sum: number, acc: any) => {
-            return sum + toBase(Number(acc.current_balance || 0), acc.currency_code)
-        }, 0) || 0
-
-        const liabilities = accounts.filter((acc: any) => acc.account_type === 'CREDIT_CARD').reduce((sum: number, acc: any) => {
-            return sum + toBase(Number(acc.current_balance || 0), acc.currency_code)
-        }, 0) || 0
-
-        // Runway (Months of oxygen)
-        const avgMonthlyExpense = previous.expense > 0 ? (current.expense + previous.expense) / 2 : current.expense
-        const runwayMonths = avgMonthlyExpense > 0 ? totalLiquidity / avgMonthlyExpense : 12
-
-        // Financial Health Score (0-100)
-        // Weights: Savings Rate (40), Runway (30), Budget Adherence/Stability (20), Income Growth (10)
-        const savingsScore = Math.max(0, Math.min(40, (savingsRate / 20) * 40)) // 20% = 40pts
-        const runwayScore = Math.max(0, Math.min(30, (runwayMonths / 6) * 30)) // 6 months = 30pts
-        const stabilityScore = current.expense < current.income ? 20 : 10
-        const growthScore = current.income >= previous.income ? 10 : 5
-        const healthScore = Math.round(savingsScore + runwayScore + stabilityScore + growthScore)
-
-        // Forecasts
-        const daysInMonth = 30 // Simplified
-        const remainingDays = daysInMonth - now.getDate()
-        const predictedMonthEndExpense = current.expense + (burnRate * remainingDays)
-        const estimatedYearlySavings = (current.income - current.expense) * 12
-
-        // Annualized Leaks (Top 3 expenses)
-        const annualizedImpact = Object.values(categorySpending)
-            .filter(c => c.amount > 0)
+        const totalCategorizedExpense = Object.values(categorySpending).reduce(
+            (s, c) => s + c.amount,
+            0
+        )
+        const categoriesList = Object.values(categorySpending)
             .sort((a, b) => b.amount - a.amount)
-            .slice(0, 3)
-            .map(c => ({
-                name: c.name,
-                monthly: c.amount,
-                yearly: c.amount * 12,
-                color: c.color
+            .map((c) => ({
+                ...c,
+                amount: Math.round(c.amount * 100) / 100,
+                percent:
+                    totalCategorizedExpense > 0
+                        ? Math.round((c.amount / totalCategorizedExpense) * 1000) / 10
+                        : 0,
             }))
 
-        // 6. Insights
-        const insights = []
-        if (savingsRate < 10 && current.income > 0) {
-            insights.push({
-                type: 'WARNING',
-                message: 'Tu tasa de ahorro es baja (menor al 10%). Considera revisar tus gastos hormiga.',
-                impact: 'ALTO'
-            })
-        } else if (savingsRate >= 20) {
-            insights.push({
-                type: 'SUCCESS',
-                message: '¡Excelente! Estás siguiendo la regla de oro del 20% de ahorro.',
-                impact: 'POSITIVO'
-            })
+        const ruleBase =
+            periodIncome > 0 ? periodIncome : Math.max(1, needsVal + wantsVal + savingsVal)
+        const hasRuleActivity = periodIncome > 0 || periodExpense > 0
+
+        const budgetRule = {
+            needs: {
+                amount: Math.round(needsVal * 100) / 100,
+                percent: hasRuleActivity ? (needsVal / ruleBase) * 100 : 0,
+                target: 50,
+                status: hasRuleActivity && (needsVal / ruleBase) * 100 > 55 ? "WARNING" : "OK",
+            },
+            wants: {
+                amount: Math.round(wantsVal * 100) / 100,
+                percent: hasRuleActivity ? (wantsVal / ruleBase) * 100 : 0,
+                target: 30,
+                status: hasRuleActivity && (wantsVal / ruleBase) * 100 > 35 ? "WARNING" : "OK",
+            },
+            savings: {
+                amount: Math.round(savingsVal * 100) / 100,
+                percent: hasRuleActivity ? (savingsVal / ruleBase) * 100 : 0,
+                target: 20,
+                status: hasRuleActivity && (savingsVal / ruleBase) * 100 < 15 ? "WARNING" : "OK",
+            },
         }
 
-        if (current.expense > previous.expense * 1.2 && previous.expense > 0) {
-            insights.push({
-                type: 'CAUTION',
-                message: `Tus gastos han aumentado un ${Math.round((current.expense / previous.expense - 1) * 100)}% respecto al mes pasado.`,
-                impact: 'MEDIO'
-            })
+        // 4. Liquidity, Credit Card Liabilities, Runway & Health Score
+        const liquidityAccounts = accounts.filter((acc: any) => acc.account_type !== "CREDIT_CARD")
+        const totalLiquidity =
+            liquidityAccounts.reduce((sum: number, acc: any) => {
+                return sum + toBase(Number(acc.current_balance || 0), acc.currency_code)
+            }, 0) || 0
+
+        const cardLiabilities =
+            accounts
+                .filter((acc: any) => acc.account_type === "CREDIT_CARD")
+                .reduce((sum: number, acc: any) => {
+                    const debt = Math.max(
+                        Math.abs(Number(acc.used_balance || 0)),
+                        Math.abs(Math.min(0, Number(acc.current_balance || 0)))
+                    )
+                    return sum + toBase(debt, acc.currency_code)
+                }, 0) || 0
+
+        const savingsRate =
+            periodIncome > 0 ? ((periodIncome - periodExpense) / periodIncome) * 100 : 0
+
+        const burnRate = periodExpense / elapsedDaysInPeriod
+        const monthlyExpenseEquivalent =
+            monthsInPeriod > 0 ? periodExpense / monthsInPeriod : periodExpense
+
+        const avgMonthlyExpense =
+            monthlyExpenseEquivalent > 0
+                ? monthlyExpenseEquivalent
+                : prevMonthExpense > 0
+                  ? (thisMonthExpense + prevMonthExpense) / 2
+                  : thisMonthExpense
+
+        const runwayMonths =
+            totalLiquidity <= 0
+                ? 0
+                : avgMonthlyExpense > 0
+                  ? totalLiquidity / avgMonthlyExpense
+                  : 12
+
+        const hasAnyFinancialData =
+            accounts.length > 0 || periodIncome > 0 || periodExpense > 0 || totalLiquidity > 0
+
+        let healthScore = 0
+        if (hasAnyFinancialData) {
+            const savingsScore =
+                periodIncome > 0
+                    ? Math.max(0, Math.min(40, (savingsRate / 20) * 40))
+                    : totalLiquidity > 0
+                      ? 20
+                      : 0
+            const runwayScore = Math.max(0, Math.min(30, (runwayMonths / 6) * 30))
+            const stabilityScore =
+                periodIncome > 0 && periodExpense <= periodIncome
+                    ? 20
+                    : periodExpense === 0 && totalLiquidity > 0
+                      ? 15
+                      : 8
+            const growthScore =
+                thisMonthIncome >= prevMonthIncome && (thisMonthIncome > 0 || totalLiquidity > 0)
+                    ? 10
+                    : 5
+            healthScore = Math.round(savingsScore + runwayScore + stabilityScore + growthScore)
         }
 
-        if (runwayMonths < 3) {
-            insights.push({
-                type: 'DANGER',
-                message: `Peligro: Tu reserva actual solo cubre ${runwayMonths} meses de gastos. Se recomienda tener al menos 6 meses.`,
-                impact: 'CRÍTICO'
+        // Forecasts (Current Month projection)
+        const daysInCurrentMonth = endOfMonth(now).getDate()
+        const currentDayOfMonth = Math.max(1, now.getDate())
+        const remainingDaysInMonth = Math.max(0, daysInCurrentMonth - currentDayOfMonth)
+        const currentMonthDailyBurn = thisMonthExpense / currentDayOfMonth
+        const predictedMonthEndExpense =
+            thisMonthExpense > 0
+                ? thisMonthExpense + currentMonthDailyBurn * remainingDaysInMonth
+                : monthlyExpenseEquivalent
+        const monthlyNetAvg = (periodIncome - periodExpense) / Math.max(1, monthsInPeriod)
+        const estimatedYearlySavings = monthlyNetAvg * 12
+
+        // 5. Annualized Leaks (Normalized to true monthly average x 12)
+        const annualizedImpact = categoriesList
+            .filter((c) => c.amount > 0)
+            .slice(0, 4)
+            .map((c) => {
+                const monthlyAvg = c.amount / Math.max(1, monthsInPeriod)
+                return {
+                    id: c.id,
+                    name: c.name,
+                    monthly: Math.round(monthlyAvg * 100) / 100,
+                    yearly: Math.round(monthlyAvg * 12 * 100) / 100,
+                    color: c.color,
+                    percent: c.percent,
+                }
             })
-        }
 
-        // 7. Active Budgets (Current Month Progress)
-        const budgetStart = startOfMonth(now).toISOString()
-        const budgetEnd = endOfMonth(now).toISOString()
-
-        const { data: budgets } = await supabase
-            .from('budgets')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('is_active', true)
+        // 6. Active Budgets (Current Month Progress, converted to targetCurrency)
+        const { data: budgets } = await db
+            .from("budgets")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("is_active", true)
 
         const idToName: Record<string, string> = {}
-        allCategories.forEach(c => { idToName[c.id] = c.name })
+        allCategories.forEach((c) => {
+            idToName[c.id] = c.name
+        })
 
-        const { data: budgetTxs } = await supabase
-            .from('transactions')
-            .select('amount, expense_category_id, subcategory_id')
-            .eq('user_id', user.id)
-            .gte('transaction_date', budgetStart)
-            .lte('transaction_date', budgetEnd)
-            .eq('transaction_type', 'EXPENSE')
+        const thisMonthExpenseTxs = windowTxs.filter((tx: any) => {
+            const txIso = new Date(tx.transaction_date).toISOString()
+            return (
+                txIso >= thisMonthStart &&
+                txIso <= thisMonthEnd &&
+                tx.transaction_type === "EXPENSE"
+            )
+        })
 
-        const mappedBudgets = budgets?.map((b: any) => {
-            let spent = 0
-            if (b.include_categories && b.include_categories.length > 0) {
-                // Intelligent Name Matching & Expansion
-                let targetIds: string[] = []
-                b.include_categories.forEach((id: string) => {
-                    targetIds.push(id)
-                    const name = idToName[id]
-                    if (name) {
-                        const key = normalize(name)
-                        if (categoriesByName[key]) {
-                            targetIds.push(...categoriesByName[key])
+        const mappedBudgets = (budgets || [])
+            .map((b: any) => {
+                let spent = 0
+                const budgetLimit = toBase(Number(b.amount || 0), b.currency_code)
+
+                if (b.include_categories && b.include_categories.length > 0) {
+                    const targetIds: string[] = []
+                    b.include_categories.forEach((id: string) => {
+                        targetIds.push(id)
+                        const name = idToName[id]
+                        if (name) {
+                            const key = normalize(name)
+                            if (categoriesByName[key]) {
+                                targetIds.push(...categoriesByName[key])
+                            }
                         }
-                    }
+                    })
+
+                    const targetIdsSet = new Set(expandCategoryIds(targetIds, allCategories))
+
+                    spent = thisMonthExpenseTxs.reduce((sum: number, tx: any) => {
+                        const match =
+                            (tx.expense_category_id && targetIdsSet.has(tx.expense_category_id)) ||
+                            (tx.subcategory_id && targetIdsSet.has(tx.subcategory_id))
+                        if (!match) return sum
+                        const txCurr =
+                            tx.currency_code || accountCurrencyMap[tx.account_id] || targetCurrency
+                        return sum + toBase(Number(tx.amount || 0), txCurr)
+                    }, 0)
+                } else {
+                    spent = thisMonthExpenseTxs.reduce((sum: number, tx: any) => {
+                        const txCurr =
+                            tx.currency_code || accountCurrencyMap[tx.account_id] || targetCurrency
+                        return sum + toBase(Number(tx.amount || 0), txCurr)
+                    }, 0)
+                }
+
+                const rawPct = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
+                return {
+                    id: b.id,
+                    name: b.name,
+                    amount: Math.round(budgetLimit * 100) / 100,
+                    spent: Math.round(spent * 100) / 100,
+                    percent: Math.round(rawPct * 10) / 10,
+                    color: b.color || "#7C5CFC",
+                }
+            })
+            .sort((a: any, b: any) => b.percent - a.percent)
+
+        // 7. Active Loans (Receivables + Payables + Legacy Loans table)
+        const [receivablesRes, payablesRes, legacyLoansRes] = await Promise.all([
+            db
+                .from("accounts_receivable")
+                .select("*")
+                .eq("user_id", user.id)
+                .in("status", ["PENDING", "PARTIAL", "OVERDUE"])
+                .order("outstanding_balance", { ascending: false }),
+            db
+                .from("accounts_payable")
+                .select("*")
+                .eq("user_id", user.id)
+                .in("status", ["PENDING", "PARTIAL", "OVERDUE"])
+                .order("outstanding_balance", { ascending: false }),
+            db
+                .from("loans")
+                .select("*")
+                .eq("user_id", user.id)
+                .eq("status", "ACTIVE"),
+        ])
+
+        const mappedLoans: any[] = []
+
+        for (const r of receivablesRes.data || []) {
+            const orig = toBase(Number(r.original_amount || 0), r.currency_code)
+            const rem = toBase(Number(r.outstanding_balance || 0), r.currency_code)
+            mappedLoans.push({
+                id: r.id,
+                person: r.contact_name,
+                type: "LENT",
+                amount: orig,
+                paid: Math.max(0, orig - rem),
+                remaining: rem,
+                dueDate: r.due_date,
+                status: r.status,
+            })
+        }
+
+        for (const p of payablesRes.data || []) {
+            const orig = toBase(Number(p.original_amount || 0), p.currency_code)
+            const rem = toBase(Number(p.outstanding_balance || 0), p.currency_code)
+            mappedLoans.push({
+                id: p.id,
+                person: p.contact_name,
+                type: "BORROWED",
+                amount: orig,
+                paid: Math.max(0, orig - rem),
+                remaining: rem,
+                dueDate: p.due_date,
+                status: p.status,
+            })
+        }
+
+        for (const l of legacyLoansRes.data || []) {
+            const orig = toBase(Number(l.principal_amount || 0), l.currency_code)
+            const rem = toBase(Number(l.remaining_balance || 0), l.currency_code)
+            mappedLoans.push({
+                id: l.id,
+                person: l.contact_name,
+                type: l.loan_type === "BORROWED" ? "BORROWED" : "LENT",
+                amount: orig,
+                paid: Math.max(0, orig - rem),
+                remaining: rem,
+                dueDate: l.due_date,
+                status: l.status,
+            })
+        }
+
+        const totalReceivable = mappedLoans
+            .filter((l) => l.type === "LENT")
+            .reduce((acc, c) => acc + c.remaining, 0)
+        const totalPayable = mappedLoans
+            .filter((l) => l.type === "BORROWED")
+            .reduce((acc, c) => acc + c.remaining, 0)
+
+        // 8. Smart Financial Insights
+        const insights: { type: string; title: string; message: string; impact: string }[] = []
+        const roundedRunway = Math.round(runwayMonths * 10) / 10
+
+        if (!hasAnyFinancialData) {
+            insights.push({
+                type: "INFO",
+                title: "Sin movimientos suficientes",
+                message:
+                    "Registra tus cuentas y primeros movimientos (o activa el Modo Demo en Ajustes) para desbloquear el diagnóstico completo.",
+                impact: "INICIAL",
+            })
+        } else {
+            if (savingsRate >= 20 && periodIncome > 0) {
+                insights.push({
+                    type: "SUCCESS",
+                    title: "Retención de capital sobresaliente",
+                    message: `Estás reteniendo el ${Math.round(savingsRate)}% de tus ingresos, superando la meta recomendada del 20%.`,
+                    impact: "POSITIVO",
                 })
-
-                const targetIdsSet = new Set(expandCategoryIds(targetIds, allCategories))
-
-                // Filter transactions that match ANY target category (Parent OR Subcategory)
-                spent = budgetTxs?.reduce((sum: number, tx: any) => {
-                    const match = (tx.expense_category_id && targetIdsSet.has(tx.expense_category_id)) ||
-                        (tx.subcategory_id && targetIdsSet.has(tx.subcategory_id))
-                    return match ? sum + Number(tx.amount) : sum
-                }, 0) || 0
-            } else {
-                // Global Budget: Sum all expenses
-                spent = budgetTxs?.reduce((sum: number, tx: any) => sum + Number(tx.amount), 0) || 0
+            } else if (savingsRate < 10 && periodIncome > 0) {
+                insights.push({
+                    type: "WARNING",
+                    title: "Margen de ahorro reducido",
+                    message: `Tu retención actual es de ${Math.max(0, Math.round(savingsRate))}%. Reducir un 15% en gastos variables liberaría liquidez inmediata.`,
+                    impact: "ALTO",
+                })
             }
 
-            return {
-                id: b.id,
-                name: b.name,
-                amount: b.amount,
-                spent,
-                percent: Math.min(100, (spent / b.amount) * 100),
-                color: b.color || '#3b82f6'
+            if (thisMonthExpense > prevMonthExpense * 1.15 && prevMonthExpense > 0) {
+                const pctUp = Math.round((thisMonthExpense / prevMonthExpense - 1) * 100)
+                insights.push({
+                    type: "CAUTION",
+                    title: "Aceleración de gasto mensual",
+                    message: `Tus gastos de este mes van un ${pctUp}% por encima del mes anterior. Revisa tu categoría principal.`,
+                    impact: "MEDIO",
+                })
             }
-        }).sort((a: any, b: any) => b.percent - a.percent)
 
-        // 8. Active Loans
-        const { data: loans } = await supabase
-            .from('loans')
-            .select('*')
-            .eq('user_id', user.id)
-            .in('status', ['PENDING', 'PARTIAL'])
-            .order('amount', { ascending: false })
-            .limit(5)
+            if (roundedRunway < 3 && avgMonthlyExpense > 0) {
+                insights.push({
+                    type: "DANGER",
+                    title: "Reserva de liquidez baja",
+                    message: `Tu liquidez actual cubre ${roundedRunway} meses de gastos fijos. El estándar recomendado es de 3 a 6 meses.`,
+                    impact: "CRÍTICO",
+                })
+            } else if (roundedRunway >= 6 && avgMonthlyExpense > 0) {
+                insights.push({
+                    type: "SUCCESS",
+                    title: "Blindaje patrimonial sólido",
+                    message: `Cuentas con ${roundedRunway} meses de oxígeno financiero para afrontar cualquier imprevisto con tranquilidad.`,
+                    impact: "POSITIVO",
+                })
+            }
 
-        const mappedLoans = loans?.map((l: any) => ({
-            id: l.id,
-            person: l.person_name,
-            type: l.loan_type,
-            amount: l.amount,
-            paid: l.amount_paid,
-            remaining: l.amount - l.amount_paid,
-            dueDate: l.due_date
-        }))
+            const overBudget = mappedBudgets.find((b: any) => b.percent >= 90)
+            if (overBudget) {
+                insights.push({
+                    type: overBudget.percent >= 100 ? "DANGER" : "WARNING",
+                    title:
+                        overBudget.percent >= 100
+                            ? `Presupuesto excedido: ${overBudget.name}`
+                            : `Presupuesto al límite: ${overBudget.name}`,
+                    message: `Has consumido el ${Math.round(overBudget.percent)}% del límite asignado para este mes.`,
+                    impact: overBudget.percent >= 100 ? "CRÍTICO" : "ALTO",
+                })
+            }
+        }
 
         return NextResponse.json({
+            range: {
+                startDate: analyticsStart,
+                endDate: analyticsEnd,
+                days: elapsedDaysInPeriod,
+                months: monthsInPeriod,
+                period: periodParam,
+            },
             kpis: {
-                income: current.income,
-                expense: current.expense,
-                savingsRate: Math.max(0, Math.round(savingsRate * 10) / 10),
+                income: Math.round(periodIncome * 100) / 100,
+                expense: Math.round(periodExpense * 100) / 100,
+                thisMonthIncome: Math.round(thisMonthIncome * 100) / 100,
+                thisMonthExpense: Math.round(thisMonthExpense * 100) / 100,
+                savingsRate: Math.round(savingsRate * 10) / 10,
                 burnRate: Math.round(burnRate * 100) / 100,
-                netCashFlow: current.income - current.expense,
+                netCashFlow: Math.round((periodIncome - periodExpense) * 100) / 100,
                 healthScore,
-                runwayMonths: Math.round(runwayMonths * 10) / 10,
-                totalLiquidity,
-                liabilities
+                runwayMonths: roundedRunway,
+                totalLiquidity: Math.round(totalLiquidity * 100) / 100,
+                liabilities: Math.round((cardLiabilities + totalPayable) * 100) / 100,
+                cardLiabilities: Math.round(cardLiabilities * 100) / 100,
+                totalReceivable: Math.round(totalReceivable * 100) / 100,
+                totalPayable: Math.round(totalPayable * 100) / 100,
+                transactionCount: periodTxs.length,
             },
             comparison: {
-                incomeChange: previous.income > 0 ? (current.income / previous.income - 1) * 100 : 0,
-                expenseChange: previous.expense > 0 ? (current.expense / previous.expense - 1) * 100 : 0
+                incomeChange:
+                    prevMonthIncome > 0
+                        ? Math.round((thisMonthIncome / prevMonthIncome - 1) * 1000) / 10
+                        : 0,
+                expenseChange:
+                    prevMonthExpense > 0
+                        ? Math.round((thisMonthExpense / prevMonthExpense - 1) * 1000) / 10
+                        : 0,
             },
-            categories: Object.values(categorySpending).sort((a, b) => b.amount - a.amount),
+            categories: categoriesList,
             trend,
             budgetRule,
             insights,
             forecast: {
-                predictedMonthEndExpense,
-                estimatedYearlySavings
+                predictedMonthEndExpense: Math.round(predictedMonthEndExpense * 100) / 100,
+                estimatedYearlySavings: Math.round(estimatedYearlySavings * 100) / 100,
             },
             annualizedImpact,
             budgets: mappedBudgets,
-            loans: mappedLoans
+            loans: mappedLoans,
         })
-
     } catch (error: any) {
-        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
-        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
-            throw error;
+        if (
+            error &&
+            (error.digest === "DYNAMIC_SERVER_USAGE" ||
+                String(error).includes("Dynamic server usage"))
+        ) {
+            throw error
         }
 
+        console.error("[FINANCIAL_HEALTH_ERROR]", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 }

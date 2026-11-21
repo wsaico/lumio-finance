@@ -6,7 +6,7 @@ import { useEffect, useCallback, useRef } from 'react'
  */
 export function useBudgetRefresh(onRefresh: () => void, enabled: boolean = true) {
   const lastRefreshRef = useRef<number>(Date.now())
-  const intervalRef = useRef<NodeJS.Timeout>()
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   const handleRefresh = useCallback(() => {
     const now = Date.now()

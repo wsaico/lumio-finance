@@ -21,13 +21,16 @@ interface LearnResponse {
   keywords: string[];
 }
 
-async function fetchSuggestions(description: string): Promise<SuggestResponse> {
+async function fetchSuggestions(
+  description: string,
+  type: 'EXPENSE' | 'INCOME' = 'EXPENSE'
+): Promise<SuggestResponse> {
   const response = await fetch('/api/smart-categories/suggest', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ description }),
+    body: JSON.stringify({ description, type }),
   });
 
   if (!response.ok) {
@@ -57,13 +60,17 @@ async function learnCategoryAssociation(
   return response.json();
 }
 
-export function useSmartCategories(description: string, enabled = true) {
+export function useSmartCategories(
+  description: string,
+  type: 'EXPENSE' | 'INCOME' = 'EXPENSE',
+  enabled = true
+) {
   return useQuery({
-    queryKey: ['smart-categories', description],
-    queryFn: () => fetchSuggestions(description),
-    enabled: enabled && description.length > 2,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    queryKey: ['smart-categories', type, description.trim().toLowerCase()],
+    queryFn: () => fetchSuggestions(description, type),
+    enabled: enabled && description.trim().length >= 3,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
   });
 }
 

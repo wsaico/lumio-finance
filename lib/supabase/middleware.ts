@@ -1,4 +1,3 @@
-
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -7,61 +6,103 @@ export async function updateSession(request: NextRequest) {
         request,
     })
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+    const pathname = request.nextUrl.pathname
+    const host = (request.headers.get('host') || '').toLowerCase()
+    const isAppSubdomain = host.startsWith('app.')
 
-    const isMissing = !supabaseUrl || supabaseUrl === 'undefined' || supabaseUrl.length < 5 ||
-        !supabaseAnonKey || supabaseAnonKey === 'undefined' || supabaseAnonKey.length < 10;
+    const isPublicMarketingRoute =
+        pathname === '/' ||
+        pathname.startsWith('/privacidad') ||
+        pathname.startsWith('/terminos') ||
+        pathname === '/sitemap.xml' ||
+        pathname === '/robots.txt' ||
+        pathname === '/manifest.webmanifest' ||
+        pathname.startsWith('/opengraph-image')
 
-    const url = isMissing ? null : supabaseUrl;
-    const key = isMissing ? null : supabaseAnonKey;
+    const isPublicAuthRoute =
+        pathname.startsWith('/login') ||
+        pathname.startsWith('/register') ||
+        pathname.startsWith('/forgot-password') ||
+        pathname.startsWith('/reset-password') ||
+        pathname.startsWith('/auth')
 
-    if (!url || !key) {
-        return supabaseResponse; // Skip session update during build if config is missing
+    const isApiRoute = pathname.startsWith('/api/')
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+
+    const isMissing =
+        !supabaseUrl ||
+        supabaseUrl === 'undefined' ||
+        supabaseUrl.length < 5 ||
+        !supabaseAnonKey ||
+        supabaseAnonKey === 'undefined' ||
+        supabaseAnonKey.length < 10
+
+    if (isMissing) {
+        return supabaseResponse
     }
 
-    const supabase = createServerClient(
-        url,
-        key,
-        {
-            cookies: {
-                getAll() {
-                    return request.cookies.getAll()
-                },
-                setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        request.cookies.set(name, value)
-                    )
-                    supabaseResponse = NextResponse.next({
-                        request,
-                    })
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options)
-                    )
-                },
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+            getAll() {
+                return request.cookies.getAll()
             },
-        }
-    )
+            setAll(cookiesToSet) {
+                cookiesToSet.forEach(({ name, value }) =>
+                    request.cookies.set(name, value)
+                )
+                supabaseResponse = NextResponse.next({
+                    request,
+                })
+                cookiesToSet.forEach(({ name, value, options }) =>
+                    supabaseResponse.cookies.set(name, value, options)
+                )
+            },
+        },
+    })
 
-    // IMPORTANT: Avoid writing any logic between createServerClient and
-    // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-    // issues with users being randomly logged out.
-
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
-    if (
-        !user &&
-        !request.nextUrl.pathname.startsWith('/login') &&
-        !request.nextUrl.pathname.startsWith('/auth') &&
-        !request.nextUrl.pathname.startsWith('/register') &&
-        !request.nextUrl.pathname.startsWith('/api/')
-    ) {
-        // Redirect to login ONLY for non-API routes
+    // On app.<domain>, `/` routes directly into /dashboard or /login
+    if (isAppSubdomain && pathname === '/') {
+        const hasAuthCookie = request.cookies
+            .getAll()
+            .some((c) => c.name.includes('-auth-token') || c.name.startsWith('sb-'))
         const url = request.nextUrl.clone()
-        url.pathname = '/login'
+        url.pathname = hasAuthCookie ? '/dashboard' : '/login'
         return NextResponse.redirect(url)
+    }
+
+    // Do not block public marketing, public auth, or API routes
+    if (isPublicMarketingRoute || isPublicAuthRoute || isApiRoute) {
+        return supabaseResponse
+    }
+
+    // Protect dashboard and admin routes safely
+    try {
+        const {
+            data: { user },
+            error,
+        } = await supabase.auth.getUser()
+
+        if (!user || error) {
+            const hasAuthCookie = request.cookies
+                .getAll()
+                .some((c) => c.name.includes('-auth-token') || c.name.startsWith('sb-'))
+            if (!hasAuthCookie) {
+                const url = request.nextUrl.clone()
+                url.pathname = '/login'
+                return NextResponse.redirect(url)
+            }
+        }
+    } catch {
+        const hasAuthCookie = request.cookies
+            .getAll()
+            .some((c) => c.name.includes('-auth-token') || c.name.startsWith('sb-'))
+        if (!hasAuthCookie) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            return NextResponse.redirect(url)
+        }
     }
 
     return supabaseResponse

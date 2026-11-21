@@ -38,7 +38,7 @@ export function BudgetScopeSelector({ selected, onChange }: BudgetScopeSelectorP
                                     isSelected ? "bg-primary border-primary" : "border-muted-foreground/30"
                                 )}>
                                     {isSelected && (
-                                        <div className="w-2 h-2 rounded-full bg-white" />
+                                        <div className="w-2 h-2 rounded-full bg-card" />
                                     )}
                                 </div>
                                 <span className="text-sm font-medium">{option.label}</span>

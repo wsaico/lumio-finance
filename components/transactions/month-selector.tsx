@@ -48,23 +48,22 @@ export function MonthSelector({ currentMonth, onMonthChange }: MonthSelectorProp
     }
 
     return (
-        <div className="flex flex-col gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-20 md:top-24 z-20 pb-2 border-b">
-            {/* Year Navigator (Optional visual enhancement) */}
-            <div className="flex items-center justify-between px-4 py-1 text-sm font-medium text-muted-foreground">
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYearChange(-1)}>
+        <div className="flex flex-col gap-1 bg-card/90 backdrop-blur-md sticky top-[66px] sm:top-[78px] z-20 py-2 rounded-2xl border border-border/60 shadow-xs">
+            {/* Year Navigator */}
+            <div className="flex items-center justify-between px-2 sm:px-4 text-xs sm:text-sm font-bold text-muted-foreground">
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" onClick={() => handleYearChange(-1)}>
                     <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span>{year}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYearChange(1)}>
+                <span className="tabular-nums font-extrabold text-foreground/80">{year}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" onClick={() => handleYearChange(1)}>
                     <ChevronRight className="h-4 w-4" />
                 </Button>
             </div>
 
-            {/* Horizontal Month Scroll */}
+            {/* Horizontal Month Scroll with smooth edge fade */}
             <div
                 ref={scrollRef}
-                className="flex overflow-x-auto scrollbar-hide px-4 gap-2 items-center select-none"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                className="flex overflow-x-auto no-scrollbar px-3 sm:px-4 gap-1.5 sm:gap-2 items-center select-none [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]"
             >
                 {months.map((monthDate) => {
                     const isSelected = monthDate.getMonth() === currentMonth.getMonth() && monthDate.getFullYear() === currentMonth.getFullYear()
@@ -75,10 +74,10 @@ export function MonthSelector({ currentMonth, onMonthChange }: MonthSelectorProp
                             data-active={isSelected}
                             onClick={() => onMonthChange(monthDate)}
                             className={cn(
-                                "flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 capitalize whitespace-nowrap",
+                                "flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 capitalize whitespace-nowrap",
                                 isSelected
-                                    ? "bg-primary text-primary-foreground shadow-md scale-105 transform"
-                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                         >
                             {format(monthDate, "MMMM", { locale: es })}

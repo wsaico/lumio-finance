@@ -1,524 +1,275 @@
-"use client"
+﻿"use client"
 
+import { Suspense, useEffect, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
-    Tags,
-    Coins,
-    Calculator,
-    Monitor,
-    DollarSign,
-    PenTool,
-    Sparkles,
+    ArrowLeft,
+    ChevronRight,
+    Download,
+    Globe,
+    Info,
+    ListOrdered,
     Palette,
-    Moon,
-    Sun,
-    Monitor as MonitorIcon,
-    Check,
-    Type,
-    ChevronRight
+    Settings as SettingsIcon,
 } from "lucide-react"
-
-import {
-    SettingsSection,
-    SettingsRow,
-    SettingsSelect,
-    SettingsSwitch
-} from "@/components/settings/settings-components"
-
-import { useSettingsStore } from "@/hooks/useSettingsStore"
-import { useUser } from "@/hooks/useUser"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { useTheme } from "next-themes"
-import { BudgetingMethod } from "@/types/budget-methodology"
-import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { useSystemBranding } from "@/hooks/useSystemBranding"
 import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { createClient } from "@/lib/supabase/client"
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { resetUserData } from "@/app/actions/settings/reset-data"
-import { toast } from "sonner"
-import { Trash2, AlertTriangle } from "lucide-react"
+    GeneralSettingsSection,
+    AppearanceSettingsSection,
+    TransactionsSettingsSection,
+    LocalizationSettingsSection,
+    DataSettingsSection,
+    AboutSettingsSection,
+} from "@/components/settings/cashew-sections"
 
-const ACCENT_COLORS = [
-    { name: "Lumio Orange", value: "#E8572A" },
-    { name: "Vibrant Violet", value: "#8B5CF6" },
-    { name: "Sky Blue", value: "#0EA5E9" },
-    { name: "Emerald Green", value: "#10B981" },
-    { name: "Rose Pink", value: "#F43F5E" },
-    { name: "Gold", value: "#F59E0B" },
-]
+type SectionId = "general" | "appearance" | "transactions" | "localization" | "data" | "about"
 
-const FONTS = [
-    { name: "Geist", description: "Minimalista y técnico" },
-    { name: "Inter", description: "Estándar moderno y legible" },
-    { name: "Montserrat", description: "Geométrico y elegante" },
-    { name: "Outfit", description: "Suave y contemporáneo" },
-    { name: "Plus Jakarta Sans", description: "Dinámico y corporativo" },
-    { name: "HONOR Sans", description: "Diseño premium de Honor" },
-]
+interface SectionMeta {
+    id: SectionId
+    title: string
+    subtitle: string
+    icon: any
+}
 
-
-
-export default function SettingsPage() {
+function SettingsContent() {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
-    const store = useSettingsStore()
-    const { theme, setTheme } = useTheme()
-    const { profile, mutateProfile } = useUser() // SWR Hook with Mutation
+    const branding = useSystemBranding()
+    const isDesktop = useMediaQuery("(min-width: 1024px)")
 
-    // Get tab from URL or default to 'appearance'
-    const currentTab = searchParams.get('tab') || 'appearance'
+    const sections: SectionMeta[] = [
+        {
+            id: "general",
+            title: "Configuración general",
+            subtitle: "Perfil, bloqueo con PIN, respuesta háptica, edición de datos",
+            icon: SettingsIcon,
+        },
+        {
+            id: "appearance",
+            title: "Tema y estilo",
+            subtitle: "Color del tema, Material You, íconos, animaciones, fuente",
+            icon: Palette,
+        },
+        {
+            id: "transactions",
+            title: "Transacciones",
+            subtitle: "Nueva transacción, adjuntos, transacciones programadas",
+            icon: ListOrdered,
+        },
+        {
+            id: "localization",
+            title: "Localización y formato",
+            subtitle: "País, moneda principal, zona horaria y formato numérico",
+            icon: Globe,
+        },
+        {
+            id: "data",
+            title: "Importar y exportar datos",
+            subtitle: "Importar CSV, copias de seguridad JSON, Google Drive",
+            icon: Download,
+        },
+        {
+            id: "about",
+            title: `Acerca de ${branding.appName.split(" ")[0] || "Lumio"}`,
+            subtitle: "Información, guía de inicio y desarrollador",
+            icon: Info,
+        },
+    ]
 
-    const setTab = (value: string) => {
-        const params = new URLSearchParams(searchParams.toString())
-        params.set('tab', value)
-        // Update URL without full reload
-        router.push(`${pathname}?${params.toString()}`, { scroll: false })
+    const rawSection = searchParams.get("section")
+    const legacyTab = searchParams.get("tab")
+
+    const mapLegacy = (tab?: string | null): SectionId | null => {
+        if (!tab) return null
+        if (tab === "appearance") return "appearance"
+        if (tab === "regional" || tab === "strategy") return "localization"
+        if (tab === "data" || tab === "ai" || tab === "reports") return "data"
+        return null
     }
 
+    const activeSectionParam = (rawSection as SectionId | null) || mapLegacy(legacyTab)
     const [mounted, setMounted] = useState(false)
-    const [budgetMethod, setBudgetMethod] = useState<BudgetingMethod | null>(null)
-    const [loadingMethod, setLoadingMethod] = useState(false)
+    useEffect(() => setMounted(true), [])
 
-    useEffect(() => {
-        setMounted(true)
-        fetch('/api/user/preferences')
-            .then(res => res.json())
-            .then(data => setBudgetMethod(data.budgeting_method))
-            .catch(err => console.error(err))
-    }, [])
-
-    // ... (method checks)
+    const selectSection = (id: SectionId | null) => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.delete("tab")
+        if (id) params.set("section", id)
+        else params.delete("section")
+        const qs = params.toString()
+        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    }
 
     if (!mounted) return null
 
+    // Desktop defaults to "general" when no section is chosen; Mobile shows clean Hub first
+    const resolvedSection: SectionId | null = isDesktop
+        ? activeSectionParam || "general"
+        : activeSectionParam || null
+
+    const currentMeta = sections.find((s) => s.id === resolvedSection)
+
+    const renderSectionBody = (id: SectionId) => {
+        switch (id) {
+            case "general":
+                return <GeneralSettingsSection onNavigateSection={(s) => selectSection(s as SectionId)} />
+            case "appearance":
+                return <AppearanceSettingsSection />
+            case "transactions":
+                return <TransactionsSettingsSection />
+            case "localization":
+                return <LocalizationSettingsSection />
+            case "data":
+                return <DataSettingsSection />
+            case "about":
+                return <AboutSettingsSection />
+        }
+    }
+
     return (
-        <div className="container mx-auto max-w-4xl py-10 px-4 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32">
+        <div className="max-w-6xl mx-auto py-4 sm:py-6 px-1 sm:px-4 pb-28 animate-in fade-in duration-300">
+            {/* MOBILE HUB (when no section selected) */}
+            {!isDesktop && !resolvedSection && (
+                <div className="space-y-6">
+                    <h1 className="text-2xl font-black tracking-tight text-center text-foreground">
+                        Ajustes
+                    </h1>
 
-            <Tabs value={currentTab} onValueChange={setTab} className="space-y-8">
-                <TabsList className="bg-muted/50 p-1 border border-border/50 w-full md:w-fit justify-start h-auto flex-wrap gap-1">
-                    <TabsTrigger value="appearance" className="gap-2 px-4 py-2">
-                        <Palette className="h-4 w-4" />
-                        <span className="text-xs uppercase font-bold tracking-tight">Apariencia</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="regional" className="gap-2 px-4 py-2">
-                        <Coins className="h-4 w-4" />
-                        <span className="text-xs uppercase font-bold tracking-tight">Regional</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="strategy" className="gap-2 px-4 py-2">
-                        <Calculator className="h-4 w-4" />
-                        <span className="text-xs uppercase font-bold tracking-tight">Estrategia</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="data" className="gap-2 px-4 py-2">
-                        <Tags className="h-4 w-4" />
-                        <span className="text-xs uppercase font-bold tracking-tight">Datos</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="ai" className="gap-2 px-4 py-2">
-                        <Sparkles className="h-4 w-4" />
-                        <span className="text-xs uppercase font-bold tracking-tight">IA</span>
-                    </TabsTrigger>
-                </TabsList>
+                    <div className="rounded-3xl bg-card border border-border/60 divide-y divide-border/50 overflow-hidden shadow-sm">
+                        {sections.map((sec) => (
+                            <button
+                                key={sec.id}
+                                type="button"
+                                onClick={() => selectSection(sec.id)}
+                                className="w-full flex items-center gap-3.5 px-4 py-4 text-left hover:bg-muted/35 active:bg-muted/50 transition-colors"
+                            >
+                                <div className="h-10 w-10 rounded-[var(--icon-radius,0.85rem)] bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                    <sec.icon className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-sm text-foreground leading-snug">
+                                        {sec.title}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground leading-snug line-clamp-1 mt-0.5">
+                                        {sec.subtitle}
+                                    </p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
-                {/* --- APARIENCIA --- */}
-                <TabsContent value="appearance" className="space-y-8 outline-none animate-in fade-in slide-in-from-left-2 duration-300">
-                    <SettingsSection title="Personalización del Sistema">
-                        <div className="grid gap-6 md:grid-cols-2 mt-2">
-                            {/* Selector de Tema */}
-                            <Card className="p-5 bg-card/40 backdrop-blur-sm border-border/50 space-y-4">
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-bold">Tema Principal</h4>
-                                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Modo claro, oscuro o automático</p>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {[
-                                        { id: 'light', icon: Sun, label: 'Claro' },
-                                        { id: 'dark', icon: Moon, label: 'Oscuro' },
-                                        { id: 'system', icon: MonitorIcon, label: 'Auto' },
-                                    ].map((mode) => (
-                                        <button
-                                            key={mode.id}
-                                            onClick={() => setTheme(mode.id)}
-                                            className={cn(
-                                                "flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all border",
-                                                theme === mode.id
-                                                    ? "border-primary bg-primary/10 text-primary shadow-sm"
-                                                    : "border-transparent bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:border-border/50"
-                                            )}
-                                        >
-                                            <mode.icon className="h-4 w-4" />
-                                            <span className="text-[9px] font-bold uppercase">{mode.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </Card>
-
-                            {/* Color de Realce */}
-                            <Card className="p-5 bg-card/40 backdrop-blur-sm border-border/50 space-y-4">
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-bold">Color de Realce</h4>
-                                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Identidad visual de botones y realces</p>
-                                </div>
-                                <div className="flex flex-wrap gap-2.5 pt-1">
-                                    {ACCENT_COLORS.map((color) => (
-                                        <button
-                                            key={color.value}
-                                            onClick={() => store.setAccentColor(color.value)}
-                                            className={cn(
-                                                "h-8 w-8 rounded-full transition-all flex items-center justify-center relative",
-                                                "hover:scale-110 active:scale-95 shadow-sm border border-black/5",
-                                                store.accentColor === color.value ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-                                            )}
-                                            style={{ backgroundColor: color.value }}
-                                            title={color.name}
-                                        >
-                                            {store.accentColor === color.value && (
-                                                <Check className="h-4 w-4 text-white" />
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            </Card>
-
-                            {/* Tipografía */}
-                            <Card className="p-5 bg-card/40 backdrop-blur-sm border-border/50 space-y-4 md:col-span-2">
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-bold flex items-center gap-2">
-                                        <Type className="h-4 w-4 text-primary" />
-                                        Tipografía del Sistema
-                                    </h4>
-                                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Personaliza la fuente de texto de toda la plataforma</p>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-                                    {FONTS.map((font) => (
-                                        <button
-                                            key={font.name}
-                                            onClick={() => store.setFontFamily(font.name)}
-                                            className={cn(
-                                                "flex flex-col items-start gap-1 p-4 rounded-xl transition-all border text-left group",
-                                                store.fontFamily === font.name
-                                                    ? "border-primary bg-primary/10 shadow-sm"
-                                                    : "border-transparent bg-muted/20 hover:bg-muted/40 hover:border-border/50"
-                                            )}
-                                        >
-                                            <div className="flex items-center justify-between w-full">
-                                                <span className={cn(
-                                                    "text-sm font-bold",
-                                                    store.fontFamily === font.name ? "text-primary" : "text-foreground"
-                                                )} style={{ fontFamily: `var(--font-${font.name.toLowerCase().replace(/\s+/g, '-')})` }}>
-                                                    {font.name}
-                                                </span>
-                                                {store.fontFamily === font.name && (
-                                                    <Check className="h-4 w-4 text-primary" />
-                                                )}
-                                            </div>
-                                            <span className="text-[10px] text-muted-foreground font-medium line-clamp-1 group-hover:text-muted-foreground/80 transition-colors">
-                                                {font.description}
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </Card>
+            {/* MOBILE DRILL-DOWN */}
+            {!isDesktop && resolvedSection && currentMeta && (
+                <div className="space-y-5">
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => selectSection(null)}
+                            className="h-10 w-10 rounded-2xl bg-card border border-border/60 flex items-center justify-center text-foreground hover:bg-muted active:scale-95 transition-all shrink-0"
+                            aria-label="Volver a Ajustes"
+                        >
+                            <ArrowLeft className="h-4.5 w-4.5" />
+                        </button>
+                        <div className="min-w-0">
+                            <h1 className="text-xl font-black tracking-tight text-foreground truncate">
+                                {currentMeta.title}
+                            </h1>
                         </div>
-                    </SettingsSection>
-                </TabsContent>
+                    </div>
 
-                {/* --- REGIONAL --- */}
-                <TabsContent value="regional" className="space-y-6 outline-none animate-in fade-in slide-in-from-left-2 duration-300">
-                    <SettingsSection title="Configuración Regional">
-                        <SettingsRow
-                            icon={Coins}
-                            title="Tasas de Cambio"
-                            description="Monitorea y actualiza los valores de conversión."
-                            onClick={() => router.push('/dashboard/settings/exchange-rates')}
-                        />
-                        <SettingsRow
-                            icon={DollarSign}
-                            title="Divisa Principal"
-                            description="Base monetaria para reportes consolidados."
-                            action={
-                                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
-                                    <span className="text-xs font-black">{store.currencyCode}</span>
-                                </div>
-                            }
-                            onClick={() => router.push('/dashboard/settings/currency')}
-                        />
-                        <SettingsRow
-                            icon={PenTool}
-                            title="Formato Numérico"
-                            description="Estilo de visualización para montos de dinero."
-                            action={
-                                <SettingsSelect
-                                    value={store.numberFormat}
-                                    onValueChange={(v: any) => store.setNumberFormat(v)}
-                                    options={[
-                                        { label: "S/. 1,234.56", value: "S/. 1,234.56" },
-                                        { label: "S/. 1.234,56", value: "S/. 1.234,56" },
-                                        { label: "1,234.56 S/.", value: "1,234.56 S/." },
-                                    ]}
-                                />
-                            }
-                        />
-                    </SettingsSection>
-                </TabsContent>
+                    {renderSectionBody(resolvedSection)}
+                </div>
+            )}
 
-                {/* --- ESTRATEGIA --- */}
-                <TabsContent value="strategy" className="space-y-6 outline-none animate-in fade-in slide-in-from-left-2 duration-300">
-                    <SettingsSection title="Estrategia Financiera">
+            {/* DESKTOP MASTER-DETAIL */}
+            {isDesktop && resolvedSection && (
+                <div className="grid grid-cols-[290px_1fr] gap-7 items-start">
+                    {/* Left Menu */}
+                    <aside className="sticky top-24 space-y-4">
+                        <div className="px-2">
+                            <h1 className="text-2xl font-black tracking-tight text-foreground">
+                                Ajustes
+                            </h1>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Personaliza tu experiencia financiera
+                            </p>
+                        </div>
 
-                        <SettingsRow
-                            icon={Monitor}
-                            title="Lógica de Presupuestos"
-                            description={store.budgetTotalType === 'remaining' ? 'Priorizar saldo restante' : 'Priorizar gasto acumulado'}
-                            action={
-                                <SettingsSelect
-                                    value={store.budgetTotalType}
-                                    onValueChange={(v: any) => store.setBudgetTotalType(v)}
-                                    options={[
-                                        { label: "Saldo Restante", value: "remaining" },
-                                        { label: "Total Gastado", value: "spent" },
-                                    ]}
-                                />
-                            }
-                        />
-                    </SettingsSection>
-                </TabsContent>
-
-                {/* --- DATOS --- */}
-                <TabsContent value="data" className="space-y-6 outline-none animate-in fade-in slide-in-from-left-2 duration-300">
-                    <SettingsSection title="Perfil de Usuario">
-                        <div className="flex flex-col md:flex-row gap-6 items-center md:items-start bg-card/40 p-6 rounded-2xl border border-border/50">
-                            <div className="relative group">
-                                <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-background shadow-xl ring-2 ring-primary/20">
-                                    {/* Real Avatar */}
-                                    <Avatar className="h-full w-full">
-                                        {/* Assuming store.user or similar exists, but we can fetch on client or use context. 
-                                            For now, relying on basic img or local state if store isn't sync'd instantly */}
-                                        <img
-                                            src={profile?.avatar_url || "/placeholder-avatar.jpg"}
-                                            onError={(e) => e.currentTarget.src = `https://ui-avatars.com/api/?name=Usuario&background=random`}
-                                            alt="Avatar"
-                                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                        />
-                                    </Avatar>
-                                </div>
-                                <label
-                                    htmlFor="settings-avatar-upload"
-                                    className="absolute bottom-0 right-0 p-1.5 bg-primary text-primary-foreground rounded-full shadow-lg hover:scale-110 transition-transform cursor-pointer flex items-center justify-center"
-                                >
-                                    {loadingMethod ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <PenTool className="h-4 w-4" />}
-                                </label>
-                                <input
-                                    id="settings-avatar-upload"
-                                    type="file"
-                                    className="hidden"
-                                    accept="image/*"
-                                    disabled={loadingMethod}
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0]
-                                        if (!file) return
-
-                                        // 1. Upload Logic via Proxy API
-                                        try {
-                                            setLoadingMethod(true)
-
-                                            const formData = new FormData()
-                                            formData.append('file', file)
-
-                                            const response = await fetch('/api/user/avatar', {
-                                                method: 'POST',
-                                                body: formData
-                                            })
-
-                                            const result = await response.json()
-
-                                            if (!response.ok) {
-                                                throw new Error(result.error || "Error al subir imagen")
-                                            }
-
-                                            toast.success("Foto de perfil actualizada", {
-                                                description: "Los cambios se reflejarán en breve."
-                                            })
-
-                                            // Force refresh global state (Sidebar + this page)
-                                            await mutateProfile()
-
-                                            // Optional: router.refresh() if server components need it
-                                            router.refresh()
-
-                                        } catch (error: any) {
-                                            toast.error("Error al subir imagen", {
-                                                description: error.message
-                                            })
-                                        } finally {
-                                            setLoadingMethod(false)
-                                        }
-                                    }}
-                                />
-                            </div>
-
-                            <div className="space-y-4 flex-1 w-full text-center md:text-left">
-                                <div>
-                                    <h3 className="text-lg font-bold">Tu Foto de Perfil</h3>
-                                    <p className="text-sm text-muted-foreground">Esta imagen se mostrará en tu barra lateral y en los comentarios.</p>
-                                </div>
-                                <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                                    <label
-                                        htmlFor="settings-avatar-upload"
-                                        className="cursor-pointer px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-colors inline-flex items-center gap-2"
-                                    >
-                                        <PenTool className="h-4 w-4" />
-                                        Subir nueva imagen
-                                    </label>
+                        <nav className="rounded-3xl bg-card border border-border/60 divide-y divide-border/40 overflow-hidden shadow-xs">
+                            {sections.map((sec) => {
+                                const active = resolvedSection === sec.id
+                                return (
                                     <button
-                                        className="px-4 py-2 bg-muted text-muted-foreground text-sm font-bold rounded-xl hover:bg-muted/80 transition-colors"
-                                        onClick={() => toast.success("Avatar eliminado (simulado)")}
+                                        key={sec.id}
+                                        type="button"
+                                        onClick={() => selectSection(sec.id)}
+                                        className={cn(
+                                            "w-full flex items-center gap-3 px-4 py-3.5 text-left transition-all",
+                                            active
+                                                ? "bg-primary/10 text-primary"
+                                                : "hover:bg-muted/35 text-foreground"
+                                        )}
                                     >
-                                        Eliminar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <SettingsRow
-                            icon={Tags}
-                            title="Nombre de Visualización"
-                            description="Cómo te ven los demás usuarios."
-                            action={
-                                <div className="font-medium text-sm bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50">
-                                    {store.user?.full_name || 'Usuario'}
-                                </div>
-                            }
-                            onClick={() => { }}
-                        />
-                    </SettingsSection>
-
-                    <SettingsSection title="Gestión de Datos">
-                        <SettingsRow
-                            icon={Tags}
-                            title="Administrar Categorías"
-                            description="Configura tus etiquetas de ingresos y gastos."
-                            onClick={() => router.push('/dashboard/settings/categories')}
-                        />
-                        <SettingsRow
-                            icon={Monitor}
-                            title="Modulos del Sistema"
-                            description="Personaliza la visibilidad de herramientas."
-                            onClick={() => router.push('/dashboard/settings/home')}
-                        />
-                    </SettingsSection>
-
-                    <SettingsSection title="Zona de Peligro">
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <div className="w-full">
-                                    <SettingsRow
-                                        icon={Trash2}
-                                        title="Restablecer Datos"
-                                        description="Elimina todas las transacciones, cuentas y presupuestos. Irreversible."
-                                        variant="danger"
-                                        action={
-                                            <div className="px-3 py-1 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 text-xs font-bold">
-                                                REQUIERE CONFIRMACIÓN
-                                            </div>
-                                        }
-                                        onClick={() => { }} // Trigger controlled by AlertDialog
-                                    />
-                                </div>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="border-red-500/20">
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle className="text-red-500 flex items-center gap-2">
-                                        <AlertTriangle className="h-5 w-5" />
-                                        ¿Estás absolutamente seguro?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription className="space-y-3" asChild>
-                                        <div>
-                                            <p>
-                                                Esta acción <strong>no se puede deshacer</strong>.
-                                                Eliminará permanentemente:
+                                        <div
+                                            className={cn(
+                                                "h-9 w-9 rounded-[var(--icon-radius,0.85rem)] flex items-center justify-center shrink-0 transition-colors",
+                                                active
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "bg-muted text-muted-foreground"
+                                            )}
+                                        >
+                                            <sec.icon className="h-4.5 w-4.5" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p
+                                                className={cn(
+                                                    "text-sm leading-tight truncate",
+                                                    active ? "font-extrabold" : "font-semibold"
+                                                )}
+                                            >
+                                                {sec.title}
                                             </p>
-                                            <ul className="list-disc pl-5 space-y-1 text-xs">
-                                                <li>Todas tus cuentas y saldos.</li>
-                                                <li>Todas las transacciones históricas.</li>
-                                                <li>Todos los presupuestos y metas de ahorro.</li>
-                                                <li>Toda la configuración de análisis.</li>
-                                            </ul>
-                                            <p className="font-bold text-foreground">
-                                                Tu configuración de perfil y categorías personalizadas SE MANTENDRÁN.
+                                            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                                {sec.subtitle}
                                             </p>
                                         </div>
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction
-                                        onClick={async (e) => {
-                                            e.preventDefault() // Prevent auto-close to show loading state if needed, though here we just fire
+                                    </button>
+                                )
+                            })}
+                        </nav>
+                    </aside>
 
-                                            // Optional: Add simple loading state here if desired, but for now direct call
-                                            const res = await resetUserData()
-                                            if (res.success) {
-                                                toast("Datos Eliminados", {
-                                                    description: "Tu sistema ha sido reiniciado correctamente.",
-                                                })
-                                                window.location.href = '/dashboard' // Force hard reload/redirect
-                                            } else {
-                                                toast("Error", {
-                                                    description: "No se pudieron eliminar los datos. Inténtalo de nuevo.",
-                                                    action: { label: "Reintentar", onClick: () => resetUserData() }
-                                                })
-                                            }
-                                        }}
-                                        className="bg-red-500 hover:bg-red-600 text-white focus:ring-red-500"
-                                    >
-                                        Sí, eliminar todo
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </SettingsSection>
-                </TabsContent>
+                    {/* Right Detail */}
+                    <div className="min-w-0 space-y-5">
+                        {currentMeta && (
+                            <div className="px-1">
+                                <h2 className="text-xl font-black tracking-tight text-foreground">
+                                    {currentMeta.title}
+                                </h2>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    {currentMeta.subtitle}
+                                </p>
+                            </div>
+                        )}
 
-                {/* --- IA --- */}
-                <TabsContent value="ai" className="space-y-6 outline-none animate-in fade-in slide-in-from-left-2 duration-300">
-                    <SettingsSection title="Inteligencia Artificial">
-                        <SettingsRow
-                            icon={Sparkles}
-                            title="Análisis con Gemini"
-                            description="Escaneo inteligente de recibos mediante visión IA."
-                            action={
-                                <SettingsSwitch
-                                    checked={store.enableAIReceiptScanning}
-                                    onCheckedChange={store.setEnableAIReceiptScanning}
-                                />
-                            }
-                        />
-                    </SettingsSection>
-                </TabsContent>
-            </Tabs>
-
-            <div className="pt-20 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                    Lumio Finance &middot; Professional Suite v1.0.0
-                </p>
-            </div>
+                        {renderSectionBody(resolvedSection)}
+                    </div>
+                </div>
+            )}
         </div>
+    )
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={null}>
+            <SettingsContent />
+        </Suspense>
     )
 }

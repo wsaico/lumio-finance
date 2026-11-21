@@ -39,18 +39,30 @@ interface AllocationWizardProps {
     trigger?: React.ReactNode
     onSuccess?: () => void
     editingAllocation?: any
+    initialData?: any
+    unassignedPool?: { pen: number; usd: number }
+    defaultTab?: 'expenses' | 'savings'
 }
 
 // Fetcher
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
-export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocation }: AllocationWizardProps) {
+export function AllocationWizard({
+    cycleId,
+    trigger,
+    onSuccess,
+    editingAllocation,
+    initialData,
+    unassignedPool,
+    defaultTab = 'expenses',
+}: AllocationWizardProps) {
+    const activeEditing = editingAllocation || initialData
     const [open, setOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const { mutate } = useSWRConfig()
 
     // Tabs State
-    const [tab, setTab] = useState<'expenses' | 'savings'>('expenses')
+    const [tab, setTab] = useState<'expenses' | 'savings'>(defaultTab)
 
     // Focus Refs
     const amountInputRef = useRef<HTMLInputElement>(null)
@@ -78,7 +90,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
 
     // Duplicate Check
     const getExistingAllocation = () => {
-        if (editingAllocation) return null // If editing, we don't care about "finding" it
+        if (activeEditing) return null // If editing, we don't care about "finding" it
         if (tab === 'expenses') {
             return existingAllocations.find((a: any) => a.category_id === categoryId)
         } else {
@@ -88,24 +100,26 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
 
     const duplicate = getExistingAllocation()
 
-    // Initialize from editingAllocation
+    // Initialize from activeEditing
     useEffect(() => {
-        if (open && editingAllocation) {
-            if (editingAllocation.category_id) {
+        if (open && activeEditing) {
+            if (activeEditing.category_id) {
                 setTab('expenses')
-                setCategoryId(editingAllocation.category_id)
-                setSubcategoryId(editingAllocation.subcategory_id)
-            } else if (editingAllocation.goal_id) {
+                setCategoryId(activeEditing.category_id)
+                setSubcategoryId(activeEditing.subcategory_id)
+            } else if (activeEditing.goal_id) {
                 setTab('savings')
-                setGoalId(editingAllocation.goal_id)
+                setGoalId(activeEditing.goal_id)
             }
 
-            const isPen = editingAllocation.allocated_amount_pen > 0
-            const rawAmount = isPen ? editingAllocation.allocated_amount_pen : editingAllocation.allocated_amount_usd
-            const justText = editingAllocation.justification || ""
+            const isPen = (Number(activeEditing.allocated_amount_pen) || 0) > 0
+            const rawAmount = isPen
+                ? Number(activeEditing.allocated_amount_pen) || 0
+                : Number(activeEditing.allocated_amount_usd) || 0
+            const justText = activeEditing.justification || ""
 
             setCurrency(isPen ? 'PEN' : 'USD')
-            setPriority(String(editingAllocation.priority))
+            setPriority(String(activeEditing.priority || 1))
 
             // SMART RESTORE: Check if justification has [Frequency] tag
             let restoredFreq = 'monthly'
@@ -125,14 +139,14 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
             // Clean justification for UI
             const cleanJust = justText.replace(/\[.*?\]\s*/g, '')
 
-            setAmount(parseFloat(validAmount).toFixed(2))
+            setAmount(parseFloat(String(validAmount)).toFixed(2))
             setFrequency(restoredFreq)
             setJustification(cleanJust)
 
-        } else if (open && !editingAllocation) {
+        } else if (open && !activeEditing) {
             resetForm()
         }
-    }, [open, editingAllocation])
+    }, [open, activeEditing])
 
     // Calculate Final Monthly Amount
     const getMonthlyAmount = () => {
@@ -186,7 +200,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
 
         try {
             const url = '/api/zbb/allocations'
-            const isUpdating = !!editingAllocation || !!duplicate
+            const isUpdating = !!activeEditing || !!duplicate
             const method = isUpdating ? 'PUT' : 'POST'
 
             const body: any = {
@@ -200,7 +214,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                 priority: parseInt(priority)
             }
 
-            if (isUpdating) body.id = editingAllocation?.id || duplicate?.id
+            if (isUpdating) body.id = activeEditing?.id || duplicate?.id
 
             const res = await fetch(url, {
                 method,
@@ -212,7 +226,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
 
             if (!res.ok) throw new Error(data.error || "Error al guardar")
 
-            toast.success(editingAllocation ? "Asignación actualizada" : "Asignación registrada")
+            toast.success(activeEditing ? "Asignación actualizada" : "Asignación registrada")
             setOpen(false)
             resetForm()
             mutate('/api/zbb/planning-cycle')
@@ -231,9 +245,14 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
         setSubcategoryId(undefined)
         setAmount("")
         setJustification("")
-        setPriority("1")
+        setPriority(defaultTab === 'savings' ? "2" : "1")
         setFrequency("monthly")
-        setTab('expenses')
+        setTab(defaultTab)
+        if (unassignedPool && unassignedPool.pen <= 0 && unassignedPool.usd > 0) {
+            setCurrency("USD")
+        } else {
+            setCurrency("PEN")
+        }
     }
 
     const handleCategoryChange = (catId: string, subId?: string) => {
@@ -260,10 +279,10 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                             <div className="bg-primary text-primary-foreground p-2.5 rounded-xl shadow-lg shadow-primary/20">
                                 <Wallet className="w-6 h-6" />
                             </div>
-                            {editingAllocation ? 'Editar Asignación' : 'Nueva Asignación'}
+                            {activeEditing ? 'Editar Asignación' : 'Nueva Asignación'}
                         </DialogTitle>
                         <DialogDescription className="text-base text-muted-foreground/80 font-medium ml-1">
-                            {editingAllocation ? 'Ajusta los detalles.' : 'Define el destino de tu dinero.'}
+                            {activeEditing ? 'Ajusta los detalles.' : 'Define el destino de tu dinero.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -274,7 +293,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                             className={cn(
                                 "py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2",
                                 tab === 'expenses'
-                                    ? "bg-white dark:bg-zinc-800 shadow-md text-primary scale-[1.02]"
+                                    ? "bg-card shadow-md text-primary scale-[1.02]"
                                     : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                             )}
                         >
@@ -286,7 +305,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                             className={cn(
                                 "py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2",
                                 tab === 'savings'
-                                    ? "bg-white dark:bg-zinc-800 shadow-md text-emerald-600 scale-[1.02]"
+                                    ? "bg-card shadow-md text-emerald-600 scale-[1.02]"
                                     : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                             )}
                         >
@@ -348,8 +367,8 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                                     subcategoryId={subcategoryId}
                                     onChange={handleCategoryChange}
                                     enableTabs={true}
-                                    autoFocus={!editingAllocation}
-                                    defaultOpen={!editingAllocation && tab === 'expenses'}
+                                    autoFocus={false}
+                                    defaultOpen={false}
                                 />
                             ) : (
                                 <Select value={goalId} onValueChange={setGoalId}>
@@ -373,7 +392,38 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                     </div>
 
                     <div className="space-y-1.5 pt-1">
-                        <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-1">Monto</Label>
+                        <div className="flex items-center justify-between ml-1">
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Monto</Label>
+                            {!activeEditing && unassignedPool && (
+                                (() => {
+                                    const avail = currency === 'USD' ? unassignedPool.usd : unassignedPool.pen
+                                    if (avail <= 0.01) return null
+                                    const sym = currency === 'USD' ? '$' : 'S/.'
+                                    const existingAmt = duplicate
+                                        ? Number(
+                                              currency === 'USD'
+                                                  ? duplicate.allocated_amount_usd || 0
+                                                  : duplicate.allocated_amount_pen || 0
+                                          )
+                                        : 0
+                                    const targetTotal = Math.round((existingAmt + avail) * 100) / 100
+                                    return (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFrequency('monthly')
+                                                setAmount(targetTotal.toFixed(2))
+                                            }}
+                                            className="text-[11px] font-bold text-primary hover:underline tabular-nums"
+                                        >
+                                            {duplicate && existingAmt > 0
+                                                ? `Sumar excedente (+${sym} ${avail.toFixed(2)} → ${sym} ${targetTotal.toFixed(2)})`
+                                                : `Usar todo lo disponible (${sym} ${avail.toFixed(2)})`}
+                                        </button>
+                                    )
+                                })()
+                            )}
+                        </div>
                         <div className="flex gap-4">
                             <div className="flex-1 relative group transition-all focus-within:ring-2 focus-within:ring-primary/20 rounded-2xl">
                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold text-lg pointer-events-none">
@@ -444,7 +494,7 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                                     <SelectItem value="1" className="text-red-600 font-medium py-3">Esencial</SelectItem>
                                     <SelectItem value="2" className="text-orange-600 font-medium py-3">Importante</SelectItem>
                                     <SelectItem value="3" className="text-blue-600 font-medium py-3">Deseable</SelectItem>
-                                    <SelectItem value="4" className="text-slate-500 font-medium py-3">Opcional</SelectItem>
+                                    <SelectItem value="4" className="text-muted-foreground font-medium py-3">Opcional</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -482,12 +532,12 @@ export function AllocationWizard({ cycleId, trigger, onSuccess, editingAllocatio
                             disabled={isSubmitting}
                             className={cn(
                                 "w-full h-14 text-base font-bold rounded-2xl shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]",
-                                duplicate && !editingAllocation
+                                duplicate && !activeEditing
                                     ? "bg-amber-500 hover:bg-amber-600 shadow-amber-200 text-white"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20 hover:shadow-primary/30"
                             )}
                         >
-                            {isSubmitting ? "Guardando..." : (duplicate && !editingAllocation ? "Actualizar Existente" : (editingAllocation ? "Guardar Cambios" : "Confirmar Asignación"))}
+                            {isSubmitting ? "Guardando..." : (duplicate && !activeEditing ? "Actualizar Existente" : (activeEditing ? "Guardar Cambios" : "Confirmar Asignación"))}
                         </Button>
                     </div>
                 </form>

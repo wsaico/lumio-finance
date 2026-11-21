@@ -1,44 +1,21 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server'
+
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { resolveCategory, getCategoryDefaults, expandCategoryIds } from '@/lib/category-utils'
-// import { budgetCalculator } from '@/lib/budget-calculator' // DISABLED
+import { resolveCategory, getCategoryDefaults } from '@/lib/category-utils'
+import { getExchangeRatesMap } from '@/lib/currency'
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
+import {
+    buildCategoryIndex,
+    calculateBudgetSpent,
+    getMonthDateRangeUTC,
+    mapBudgetRow,
+    normalizeBudgetScope,
+    type BudgetTransactionRow,
+} from '@/lib/budgets'
+import { getUserEntitlementsServer } from '@/lib/server/entitlements'
 
-function mapBudget(row: any) {
-    return {
-        id: row.id,
-        userId: row.user_id,
-        name: row.name,
-        amount: row.amount,
-        spent: Number(row.spent || 0), // Use stored value
-        type: row.type,
-        period: row.period,
-        color: row.color,
-        currencyCode: row.currency_code,
-        startDate: row.start_date,
-        endDate: row.end_date,
-        accountIds: row.account_ids || [],
-        includeCategories: row.include_categories || [],
-        excludeCategories: row.exclude_categories || [],
-        includeTags: row.include_tags || [],
-        transactionFilterMode: row.transaction_filter_mode || 'DEFAULT',
-        budgetScope: row.budget_scope || 'ALL_TRANSACTIONS',
-        includeLoaned: row.include_loaned || false,
-        includeGoalTransactions: row.include_goal_transactions || false,
-        includeBalanceCorrections: row.include_balance_corrections || false,
-        includeFromOtherBudgets: row.include_from_other_budgets || false,
-        excludedBudgetIds: row.excluded_budget_ids || [],
-        isActive: row.is_active,
-        createdAt: row.created_at,
-        stats: {
-            spent: Number(row.spent || 0),
-            remaining: Number(row.amount) - Number(row.spent || 0),
-            percentage: Number(row.amount) > 0 ? (Number(row.spent || 0) / Number(row.amount)) * 100 : 0
-        }
-    }
-}
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
         const supabase = await createClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -47,166 +24,94 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { data: budgets, error } = await supabase
+        const searchParams = request.nextUrl.searchParams
+        const activeOnly = searchParams.get('activeOnly') === 'true'
+        const yearParam = searchParams.get('year')
+        const monthParam = searchParams.get('month')
+
+        let budgetsQuery = supabase
             .from('budgets')
             .select('*')
             .eq('user_id', user.id)
-            .eq('is_active', true)
             .order('created_at', { ascending: false })
+
+        if (activeOnly) {
+            budgetsQuery = budgetsQuery.eq('is_active', true)
+        }
+        if (yearParam && !Number.isNaN(Number(yearParam))) {
+            budgetsQuery = budgetsQuery.eq('budget_year', Number(yearParam))
+        }
+        if (monthParam && !Number.isNaN(Number(monthParam))) {
+            budgetsQuery = budgetsQuery.eq('budget_month', Number(monthParam))
+        }
+
+        const { data: budgets, error } = await budgetsQuery
 
         if (error) {
             console.error('[BUDGETS_GET_SUPABASE]', error)
             return NextResponse.json({ error: 'Database Error' }, { status: 500 })
         }
 
-        // 1. Fetch Categories explicitly (Split queries to avoid OR syntax issues)
-        // 1. Fetch Categories explicitly (Split queries to avoid OR syntax issues)
-        const [userExp, sysExp, userInc, sysInc, subcats] = await Promise.all([
-            supabase.from('expense_categories').select('*').eq('user_id', user.id),
-            supabase.from('expense_categories').select('*').is('user_id', null),
-            supabase.from('income_categories').select('*').eq('user_id', user.id),
-            supabase.from('income_categories').select('*').is('user_id', null),
-            supabase.from('subcategories').select('*') // Fetch all subcategories
+        if (!budgets || budgets.length === 0) {
+            return NextResponse.json([])
+        }
+
+        const { timezone } = await getUserEntitlementsServer(supabase, user)
+
+        // Compute the global min/max local timezone date window across all fetched budgets
+        const now = new Date()
+        let minStartIso: string | null = null
+        let maxEndIso: string | null = null
+
+        for (const b of budgets) {
+            const y = Number(b.budget_year) || now.getUTCFullYear()
+            const m = Number(b.budget_month) || now.getUTCMonth() + 1
+            const { startIso, endIso } = getMonthDateRangeUTC(y, m, timezone)
+            if (!minStartIso || startIso < minStartIso) minStartIso = startIso
+            if (!maxEndIso || endIso > maxEndIso) maxEndIso = endIso
+        }
+
+        // Fetch categories, exchange rates, and transactions in parallel (no N+1)
+        const [userExp, sysExp, userInc, sysInc, subcats, rateMap, txResult] = await Promise.all([
+            supabase.from('expense_categories').select('id, name, parent_category_id').eq('user_id', user.id),
+            supabase.from('expense_categories').select('id, name, parent_category_id').is('user_id', null),
+            supabase.from('income_categories').select('id, name, parent_category_id').eq('user_id', user.id),
+            supabase.from('income_categories').select('id, name, parent_category_id').is('user_id', null),
+            supabase.from('subcategories').select('id, name, parent_category_id'),
+            getExchangeRatesMap(supabase),
+            supabase
+                .from('transactions')
+                .select(
+                    'amount, currency_code, transaction_type, transaction_date, account_id, expense_category_id, income_category_id, subcategory_id, loan_id, savings_goal_id, tags, metadata'
+                )
+                .eq('user_id', user.id)
+                .gte('transaction_date', minStartIso!)
+                .lte('transaction_date', maxEndIso!),
         ])
 
         const allCategories = [
-            ...(userExp.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
-            ...(sysExp.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
-            ...(userInc.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
-            ...(sysInc.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
-            ...(subcats.data || []).map(c => ({ id: c.id, name: c.name, parent_id: c.parent_category_id }))
+            ...(userExp.data || []).map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
+            ...(sysExp.data || []).map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
+            ...(userInc.data || []).map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
+            ...(sysInc.data || []).map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
+            ...(subcats.data || []).map((c: any) => ({ id: c.id, name: c.name, parent_id: c.parent_category_id })),
         ]
 
-        // Robust Matching: Map Names to Multiple IDs (User Version + System Version)
-        // Robust Matching: Map Names to Multiple IDs (User Version + System Version)
-        const categoriesByName: Record<string, string[]> = {}
-        const normalize = (n: string) => n ? n.trim().toLowerCase() : ''
+        const categoryIndex = buildCategoryIndex(allCategories)
+        const transactions: BudgetTransactionRow[] = !txResult.error && txResult.data ? txResult.data : []
 
-        allCategories.forEach(c => {
-            if (c.name) {
-                const key = normalize(c.name)
-                if (!categoriesByName[key]) categoriesByName[key] = []
-                categoriesByName[key].push(c.id)
-            }
+        const budgetsWithSpent = budgets.map((budget: any) => {
+            const spent = calculateBudgetSpent(budget, transactions, categoryIndex, rateMap)
+            return mapBudgetRow(budget, spent)
         })
-        const idToName: Record<string, string> = {}
-        allCategories.forEach(c => { idToName[c.id] = c.name })
-
-        // Calculate Spent Dynamically (Since 'spent' column does not exist)
-        const budgetsWithSpent = await Promise.all(budgets.map(async (budget) => {
-            const year = budget.budget_year || new Date().getFullYear()
-            const month = budget.budget_month || (new Date().getMonth() + 1)
-
-            // Construct Month Range
-            const startDate = new Date(year, month - 1, 1).toISOString();
-            const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
-
-            // Corrected: Select correct column names based on actual Schema (step 988/1024)
-            let query = supabase
-                .from('transactions')
-                .select('amount, expense_category_id, income_category_id, subcategory_id') // Added subcategory_id
-                .eq('user_id', user.id)
-                .gte('transaction_date', startDate)
-                .lte('transaction_date', endDate)
-
-            // --- SMART RULES IMPLEMENTATION ---
-            // 1. Loans: Exclude unless explicitly included
-            if (!budget.include_loaned) {
-                query = query.is('loan_id', null)
-            }
-
-            // 2. Savings Goals: Exclude unless explicitly included
-            if (!budget.include_goal_transactions) {
-                query = query.is('savings_goal_id', null)
-                    .neq('transaction_type', 'SAVINGS_DEPOSIT')
-            }
-
-            // 3. Balance Corrections: Exclude Transfers unless included
-            if (!budget.include_balance_corrections) {
-                query = query.neq('transaction_type', 'TRANSFER')
-            }
-            // ----------------------------------
-
-            // Filter by Category if specific categories are selected
-            // If include_categories is empty, it means "All Categories" (Global Budget) for that Type?
-            // Usually Global Budget implies "All Expenses".
-            // If specific categories, filter IN.
-
-            // ----------------------------------
-
-            // OPTIMIZATION: Fetch all transactions for the period and filter in memory to handle complex OR conditions
-            // (expense_category_id IN list OR subcategory_id IN list)
-            // We removed the DB-side category filtering to do it robustly in JS below.
-
-            if (budget.include_categories && budget.include_categories.length > 0) {
-                // Do not filter by category in DB, fetch all for the Type/Period and filter in memory
-            } else {
-                // Global Budget: Filter by Type only (keep DB filter for efficiency)
-                if (budget.type === 'INCOME' || budget.type === 'SAVINGS') {
-                    query = query.not('income_category_id', 'is', null)
-                } else {
-                    query = query.not('expense_category_id', 'is', null)
-                }
-            }
-
-            // ----------------------------------
-
-            // 4. Account Scope: Specific vs Global
-            if (budget.account_ids && budget.account_ids.length > 0) {
-                // If specific accounts are selected, filter by account_id
-                query = query.in('account_id', budget.account_ids)
-            }
-
-            const { data: transactions, error: txError } = await query;
-
-            let spent = 0;
-            if (!txError && transactions) {
-                // In-Memory Filtering for Robustness (Handle Subcategories & System Categories)
-                if (budget.include_categories && budget.include_categories.length > 0) {
-                    // 1. Get Names of selected categories
-                    // 2. Find ALL IDs matching those names (bridging User vs System IDs)
-                    let targetIds: string[] = []
-                    budget.include_categories.forEach((id: string) => {
-                        targetIds.push(id) // Always include the original
-                        const name = idToName[id]
-                        if (name) {
-                            const key = normalize(name)
-                            if (categoriesByName[key]) {
-                                targetIds.push(...categoriesByName[key])
-                            }
-                        }
-                    })
-
-                    const expandedIds = new Set(expandCategoryIds(targetIds, allCategories))
-
-                    spent = transactions.reduce((sum, t) => {
-                        let match = false
-                        if (budget.type === 'INCOME' || budget.type === 'SAVINGS') {
-                            match = t.income_category_id && expandedIds.has(t.income_category_id)
-                        } else {
-                            // Check both expense_category_id AND subcategory_id
-                            match = (t.expense_category_id && expandedIds.has(t.expense_category_id)) ||
-                                (t.subcategory_id && expandedIds.has(t.subcategory_id))
-                        }
-                        return match ? sum + Number(t.amount) : sum
-                    }, 0)
-                } else {
-                    // Global Budget (already filtered by Type/Account via DB query modifiers above, but check nulls)
-                    spent = transactions.reduce((sum, t) => sum + Number(t.amount), 0)
-                }
-            }
-
-            return mapBudget({ ...budget, spent });
-        }))
 
         return NextResponse.json(budgetsWithSpent)
-
     } catch (error: any) {
-        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
         if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
-            throw error;
+            throw error
         }
 
+        console.error('[BUDGETS_GET_GLOBAL]', error)
         return NextResponse.json(
             { error: error.message || 'Internal Server Error' },
             { status: 500 }
@@ -223,144 +128,95 @@ export async function POST(request: Request) {
     }
 
     try {
-        const body = await request.json()
-
-        // Basic validation
-        if (!body.name || !body.amount) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+        const { entitlements } = await getUserEntitlementsServer(supabase, user)
+        if (!entitlements.canAccessPremiumWrite) {
+            return NextResponse.json(
+                { error: 'Los presupuestos requieren Plan Premium.', code: 'PREMIUM_REQUIRED' },
+                { status: 403 }
+            )
         }
 
-        // Derive Month/Year from startDate
-        const startDate = new Date(body.startDate || new Date())
-        const month = startDate.getMonth() + 1
-        const year = startDate.getFullYear()
+        const body = await request.json()
+        const name = typeof body.name === 'string' ? body.name.trim() : ''
+        const amount = Number(body.amount)
 
-        // Resolve Category ID (Handle System IDs)
-        // Determine correct defaults/table based on type
-        // SAVINGS budgets use Income Categories based on Frontend Wizard logic
-        const isIncomeOrSavings = (body.type === 'INCOME' || body.type === 'SAVINGS')
-        const defaults = getCategoryDefaults(body.type || 'EXPENSE')
+        if (!name || !Number.isFinite(amount) || amount <= 0) {
+            return NextResponse.json(
+                { error: 'El nombre y un monto mayor a 0 son obligatorios' },
+                { status: 400 }
+            )
+        }
+
+        // Derive Month/Year from explicit fields or startDate or current date
+        const referenceDate = body.startDate ? new Date(body.startDate) : new Date()
+        const validDate = Number.isNaN(referenceDate.getTime()) ? new Date() : referenceDate
+        const budgetMonth = Number(body.budgetMonth) || validDate.getMonth() + 1
+        const budgetYear = Number(body.budgetYear) || validDate.getFullYear()
+
+        const type = body.type === 'SAVINGS' || body.type === 'INCOME' ? body.type : 'EXPENSE'
+        const isIncomeOrSavings = type === 'INCOME' || type === 'SAVINGS'
+        const defaults = getCategoryDefaults(type)
         const tableName = isIncomeOrSavings ? 'income_categories' : 'expense_categories'
 
-        // Default to Global (empty array) if no category provided
-        // const othersId = ... // REMOVED: Do not force "Others"
-        const targetCategoryId = body.includeCategories?.[0] || null
-
-        const resolvedCategoryId = await resolveCategory(supabase, tableName, targetCategoryId, user.id, defaults)
-
-        // Resolve Array of Categories (Advance: Need to map all)
-        let resolvedIncludeCategories: string[] = []
-        if (body.includeCategories && body.includeCategories.length > 0) {
-            // Processing sequentially to avoid race conditions on creation
-            for (const catId of body.includeCategories) {
-                const res = await resolveCategory(supabase, tableName, catId, user.id, defaults)
-                if (res) resolvedIncludeCategories.push(res)
+        // Resolve all category IDs sequentially to avoid race conditions creating system categories
+        const rawIncludeCategories: string[] = Array.isArray(body.includeCategories)
+            ? body.includeCategories
+            : []
+        const resolvedIncludeCategories: string[] = []
+        for (const catId of rawIncludeCategories) {
+            const resolved = await resolveCategory(supabase, tableName, catId, user.id, defaults)
+            if (resolved && !resolvedIncludeCategories.includes(resolved)) {
+                resolvedIncludeCategories.push(resolved)
             }
         }
 
-        // Prepare Categories Logic First (to get finalized categories for base payload)
-        // Verified: The table 'budgets' uses 'include_categories' (array) for category implementation. 
-        // There is NO 'category_id' column.
+        const budgetScope = normalizeBudgetScope(body.budgetScope)
+        const accountIds =
+            budgetScope === 'ACCOUNT' && Array.isArray(body.accountIds) ? body.accountIds : []
 
-        let finalIncludeCategories = resolvedIncludeCategories;
-        if (resolvedCategoryId && !finalIncludeCategories.includes(resolvedCategoryId)) {
-            finalIncludeCategories = [resolvedCategoryId, ...finalIncludeCategories];
-        }
-
-        // Prepare Base Payload (Guaranteed columns based on Schema Discovery)
-        const payload = {
-            name: body.name,
-            amount: body.amount,
-            period: body.period || 'MONTHLY',
-            // CRITICAL FIX: Explicitly take type from body, default to EXPENSE only if missing
-            type: body.type || 'EXPENSE',
-            category_id: body.categoryId || null, // Allow direct category link if passed
+        // Strictly matches public.budgets columns in supabase/schema.sql
+        const insertPayload = {
             user_id: user.id,
-            is_active: true,
-            // Smart Planning Fields
-            is_fixed: body.isFixed === true, // Ensure boolean
-            due_day: body.dueDay ? parseInt(body.dueDay) : null,
-            auto_suggest: body.autoSuggest !== false,
-            // Legacy/Advanced fields
-            includeCategories: body.includeCategories || [],
-            budgetScope: body.budgetScope || 'GLOBAL',
-            start_date: body.startDate || new Date().toISOString(),
-            budget_month: month, // Added back month and year
-            budget_year: year,
-            currency_code: body.currencyCode || 'USD',
-            include_categories: finalIncludeCategories,
-        }
-
-        const advancedPayload = {
-            ...payload, // Use the new 'payload' as base
+            name,
+            amount,
+            type,
+            period: 'MONTHLY',
             color: body.color || '#3b82f6',
-            account_ids: body.accountIds || [],
-            // include_categories already in base
-            exclude_categories: body.excludeCategories || [],
-            include_tags: body.includeTags || [],
+            currency_code: body.currencyCode || DEFAULT_CURRENCY,
+            budget_month: budgetMonth,
+            budget_year: budgetYear,
+            account_ids: accountIds,
+            include_categories: resolvedIncludeCategories,
+            exclude_categories: Array.isArray(body.excludeCategories) ? body.excludeCategories : [],
+            include_tags: Array.isArray(body.includeTags) ? body.includeTags : [],
             transaction_filter_mode: body.transactionFilterMode || 'DEFAULT',
-            budget_scope: body.budgetScope || 'ALL_TRANSACTIONS',
-            include_loaned: body.includeLoaned || false,
-            include_goal_transactions: body.includeGoalTransactions || false,
-            include_balance_corrections: body.includeBalanceCorrections || false,
-            include_from_other_budgets: body.includeFromOtherBudgets || false,
-            excluded_budget_ids: body.excludedBudgetIds || [],
-            // Smart Planning Fields
-            is_fixed: body.isFixed || false,
-            due_day: body.dueDay || null, // 1-31
-            auto_suggest: body.autoSuggest || true,
-            is_active: true
+            budget_scope: budgetScope,
+            include_loaned: Boolean(body.includeLoaned),
+            include_goal_transactions: Boolean(body.includeGoalTransactions),
+            include_balance_corrections: Boolean(body.includeBalanceCorrections),
+            include_from_other_budgets: Boolean(body.includeFromOtherBudgets),
+            excluded_budget_ids: Array.isArray(body.excludedBudgetIds) ? body.excludedBudgetIds : [],
+            is_active: body.isActive !== false,
         }
 
-        let newBudget = null
+        const { data: newBudget, error } = await supabase
+            .from('budgets')
+            .insert(insertPayload)
+            .select()
+            .single()
 
-        // Strategy: Try Advanced Insert first. If it fails due to column missing, fallback to Base.
-        try {
-            const { data, error } = await supabase
-                .from('budgets')
-                .insert(advancedPayload)
-                .select()
-                .single()
-
-            if (error) throw error
-            newBudget = data
-        } catch (advancedError: any) {
-            // Retry with Safe Backup Payload (stripping potentially missing columns)
-            const safePayload = {
-                user_id: payload.user_id,
-                name: payload.name,
-                amount: payload.amount,
-                period: payload.period,
-                budget_month: payload.budget_month,
-                budget_year: payload.budget_year,
-                currency_code: payload.currency_code,
-                include_categories: payload.include_categories,
-                type: payload.type, // CRITICAL FIX: Use the actual type (INCOME/EXPENSE)
-                is_active: true
-            }
-
-            const { data: basicData, error: basicError } = await supabase
-                .from('budgets')
-                .insert(safePayload)
-                .select()
-                .single()
-
-            if (basicError) {
-                console.error('[BUDGETS_POST_CRITICAL]', basicError)
-                // Return detailed error for user to see in Toast
-                return NextResponse.json({
-                    error: `DB Error: ${basicError.message}`,
-                    details: `Advanced: ${advancedError.message}. Basic: ${basicError.message}`
-                }, { status: 500 })
-            }
-            newBudget = basicData
+        if (error) {
+            console.error('[BUDGETS_POST_SUPABASE]', error)
+            return NextResponse.json(
+                { error: `No se pudo crear el presupuesto: ${error.message}` },
+                { status: 500 }
+            )
         }
 
-        return NextResponse.json(mapBudget(newBudget))
+        return NextResponse.json(mapBudgetRow(newBudget, 0), { status: 201 })
     } catch (error: any) {
-        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
         if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
-            throw error;
+            throw error
         }
 
         console.error('[BUDGETS_POST_GLOBAL]', error)

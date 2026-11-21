@@ -1,204 +1,135 @@
 export const dynamic = 'force-dynamic';
+
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-// POST /api/zbb/activate
-// Activates a planning cycle and synchronizes it to the Budgets table
+// POST /api/zbb/activate - Activates a planning cycle and syncs allocations to public.budgets
 export async function POST(request: Request) {
     const supabase = await createClient()
-    const { cycleId } = await request.json()
-
-    if (!cycleId) {
-        return NextResponse.json({ error: 'Missing cycleId' }, { status: 400 })
-    }
-
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // 1. Fetch Cycle & Validation
-    const { data: cycle, error: cycleError } = await supabase
-        .from('zbb_planning_cycles')
-        .select('*')
-        .eq('id', cycleId)
-        .eq('user_id', user.id)
-        .single()
-
-    if (cycleError || !cycle) {
-        return NextResponse.json({ error: "Cycle not found" }, { status: 404 })
-    }
-
-    // 2. Fetch Allocations
-    const { data: allocations, error: allocError } = await supabase
-        .from('zbb_allocations')
-        .select('*')
-        .eq('cycle_id', cycleId)
-
-    if (allocError) return NextResponse.json({ error: allocError.message }, { status: 500 })
-
-    const budgetMap = new Map<string, {
-        amountPEN: number,
-        amountUSD: number,
-        allocationIds: string[],
-        justification: string
-    }>()
-
-    let skippedGoals = 0
-
-    allocations.forEach(alloc => {
-        // Fallback for Goal Allocations (Missing Category)
-        // If it's a Goal, we need a way to group it. For now, group by goal_id if category is null.
-        const key = alloc.category_id || alloc.goal_id
-
-        if (!key) {
-            return
+    try {
+        const { cycleId } = await request.json()
+        if (!cycleId) {
+            return NextResponse.json({ error: 'Missing cycleId' }, { status: 400 })
         }
 
-        const current = budgetMap.get(key) || {
-            amountPEN: 0,
-            amountUSD: 0,
-            allocationIds: [] as string[],
-            justification: alloc.justification
+        const { data: cycle, error: cycleError } = await supabase
+            .from('zbb_planning_cycles')
+            .select('*')
+            .eq('id', cycleId)
+            .eq('user_id', user.id)
+            .single()
+
+        if (cycleError || !cycle) {
+            return NextResponse.json({ error: 'Cycle not found' }, { status: 404 })
         }
 
-        current.amountPEN += Number(alloc.allocated_amount_pen || 0)
-        current.amountUSD += Number(alloc.allocated_amount_usd || 0)
-        current.allocationIds.push(alloc.id)
+        const { data: allocations, error: allocError } = await supabase
+            .from('zbb_allocations')
+            .select(`
+                *,
+                category:expense_categories(id, name, color),
+                subcategory:subcategories(id, name),
+                goal:savings_goals(id, name)
+            `)
+            .eq('cycle_id', cycleId)
+            .eq('user_id', user.id)
 
-        // If it's a Goal, maybe prefix justification?
-        if (alloc.goal_id && !alloc.category_id) {
-            current.justification = `Meta: ${alloc.justification}`
+        if (allocError) {
+            return NextResponse.json({ error: allocError.message }, { status: 500 })
         }
 
-        budgetMap.set(key, current)
-    })
+        const [yStr, mStr] = String(cycle.period_start).split('-')
+        const budgetYear = parseInt(yStr, 10) || new Date().getFullYear()
+        const budgetMonth = parseInt(mStr, 10) || new Date().getMonth() + 1
 
-    const errors: any[] = []
-    let syncedCount = 0
+        let syncedCount = 0
+        const errors: any[] = []
 
-    // Safe Date Parsing (Avoid Timezone shifts)
-    // format: YYYY-MM-DD
-    const [yStr, mStr, dStr] = cycle.period_start.split('-')
-    const budgetYear = parseInt(yStr)
-    const budgetMonth = parseInt(mStr)
-    const cycleDate = new Date(budgetYear, budgetMonth - 1, parseInt(dStr))
+        for (const alloc of allocations || []) {
+            const amountPEN = Number(alloc.allocated_amount_pen || 0)
+            const amountUSD = Number(alloc.allocated_amount_usd || 0)
+            const limitAmount = amountPEN > 0 ? amountPEN : amountUSD
+            const currency = amountPEN > 0 ? 'PEN' : 'USD'
 
-    for (const [keyId, data] of budgetMap.entries()) {
-        let limit_amount = 0
-        let currency = 'PEN'
+            if (limitAmount <= 0) continue
 
-        if (data.amountPEN > 0) {
-            limit_amount = data.amountPEN
-            currency = 'PEN'
-        } else if (data.amountUSD > 0) {
-            limit_amount = data.amountUSD
-            currency = 'USD'
-        }
+            const isGoal = Boolean(alloc.goal_id) && !alloc.category_id
+            const budgetName = isGoal
+                ? `Meta: ${alloc.goal?.name || alloc.justification || 'Ahorro'}`
+                : alloc.subcategory?.name || alloc.category?.name || alloc.justification || 'Presupuesto'
 
-        if (limit_amount === 0) continue;
+            const includeCategories = isGoal
+                ? []
+                : alloc.subcategory_id
+                  ? [alloc.subcategory_id]
+                  : alloc.category_id
+                    ? [alloc.category_id]
+                    : []
 
-        // Check if this Key is a Category or a Goal
-        // Crude check: UUIDs don't say much...
-        // But we can check existing budget.
-        // Or simply query if it's a goal.
-        // Wait, 'budgets' table typically links `category_id`.
-        // If we link `goal_id`, does `budgets` have `goal_id` column?
-        // Let's assume budgets supports goals via some mechanism or we just set Name.
-        // If keyId is a Goal ID, we might have an issue if `category_id` is mandatory foreign key.
-        // Let's check if `category_id` is nullable in Budgets table? We don't know for sure.
-        // SAFEST BET: If it's a goal, find a "Savings" system category to act as proxy?
-        // OR try to insert with category_id = null.
+            const budgetPayload = {
+                name: budgetName,
+                amount: limitAmount,
+                currency_code: currency,
+                type: isGoal ? 'SAVINGS' : 'EXPENSE',
+                period: 'MONTHLY',
+                budget_year: budgetYear,
+                budget_month: budgetMonth,
+                budget_scope: 'GLOBAL',
+                include_categories: includeCategories,
+                transaction_filter_mode: isGoal ? 'ADDED_TO_GOAL' : 'DEFAULT',
+                include_goal_transactions: isGoal,
+                color: isGoal ? '#10b981' : alloc.category?.color || '#7C5CFC',
+                is_zbb_controlled: true,
+                zbb_allocation_id: alloc.id,
+                is_active: true,
+                updated_at: new Date().toISOString(),
+            }
 
-        const basePayload: any = {
-            amount: limit_amount,
-            // limit_amount: limit_amount, // REMOVED: Schema mismatch
-            currency_code: currency,
-            // currency: currency, // REMOVED: Schema mismatch (Error confirmed)
-            is_zbb_controlled: true,
-            zbb_allocation_id: data.allocationIds[0],
-            updated_at: new Date().toISOString(),
-            budget_month: budgetMonth,
-            budget_year: budgetYear,
-            // start_date: cycle.period_start, // REMOVED: Schema mismatch
-            type: 'EXPENSE'
-        }
-
-        // Try to distinguish if Key is Category or Goal by context or by trying fetch
-        // Optimization: We can assume if the user selected a local ID that matches an allocation.category_id, it is a category.
-        // We iterate `allocations` to find the type of `keyId`.
-        const sampleAlloc = allocations.find(a => (a.category_id === keyId) || (a.goal_id === keyId))
-        const isGoal = !!sampleAlloc?.goal_id && !sampleAlloc?.category_id
-
-        if (isGoal) {
-            basePayload.type = 'SAVINGS'
-            basePayload.name = data.justification || 'Meta Ahorro'
-            // We do not set category_id directly as it might not exist in schema. Use include_categories.
-            basePayload.include_categories = []
-        } else {
-            // basePayload.category_id = keyId // REMOVED: Schema might not support single column
-            basePayload.include_categories = [keyId]
-            basePayload.name = data.justification || 'Presupuesto' // Fallback name
-        }
-
-        // UPSERT LOGIC
-        // We need a unique constraint match. `(user_id, category_id)` is likely unique.
-        // If Goal, `category_id` is null. So `(user_id, null)` might conflict if multiple goals?
-        // YES. We can't have multiple budgets with null category unless unique index allows or uses name?
-        // Budgets table usually needs distinct category.
-        // SOLUTION: Create a unique budget per GOAL?
-        // Does `budgets` have `savings_goal_id`? Unlikely based on known schema.
-        // For now, let's TRY upsert by ID if possible? No, we don't have budget ID here.
-        // We query by criteria.
-
-        let existingBudgetQuery = supabase.from('budgets').select('id').eq('user_id', user.id)
-        if (isGoal) {
-            // Try to match by name or zbb_allocation_id?
-            // Matching by ZBB Allocation ID is safest if it persists!
-            // But existing budget might not have it yet.
-            // Match by Name? Risky.
-            // Match by `zbb_allocation_id` is best for re-sync.
-            // For initial sync, we might create duplicates if we are not careful.
-            // Let's rely on `zbb_allocation_id` if present in DB.
-            // OR match by `include_categories` being empty AND `type` SAVINGS AND `name` limit?
-            // Let's try matching `zbb_allocation_id` first.
-            existingBudgetQuery = existingBudgetQuery.eq('zbb_allocation_id', data.allocationIds[0])
-        } else {
-            existingBudgetQuery = existingBudgetQuery.eq('category_id', keyId)
-        }
-
-        const { data: existingBudget } = await existingBudgetQuery.single()
-
-        let result;
-        if (existingBudget) {
-            result = await supabase
+            // Match existing budget strictly by zbb_allocation_id (real column in public.budgets!)
+            const { data: existingBudget } = await supabase
                 .from('budgets')
-                .update(basePayload)
-                .eq('id', existingBudget.id)
-        } else {
-            result = await supabase
-                .from('budgets')
-                .insert({
-                    ...basePayload,
-                    user_id: user.id,
-                    is_active: true,
-                    // Ensure name is set for inserts
-                    name: basePayload.name || 'Presupuesto'
-                })
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('zbb_allocation_id', alloc.id)
+                .maybeSingle()
+
+            const result = existingBudget
+                ? await supabase
+                      .from('budgets')
+                      .update(budgetPayload)
+                      .eq('id', existingBudget.id)
+                      .eq('user_id', user.id)
+                : await supabase.from('budgets').insert({
+                      ...budgetPayload,
+                      user_id: user.id,
+                  })
+
+            if (result.error) {
+                console.error('[ZBB_ACTIVATE] Budget sync error:', result.error)
+                errors.push({ allocationId: alloc.id, error: result.error.message })
+            } else {
+                syncedCount++
+            }
         }
 
-        if (result.error) {
-            console.error("Budget Sync Error:", result.error)
-            errors.push({ key: keyId, error: result.error.message, details: result.error })
-        } else {
-            syncedCount++
+        await supabase
+            .from('zbb_planning_cycles')
+            .update({ status: 'active', updated_at: new Date().toISOString() })
+            .eq('id', cycleId)
+            .eq('user_id', user.id)
+
+        return NextResponse.json({
+            success: true,
+            synced_count: syncedCount,
+            errors,
+        })
+    } catch (error: any) {
+        if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
+            throw error
         }
+        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })
     }
-
-    // 4. Update Cycle Status
-    await supabase.from('zbb_planning_cycles').update({ status: 'active' }).eq('id', cycleId)
-
-    return NextResponse.json({
-        success: true,
-        synced_count: syncedCount,
-        errors
-    })
 }

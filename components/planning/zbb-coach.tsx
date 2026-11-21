@@ -1,84 +1,97 @@
 "use client"
 
-import { Lightbulb, TrendingUp, AlertTriangle, CheckCircle2, PiggyBank } from "lucide-react"
+import { AlertTriangle, CheckCircle2, PiggyBank } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"
+import { useFormat } from "@/hooks/useFormat"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
 
 interface ZBBCoachProps {
     pool: {
         usd: { unassigned: number; total: number }
         pen: { unassigned: number; total: number }
     }
+    action?: React.ReactNode
 }
 
-export function ZBBCoach({ pool }: ZBBCoachProps) {
-    // Determine the most critical state advice
-    // Priority: 1. Deficit (Error) -> 2. Surplus (Opportunity) -> 3. Balanced (Success)
+export function ZBBCoach({ pool, action }: ZBBCoachProps) {
+    const { formatMoney } = useFormat()
+    const { isBalanceVisible } = useSettingsStore()
 
-    // Agregate unassigned value (Approximation for coaching purposes)
-    const hasDeficit = pool.pen.unassigned < -0.01 || pool.usd.unassigned < -0.01
-    const hasSurplus = pool.pen.unassigned > 0.01 || pool.usd.unassigned > 0.01
+    if (!pool || (pool.pen.total === 0 && pool.usd.total === 0)) return null
 
-    // Pick the primary currency for display examples (prefer PEN)
-    const primaryUnassigned = pool.pen.unassigned !== 0 ? pool.pen.unassigned : pool.usd.unassigned
-    const currency = pool.pen.unassigned !== 0 ? "S/" : "$"
+    const penDiff = pool.pen.unassigned
+    const usdDiff = pool.usd.unassigned
+    const hasDeficit = penDiff < -0.01 || usdDiff < -0.01
+    const hasSurplus = !hasDeficit && (penDiff > 0.01 || usdDiff > 0.01)
 
-    let message = {
-        title: "",
-        description: "",
-        color: "",
-        icon: Lightbulb,
-        bg: ""
+    const formatList = (filterFn: (v: number) => boolean) => {
+        const parts: string[] = []
+        if (filterFn(penDiff)) {
+            parts.push(isBalanceVisible ? formatMoney(Math.abs(penDiff), "PEN") : "••••••")
+        }
+        if (filterFn(usdDiff)) {
+            parts.push(isBalanceVisible ? formatMoney(Math.abs(usdDiff), "USD") : "••••••")
+        }
+        return parts.join(" y ")
     }
 
-    if (hasDeficit) {
-        message = {
-            title: "Presupuesto Excedido",
-            description: "Tienes asignaciones que superan tus ingresos. Ajusta los montos para evitar saldos negativos.",
-            color: "text-rose-600",
-            icon: AlertTriangle,
-            bg: "bg-rose-50 border-rose-100"
-        }
-    } else if (hasSurplus) {
-        message = {
-            title: "Fondos por Asignar",
-            description: `Tienes ${currency} ${Math.abs(primaryUnassigned).toLocaleString()} disponibles. Asígnalos a tus ahorros o gastos futuros para completar tu presupuesto.`,
-            color: "text-emerald-600",
-            icon: PiggyBank,
-            bg: "bg-emerald-50 border-emerald-100"
-        }
-    } else {
-        message = {
-            title: "Presupuesto Balanceado",
-            description: "Todos tus ingresos han sido asignados. Tu plan de gastos está listo.",
-            color: "text-blue-600",
-            icon: CheckCircle2,
-            bg: "bg-blue-50 border-blue-100"
-        }
-    }
+    const config = hasDeficit
+        ? {
+              title: "Plan excedido",
+              description: `Asignaste ${formatList((v) => v < -0.01)} por encima de tus ingresos planificados. Reduce alguna partida opcional o registra un ingreso extra.`,
+              icon: AlertTriangle,
+              container: "bg-rose-500/8 border-rose-500/25",
+              iconBg: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+              titleColor: "text-rose-600 dark:text-rose-400",
+          }
+        : hasSurplus
+          ? {
+                title: "Dinero esperando un destino",
+                description: `Te quedan ${formatList((v) => v > 0.01)} sin asignar. Dale un objetivo (ahorro, fondo de emergencia o gasto futuro) para completar Base Cero.`,
+                icon: PiggyBank,
+                container: "bg-primary/8 border-primary/20",
+                iconBg: "bg-primary/15 text-primary",
+                titleColor: "text-primary",
+            }
+          : {
+                title: "¡Plan Base Cero balanceado al 100%!",
+                description:
+                    "Cada sol y dólar de tus ingresos tiene un propósito definido. Activa o sincroniza el plan para reflejarlo en tus presupuestos.",
+                icon: CheckCircle2,
+                container: "bg-emerald-500/8 border-emerald-500/25",
+                iconBg: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+                titleColor: "text-emerald-600 dark:text-emerald-400",
+            }
 
-    // Don't show if no income set at all (Empty state is handled elsewhere or implies setup needed)
-    if (pool.pen.total === 0 && pool.usd.total === 0) return null
+    const Icon = config.icon
 
     return (
         <AnimatePresence mode="wait">
             <motion.div
-                key={message.title}
-                initial={{ opacity: 0, y: 10 }}
+                key={config.title}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className={`w-full p-4 rounded-xl border-l-4 shadow-sm mb-6 ${message.bg} ${message.color.replace('text-', 'border-')}`}
+                exit={{ opacity: 0, y: -6 }}
+                className={cn(
+                    "w-full p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-colors",
+                    config.container
+                )}
             >
-                <div className="flex items-start gap-4">
-                    <div className={`p-2 rounded-full bg-white/50 ${message.color}`}>
-                        <message.icon className="w-6 h-6" />
+                <div className="flex items-start gap-3.5 min-w-0">
+                    <div className={cn("p-2.5 rounded-xl shrink-0", config.iconBg)}>
+                        <Icon className="w-5 h-5" />
                     </div>
-                    <div>
-                        <h4 className={`font-bold text-lg ${message.color}`}>{message.title}</h4>
-                        <p className="text-sm text-neutral-600 mt-1 leading-relaxed">
-                            {message.description}
+                    <div className="min-w-0">
+                        <h4 className={cn("font-extrabold text-sm leading-tight", config.titleColor)}>
+                            {config.title}
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                            {config.description}
                         </p>
                     </div>
                 </div>
+                {action && <div className="shrink-0 sm:ml-2">{action}</div>}
             </motion.div>
         </AnimatePresence>
     )

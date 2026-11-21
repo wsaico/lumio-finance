@@ -1,75 +1,67 @@
 "use client"
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useExchangeRates } from './useExchangeRates'
 import { useSettingsStore } from './useSettingsStore'
-import { useEffect, useState, useMemo } from 'react'
+import { useMemo } from 'react'
 
 const EMPTY_ARRAY: any[] = []
 
-// Manual definition or just use any to unblock build
 type Account = any
 
 export function useAccounts() {
-    // SSR Safety: useQueryClient throws if used outside Provider, which can happen during SSR pre-rendering
-    let queryClient;
-    try {
-        queryClient = useQueryClient()
-    } catch (e) {
-        // Return a mock state or null during SSR if context is missing
-        return {
-            accounts: EMPTY_ARRAY,
-            transactionAccounts: EMPTY_ARRAY,
-            isLoading: true,
-            error: null,
-            totalBalanceConverted: 0,
-            balancesByCurrency: {},
-            createAccount: { mutate: () => { } } as any,
-            updateAccount: { mutate: () => { } } as any,
-            deleteAccount: { mutate: () => { } } as any,
-        }
-    }
-
+    const queryClient = useQueryClient()
     const { convert } = useExchangeRates()
     const { currencyCode: baseCurrency } = useSettingsStore()
-    const [totalBalanceConverted, setTotalBalanceConverted] = useState(0)
-    const [balancesByCurrency, setBalancesByCurrency] = useState<Record<string, number>>({})
 
     const { data: accounts, isLoading, error } = useQuery<Account[]>({
         queryKey: ['accounts'],
         queryFn: async () => {
             const res = await fetch('/api/accounts')
-            if (!res.ok) throw new Error('Error fetching accounts')
+            if (!res.ok) throw new Error('Error al obtener cuentas')
             return res.json()
         },
     })
 
-    // Calculate total balance converted to base currency
-    useEffect(() => {
-        if (!accounts || isLoading) return
+    const summary = useMemo(() => {
+        const list = accounts || EMPTY_ARRAY
+        let liquidBalanceConverted = 0
+        let totalCreditDebtConverted = 0
+        let totalCreditLimitConverted = 0
+        const balancesByCurrency: Record<string, number> = {}
 
-        async function calculateConvertedBalance() {
-            let total = 0
-            const byCurrency: Record<string, number> = {}
+        for (const account of list) {
+            const currency = account.currencyCode || baseCurrency
 
-            for (const account of accounts!) {
-                const balance = Number(account.currentBalance)
-                const currency = account.currencyCode || baseCurrency
-
-                // Track by currency
-                byCurrency[currency] = (byCurrency[currency] || 0) + balance
-
-                // Convert to base currency
-                const converted = await convert(balance, currency, baseCurrency)
-                total += converted
+            if (account.accountType === 'CREDIT_CARD') {
+                const limit = Math.max(0, Number(account.creditLimit) || 0)
+                const used = Math.abs(Number(account.usedBalance) || 0)
+                totalCreditLimitConverted += convert(limit, currency, baseCurrency)
+                totalCreditDebtConverted += convert(used, currency, baseCurrency)
+            } else {
+                const balance = Number(account.currentBalance) || 0
+                balancesByCurrency[currency] = (balancesByCurrency[currency] || 0) + balance
+                liquidBalanceConverted += convert(balance, currency, baseCurrency)
             }
-
-            setTotalBalanceConverted(total)
-            setBalancesByCurrency(byCurrency)
         }
 
-        calculateConvertedBalance()
-    }, [accounts, baseCurrency, convert, isLoading])
+        const totalCreditAvailableConverted = Math.max(
+            0,
+            totalCreditLimitConverted - totalCreditDebtConverted
+        )
+        const netWorthConverted = liquidBalanceConverted - totalCreditDebtConverted
+
+        return {
+            totalBalanceConverted: liquidBalanceConverted,
+            liquidBalanceConverted,
+            totalCreditDebtConverted,
+            totalCreditLimitConverted,
+            totalCreditAvailableConverted,
+            netWorthConverted,
+            balancesByCurrency,
+        }
+    }, [accounts, baseCurrency, convert])
 
     const createAccount = useMutation({
         mutationFn: async (newAccount: Partial<Account>) => {
@@ -78,15 +70,16 @@ export function useAccounts() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newAccount),
             })
-            if (!res.ok) throw new Error('Error creating account')
+            if (!res.ok) throw new Error('Error al crear cuenta')
             return res.json()
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-analytics'] })
             toast.success('Cuenta creada exitosamente')
         },
-        onError: (error) => {
-            toast.error('Error al crear cuenta')
+        onError: () => {
+            toast.error('No se pudo crear la cuenta')
         },
     })
 
@@ -97,14 +90,15 @@ export function useAccounts() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             })
-            if (!res.ok) throw new Error('Error updating account')
+            if (!res.ok) throw new Error('Error al actualizar cuenta')
             return res.json()
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-analytics'] })
             toast.success('Cuenta actualizada')
         },
-        onError: () => toast.error('Error al actualizar'),
+        onError: () => toast.error('No se pudo actualizar la cuenta'),
     })
 
     const deleteAccount = useMutation({
@@ -115,39 +109,32 @@ export function useAccounts() {
 
             if (!res.ok) {
                 const contentType = res.headers.get('content-type')
-
                 if (contentType && contentType.includes('application/json')) {
                     const errorData = await res.json()
-                    throw new Error(errorData.message || 'Error deleting account')
+                    throw new Error(errorData.message || 'Error al eliminar cuenta')
                 }
-
-                // Try to read as text
                 const errorText = await res.text()
-                throw new Error(errorText || 'Error deleting account')
+                throw new Error(errorText || 'Error al eliminar cuenta')
             }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-analytics'] })
             toast.success('Cuenta eliminada')
         },
         onError: (error: Error) => {
-            // Don't show toast - let component handle error display
-            // Don't use console.error - it triggers Next.js error overlay
+            toast.error(error.message || 'No se pudo eliminar la cuenta')
         },
     })
 
-    // Filtered accounts excluding PETTY_CASH (for transaction forms)
-    const transactionAccounts = useMemo(() =>
-        accounts?.filter((acc: Account) => acc.accountType !== 'PETTY_CASH') || [],
-        [accounts])
+    const transactionAccounts = useMemo(() => accounts || EMPTY_ARRAY, [accounts])
 
     return {
-        accounts,
-        transactionAccounts, // Use this in transaction forms
+        accounts: accounts || EMPTY_ARRAY,
+        transactionAccounts,
         isLoading,
         error,
-        totalBalanceConverted,
-        balancesByCurrency,
+        ...summary,
         createAccount,
         updateAccount,
         deleteAccount,

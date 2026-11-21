@@ -1,16 +1,19 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useState } from "react"
 import { useWithdrawSavings } from "@/hooks/useSavingsGoals"
 import { useAccounts } from "@/hooks/useAccounts"
-import { Loader2, ArrowRight, AlertTriangle } from "lucide-react"
+import { useFormat } from "@/hooks/useFormat"
+import { getCurrencySymbol } from "@/lib/currencies"
+import { cn, formatAccountPillName } from "@/lib/utils"
+import { Loader2, ArrowRight, AlertTriangle, Wallet, ArrowRightLeft } from "lucide-react"
 import { toast } from "sonner"
+import { showAppToast } from "@/components/ui/app-alert-toast"
 
 interface WithdrawModalProps {
     goal: any
@@ -19,192 +22,271 @@ interface WithdrawModalProps {
 }
 
 export function WithdrawModal({ goal, open, onOpenChange }: WithdrawModalProps) {
-    const [amount, setAmount] = useState('')
-    const [fromAccountId, setFromAccountId] = useState(goal?.primary_account_id || '')
-    const [toAccountId, setToAccountId] = useState('')
-    const [notes, setNotes] = useState('')
-
-    // Hooks
+    const { formatMoney } = useFormat()
     const { mutate: withdraw, isPending } = useWithdrawSavings()
     const { accounts: accountsData } = useAccounts()
     const accounts = accountsData || []
 
+    const [amount, setAmount] = useState("")
+    const [fromAccountId, setFromAccountId] = useState("")
+    const [toAccountId, setToAccountId] = useState("")
+    const [notes, setNotes] = useState("")
+
+    const currency = goal?.currency || "PEN"
+    const symbol = getCurrencySymbol(currency)
+    const maxAmount = Number(goal?.current_amount || 0)
+    const isGoalCompleted = goal?.status === "COMPLETED"
+
+    useEffect(() => {
+        if (open && goal) {
+            setAmount("")
+            setNotes("")
+            const linkedFrom = goal.primary_account_id || accounts[0]?.id || ""
+            setFromAccountId(linkedFrom)
+            const defaultTo = accounts.find((a: any) => a.id !== linkedFrom)?.id || ""
+            setToAccountId(defaultTo)
+        }
+    }, [open, goal, accounts])
+
+    if (!goal) return null
+
+    const parsedAmount = parseFloat(amount) || 0
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
 
+        if (!accountsData || accountsData.length === 0) {
+            showAppToast.warning({
+                title: "Primero crea una cuenta",
+                description: "Necesitas cuentas activas para retirar fondos de tu meta.",
+                actionLabel: "Crear cuenta",
+                onAction: () => {
+                    onOpenChange(false)
+                    if (typeof window !== "undefined") window.location.href = "/dashboard/accounts"
+                },
+            })
+            return
+        }
         if (!fromAccountId) {
-            toast.error("Selecciona una cuenta de origen")
+            showAppToast.warning({
+                title: "Selecciona una cuenta de origen",
+                description: "Elige la cuenta desde donde retirarás el ahorro.",
+            })
             return
         }
         if (!toAccountId) {
-            toast.error("Selecciona una cuenta de destino")
+            showAppToast.warning({
+                title: "Selecciona una cuenta de destino",
+                description: "Elige la cuenta donde recibirás el dinero.",
+            })
             return
         }
         if (fromAccountId === toAccountId) {
             toast.error("La cuenta de origen y destino deben ser diferentes")
             return
         }
-
-        const withdrawAmount = parseFloat(amount)
-        if (withdrawAmount > (goal?.current_amount || 0)) {
+        if (parsedAmount <= 0) {
+            toast.error("Ingresa un monto válido")
+            return
+        }
+        if (parsedAmount > maxAmount) {
             toast.error("Fondos insuficientes en la meta")
             return
         }
 
-        withdraw({
-            goalId: goal.id,
-            amount: withdrawAmount,
-            fromAccountId,
-            toAccountId,
-            date: new Date().toISOString().split('T')[0],
-            notes
-        }, {
-            onSuccess: () => {
-                setAmount('')
-                setNotes('')
-                setToAccountId('')
-                // Don't reset fromAccountId
-                onOpenChange(false)
+        withdraw(
+            {
+                goalId: goal.id,
+                amount: parsedAmount,
+                fromAccountId,
+                toAccountId,
+                date: new Date().toISOString().split("T")[0],
+                notes: notes.trim() || undefined,
+            },
+            {
+                onSuccess: () => {
+                    onOpenChange(false)
+                },
             }
-        })
+        )
     }
-
-    const maxAmount = goal?.current_amount || 0
-    const isGoalCompleted = goal?.status === 'COMPLETED'
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Retirar Fondos</DialogTitle>
-                    <DialogDescription>
-                        Retira dinero de tu meta "{goal?.name}" hacia otra cuenta
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="sm:max-w-[460px] p-0 overflow-hidden border-0 shadow-2xl bg-card rounded-[1.75rem] max-h-[90dvh] flex flex-col">
+                {/* Header */}
+                <div className="bg-gradient-to-br from-rose-600 via-rose-500 to-orange-500 p-5 text-white shrink-0">
+                    <DialogHeader className="text-left">
+                        <DialogTitle className="text-xl font-black tracking-tight text-white">
+                            Retirar Fondos
+                        </DialogTitle>
+                        <DialogDescription className="text-rose-100 text-xs mt-0.5">
+                            Disponible en "{goal.name}":{" "}
+                            <strong className="text-white">{formatMoney(maxAmount, currency)}</strong>
+                        </DialogDescription>
+                    </DialogHeader>
+                </div>
 
-                {!isGoalCompleted && (
-                    <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 flex gap-3 animated-pulse">
-                        <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-full h-fit text-amber-600 dark:text-amber-500">
-                            <AlertTriangle className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-amber-700 dark:text-amber-400">¡Advertencia!</h4>
-                            <p className="text-sm text-amber-600 dark:text-amber-500 mt-1 leading-relaxed">
-                                Esta meta aún <strong>no está completada</strong>. Retirar fondos afectará tu progreso y retrasará el cumplimiento de tu objetivo.
+                <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+                    {!isGoalCompleted && (
+                        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5 text-xs">
+                            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-amber-700 dark:text-amber-400 leading-relaxed">
+                                Esta meta aún <strong>no está completada</strong>. Retirar fondos reducirá tu progreso.
                             </p>
-                        </div>
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Source Info (Visual only) */}
-                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Disponible para retirar:</span>
-                        <span className="font-bold text-orange-600 dark:text-orange-500 text-lg">
-                            {goal?.currency || 'S/'} {maxAmount.toFixed(2)}
-                        </span>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="fromAccount">Retirar desde (Origen) *</Label>
-                        <Select value={fromAccountId} onValueChange={setFromAccountId} required>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecciona cuenta de origen" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {accounts.map((acc: any) => (
-                                    <SelectItem key={acc.id} value={acc.id}>
-                                        {acc.name} ({acc.currency_code || acc.currencyCode || 'S/'} {Number(acc.currentBalance).toFixed(2)})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Cuenta donde está el dinero físico actualmente.
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="amount">Monto a retirar ({goal?.currency || 'S/'}) *</Label>
-                        <Input
-                            id="amount"
-                            type="number"
-                            step="0.01"
-                            max={maxAmount}
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder="0.00"
-                            required
-                            className="text-lg font-mono"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="toAccount">Depositar en *</Label>
-                        <Select value={toAccountId} onValueChange={setToAccountId} required>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecciona cuenta de destino" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {accounts
-                                    .filter((acc: any) => acc.id !== fromAccountId)
-                                    .map((acc: any) => (
-                                        <SelectItem key={acc.id} value={acc.id}>
-                                            {acc.name} ({acc.currency_code || acc.currencyCode || 'PEN'} {Number(acc.currentBalance).toFixed(2)})
-                                        </SelectItem>
-                                    ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="notes">Notas (opcional)</Label>
-                        <Textarea
-                            id="notes"
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Motivo del retiro..."
-                            rows={3}
-                        />
-                    </div>
-
-                    {/* Preview */}
-                    {amount && parseFloat(amount) > 0 && (
-                        <div className="p-3 rounded-lg bg-muted/50 space-y-2">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">Saldo en meta después del retiro:</span>
-                                <span className="font-bold text-amber-600">
-                                    {goal?.currency || 'S/'} {(maxAmount - parseFloat(amount)).toFixed(2)}
-                                </span>
-                            </div>
                         </div>
                     )}
 
-                    <div className="flex gap-3 pt-2">
+                    {/* Amount */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                                Monto a retirar ({currency})
+                            </Label>
+                            {maxAmount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setAmount(maxAmount.toFixed(2))}
+                                    className="text-[11px] font-bold text-rose-500 hover:underline"
+                                >
+                                    Retirar todo ({formatMoney(maxAmount, currency)})
+                                </button>
+                            )}
+                        </div>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-rose-500 pointer-events-none">
+                                {symbol}
+                            </span>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                max={maxAmount}
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                placeholder="0.00"
+                                required
+                                className="pl-12 h-14 text-2xl font-black tabular-nums rounded-2xl bg-muted/40 border-border/60"
+                            />
+                        </div>
+                    </div>
+
+                    {/* From Account Pills */}
+                    <div className="space-y-1.5">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Wallet className="h-3.5 w-3.5 text-rose-500" />
+                            Retirar desde (cuenta donde está el ahorro)
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5">
+                            {accounts.map((acc: any) => {
+                                const selected = fromAccountId === acc.id
+                                return (
+                                    <button
+                                        key={acc.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setFromAccountId(acc.id)
+                                            if (toAccountId === acc.id) setToAccountId("")
+                                        }}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-full text-xs font-bold border transition-all active:scale-95",
+                                            selected
+                                                ? "bg-rose-500 text-white border-rose-500 shadow-sm"
+                                                : "bg-muted/40 text-foreground border-border/60 hover:border-rose-500/40"
+                                        )}
+                                    >
+                                        {formatAccountPillName(acc.name, acc.currencyCode)}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* To Account Pills */}
+                    <div className="space-y-1.5">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <ArrowRightLeft className="h-3.5 w-3.5 text-primary" />
+                            Depositar en (cuenta destino)
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5">
+                            {accounts
+                                .filter((acc: any) => acc.id !== fromAccountId)
+                                .map((acc: any) => {
+                                    const selected = toAccountId === acc.id
+                                    return (
+                                        <button
+                                            key={acc.id}
+                                            type="button"
+                                            onClick={() => setToAccountId(acc.id)}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-full text-xs font-bold border transition-all active:scale-95",
+                                                selected
+                                                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                                    : "bg-muted/40 text-foreground border-border/60 hover:border-primary/40"
+                                            )}
+                                        >
+                                            {formatAccountPillName(acc.name, acc.currencyCode)}
+                                        </button>
+                                    )
+                                })}
+                        </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div className="space-y-1.5">
+                        <Label className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                            Motivo (opcional)
+                        </Label>
+                        <Textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Ej. Uso del fondo de emergencia..."
+                            rows={2}
+                            className="rounded-2xl bg-muted/40 border-border/60 resize-none text-sm"
+                        />
+                    </div>
+
+                    {/* Remaining Preview */}
+                    {parsedAmount > 0 && parsedAmount <= maxAmount && (
+                        <div className="p-3 rounded-2xl bg-muted/50 border border-border/60 flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground font-semibold">Saldo restante en meta</span>
+                            <span className="font-black text-amber-600 dark:text-amber-400 tabular-nums">
+                                {formatMoney(maxAmount - parsedAmount, currency)}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2.5 pt-1">
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => onOpenChange(false)}
-                            className="flex-1"
+                            className="h-11 rounded-2xl font-bold flex-1"
                             disabled={isPending}
                         >
                             Cancelar
                         </Button>
                         <Button
                             type="submit"
-                            disabled={!amount || parseFloat(amount) <= 0 || !fromAccountId || !toAccountId || isPending || parseFloat(amount) > maxAmount}
-                            className="flex-1"
-                            variant="destructive"
+                            disabled={
+                                parsedAmount <= 0 ||
+                                !fromAccountId ||
+                                !toAccountId ||
+                                isPending ||
+                                parsedAmount > maxAmount
+                            }
+                            className="h-11 rounded-2xl font-black flex-[1.5] bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/25 gap-1.5"
                         >
                             {isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                     Retirando...
                                 </>
                             ) : (
                                 <>
-                                    Retirar Fondos
-                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                    Retirar fondos
+                                    <ArrowRight className="h-4 w-4" />
                                 </>
                             )}
                         </Button>

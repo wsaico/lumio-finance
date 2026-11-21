@@ -111,7 +111,7 @@ export function SwipeableItem({
         onDragEnd={handleDragEnd}
         style={{ x }}
         className={cn(
-          'relative z-10 bg-white dark:bg-neutral-900',
+          'relative z-10 bg-card ',
           isDragging ? 'cursor-grabbing' : 'cursor-grab',
           className
         )}

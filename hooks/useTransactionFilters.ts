@@ -1,88 +1,104 @@
-import { useState, useCallback, useMemo } from 'react';
-import type { TransactionFilters, FilterPreset } from '@/types/filters';
-import { DEFAULT_FILTER_PRESETS } from '@/types/filters';
+import { create } from "zustand"
 
-export function useTransactionFilters(initialFilters?: TransactionFilters) {
-  const [filters, setFilters] = useState<TransactionFilters>(initialFilters || {});
-  const [activePreset, setActivePreset] = useState<string | null>(null);
-  const [customPresets, setCustomPresets] = useState<FilterPreset[]>([]);
-
-  const allPresets = useMemo(
-    () => [...DEFAULT_FILTER_PRESETS, ...customPresets],
-    [customPresets]
-  );
-
-  const updateFilter = useCallback(
-    <K extends keyof TransactionFilters>(key: K, value: TransactionFilters[K]) => {
-      setFilters((prev) => ({
-        ...prev,
-        [key]: value,
-      }));
-      setActivePreset(null); // Clear active preset when manually changing filters
-    },
-    []
-  );
-
-  const removeFilter = useCallback((key: keyof TransactionFilters) => {
-    setFilters((prev) => {
-      const newFilters = { ...prev };
-      delete newFilters[key];
-      return newFilters;
-    });
-    setActivePreset(null);
-  }, []);
-
-  const clearAllFilters = useCallback(() => {
-    setFilters({});
-    setActivePreset(null);
-  }, []);
-
-  const applyPreset = useCallback((presetId: string) => {
-    const preset = allPresets.find((p) => p.id === presetId);
-    if (preset) {
-      setFilters(preset.filters);
-      setActivePreset(presetId);
-    }
-  }, [allPresets]);
-
-  const saveAsPreset = useCallback((name: string) => {
-    const newPreset: FilterPreset = {
-      id: crypto.randomUUID(),
-      name,
-      filters,
-    };
-    setCustomPresets((prev) => [...prev, newPreset]);
-    setActivePreset(newPreset.id);
-    return newPreset;
-  }, [filters]);
-
-  const deletePreset = useCallback((presetId: string) => {
-    setCustomPresets((prev) => prev.filter((p) => p.id !== presetId));
-    if (activePreset === presetId) {
-      setActivePreset(null);
-    }
-  }, [activePreset]);
-
-  const hasActiveFilters = useMemo(() => {
-    return Object.keys(filters).length > 0;
-  }, [filters]);
-
-  const filterCount = useMemo(() => {
-    return Object.keys(filters).length;
-  }, [filters]);
-
-  return {
-    filters,
-    setFilters,
-    updateFilter,
-    removeFilter,
-    clearAllFilters,
-    applyPreset,
-    saveAsPreset,
-    deletePreset,
-    allPresets,
-    activePreset,
-    hasActiveFilters,
-    filterCount,
-  };
+export interface TransactionFiltersState {
+    search: string
+    type: string // '' | 'INCOME' | 'EXPENSE' | 'TRANSFER'
+    accountId: string
+    categoryId: string
+    currency: string
+    minAmount: string
+    maxAmount: string
+    mode: string
+    tag: string
+    startDate?: string
+    endDate?: string
 }
+
+function countActiveFilters(f: TransactionFiltersState): number {
+    let count = 0
+    if (f.accountId) count++
+    if (f.categoryId) count++
+    if (f.currency) count++
+    if (f.minAmount || f.maxAmount) count++
+    if (f.mode) count++
+    if (f.tag) count++
+    return count
+}
+
+const INITIAL_FILTERS: TransactionFiltersState = {
+    search: "",
+    type: "",
+    accountId: "",
+    categoryId: "",
+    currency: "",
+    minAmount: "",
+    maxAmount: "",
+    mode: "",
+    tag: "",
+}
+
+interface TransactionFiltersStore {
+    filters: TransactionFiltersState
+    setFilters: (
+        newFilters:
+            | Partial<TransactionFiltersState>
+            | ((prev: TransactionFiltersState) => TransactionFiltersState)
+    ) => void
+    updateFilter: <K extends keyof TransactionFiltersState>(
+        key: K,
+        value: TransactionFiltersState[K]
+    ) => void
+    clearFilters: () => void
+    clearAllFilters: () => void
+    activeFiltersCount: number
+    filterCount: number
+    hasActiveFilters: boolean
+}
+
+export const useTransactionFilters = create<TransactionFiltersStore>((set) => ({
+    filters: INITIAL_FILTERS,
+    activeFiltersCount: 0,
+    filterCount: 0,
+    hasActiveFilters: false,
+    setFilters: (updater) => {
+        set((state) => {
+            const next =
+                typeof updater === "function" ? updater(state.filters) : { ...state.filters, ...updater }
+            const activeCount = countActiveFilters(next)
+            return {
+                filters: next,
+                activeFiltersCount: activeCount,
+                filterCount: activeCount,
+                hasActiveFilters: activeCount > 0,
+            }
+        })
+    },
+    updateFilter: (key, value) => {
+        set((state) => {
+            const next = { ...state.filters, [key]: value }
+            const activeCount = countActiveFilters(next)
+            return {
+                filters: next,
+                activeFiltersCount: activeCount,
+                filterCount: activeCount,
+                hasActiveFilters: activeCount > 0,
+            }
+        })
+    },
+    clearFilters: () => {
+        set({
+            filters: INITIAL_FILTERS,
+            activeFiltersCount: 0,
+            filterCount: 0,
+            hasActiveFilters: false,
+        })
+    },
+    clearAllFilters: () => {
+        set({
+            filters: INITIAL_FILTERS,
+            activeFiltersCount: 0,
+            filterCount: 0,
+            hasActiveFilters: false,
+        })
+    },
+}))

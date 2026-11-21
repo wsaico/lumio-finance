@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import * as z from 'zod'
 import { mapAccount } from '@/lib/mappers'
+import { getUserEntitlementsServer } from '@/lib/server/entitlements'
 
 const accountSchema = z.object({
     name: z.string().min(1, 'El nombre es requerido'),
@@ -77,6 +78,26 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
+        const { entitlements } = await getUserEntitlementsServer(supabase, user)
+        if (!entitlements.canAccessPremiumWrite) {
+            const { data: activeAccounts } = await supabase
+                .from('accounts')
+                .select('id, is_demo')
+                .eq('user_id', user.id)
+                .eq('is_active', true)
+                .neq('account_type', 'PETTY_CASH')
+
+            const realAccountsCount = (activeAccounts || []).filter((a: any) => !a.is_demo).length
+            if (realAccountsCount >= entitlements.maxAccounts) {
+                return NextResponse.json(
+                    {
+                        error: 'El Plan Básico incluye 1 cuenta activa gratis de por vida. Pásate a Premium para agregar más cuentas o tarjetas.',
+                        code: 'ACCOUNT_LIMIT_REACHED',
+                    },
+                    { status: 403 }
+                )
+            }
+        }
         const parsed = accountSchema.parse(body)
 
         // Prevent creation of PETTY_CASH accounts through this endpoint

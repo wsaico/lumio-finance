@@ -16,9 +16,9 @@ function getCategoryStyles(cat?: FilterCategory) {
         case 'NEEDS': return { color: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', label: 'Needs (50%)' }
         case 'WANTS': return { color: 'text-yellow-600 dark:text-yellow-400', badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', label: 'Wants (30%)' }
         case 'SAVINGS': return { color: 'text-green-600 dark:text-green-400', badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', label: 'Savings (20%)' }
-        case 'NEUTRAL': return { color: 'text-slate-500 dark:text-slate-400', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700', label: 'Flujo / Neutro' }
+        case 'NEUTRAL': return { color: 'text-muted-foreground ', badge: 'bg-muted text-foreground border-border ', label: 'Flujo / Neutro' }
         case 'MIXED': return { color: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800', label: 'Base Principal' }
-        default: return { color: 'text-gray-500', badge: 'bg-gray-100', label: '' }
+        default: return { color: 'text-muted-foreground', badge: 'bg-muted', label: '' }
     }
 }
 

@@ -1,52 +1,64 @@
 "use client"
 
 import { useState } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Copy, Check, CreditCard as CreditCardIcon, Edit, Trash, Eye } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { AccountFormModal } from "./account-form-modal"
-import { EditInitialBalanceModal } from "./edit-initial-balance-modal"
-import { cn } from "@/lib/utils"
-import { useAccounts } from "@/hooks/useAccounts"
-import { useFormat } from "@/hooks/useFormat"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+    Copy,
+    Check,
+    CreditCard as CreditCardIcon,
+    Edit,
+    Trash,
+    Eye,
+    Wallet,
+    Landmark,
+    Banknote,
+    TrendingUp,
+    ArrowRightLeft,
+    SlidersHorizontal,
+    TrendingDown,
+    Calendar,
+} from "lucide-react"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { ConfirmAlertModal } from "@/components/ui/confirm-alert-modal"
+import { AccountFormModal } from "./account-form-modal"
+import { EditInitialBalanceModal } from "./edit-initial-balance-modal"
+import { cn, formatAccountPillName } from "@/lib/utils"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useFormat } from "@/hooks/useFormat"
+import { useSettingsStore } from "@/hooks/useSettingsStore"
+import type { AccountItem } from "./compact-account-card"
 
-interface Account {
-    id: string
-    name: string
-    accountType: string
-    currentBalance: any
-    initialBalance?: any
-    creditLimit?: any
-    usedBalance?: any
-    lastFourDigits?: string
-    cardNetwork?: string
-    expiryDate?: Date | string
-    closingDay?: string | number
-    paymentDueDay?: string | number
-    isActive: boolean
-    currencyCode: string
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+    CREDIT_CARD: "Tarjeta de Crédito",
+    BANK: "Cuenta Bancaria",
+    CASH: "Efectivo",
+    DIGITAL: "Billetera Digital",
+    INVESTMENT: "Inversión",
+}
+
+function getDaysUntilDayOfMonth(targetDay: number): number {
+    const now = new Date()
+    let diff = targetDay - now.getDate()
+    if (diff < 0) {
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+        diff += daysInMonth
+    }
+    return diff
 }
 
 interface CreditCardDetailPanelProps {
-    card: Account | null
+    card: AccountItem | null
 }
 
 export function CreditCardDetailPanel({ card }: CreditCardDetailPanelProps) {
     const router = useRouter()
     const { deleteAccount } = useAccounts()
     const { formatMoney } = useFormat()
+    const { isBalanceVisible } = useSettingsStore()
+
     const [copied, setCopied] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
     const [showEditBalance, setShowEditBalance] = useState(false)
@@ -55,58 +67,59 @@ export function CreditCardDetailPanel({ card }: CreditCardDetailPanelProps) {
 
     if (!card) {
         return (
-            <Card className="p-8 h-full flex flex-col items-center justify-center bg-gradient-to-b from-white to-neutral-50/50 dark:from-neutral-900 dark:to-neutral-950/50 border-dashed border-2 overflow-hidden relative group">
-                {/* Decorative Elements */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-1000" />
-
-                <div className="relative z-10 text-center max-w-[240px] space-y-4">
-                    <div className="relative mx-auto w-20 h-20">
-                        <div className="absolute inset-0 bg-primary/10 rounded-3xl rotate-12 group-hover:rotate-45 transition-transform duration-700" />
-                        <div className="absolute inset-0 bg-primary/5 rounded-3xl -rotate-12 group-hover:-rotate-45 transition-transform duration-700" />
-                        <div className="relative bg-white dark:bg-neutral-800 shadow-xl rounded-2xl w-full h-full flex items-center justify-center border border-neutral-100 dark:border-neutral-700">
-                            <CreditCardIcon className="h-10 w-10 text-primary animate-pulse" />
-                        </div>
+            <Card className="p-8 h-full min-h-[360px] flex flex-col items-center justify-center bg-card rounded-3xl border border-dashed border-border/80">
+                <div className="text-center max-w-[240px] space-y-3">
+                    <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                        <Wallet className="h-7 w-7" />
                     </div>
-
-                    <div className="space-y-2">
-                        <h3 className="text-xl font-black tracking-tighter text-neutral-900 dark:text-white uppercase">
-                            Vista Detallada
-                        </h3>
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                            Selecciona una de tus cuentas para gestionar movimientos, ver límites y ajustar saldos en tiempo real.
-                        </p>
-                    </div>
-
-                    <div className="pt-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-[10px] font-bold text-neutral-400 uppercase tracking-widest border border-neutral-200 dark:border-neutral-700">
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                            </span>
-                            Esperando Selección
-                        </div>
-                    </div>
+                    <h3 className="text-base font-extrabold text-foreground">Detalles de la cuenta</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                        Selecciona una cuenta para revisar su resumen, movimientos o realizar ajustes.
+                    </p>
                 </div>
             </Card>
         )
     }
 
-    const availableBalance = card.accountType === 'CREDIT_CARD'
-        ? Number(card.creditLimit || 0) - Number(card.usedBalance || 0)
+    const isCreditCard = card.accountType === "CREDIT_CARD"
+    const creditLimit = Math.max(0, Number(card.creditLimit || 0))
+    const usedBalance = Math.abs(Number(card.usedBalance || 0))
+    const availableBalance = isCreditCard
+        ? Math.max(0, creditLimit - usedBalance)
         : Number(card.currentBalance || 0)
+    const initialBalance = Number(card.initialBalance || 0)
+    const netVariation = availableBalance - initialBalance
+    const usagePercent =
+        isCreditCard && creditLimit > 0 ? Math.min(100, (usedBalance / creditLimit) * 100) : 0
 
-    const cardNumber = card.lastFourDigits ? `•••• •••• •••• ${card.lastFourDigits}` : '•••• •••• •••• ••••'
-    const expiryDate = card.expiryDate
-        ? new Date(card.expiryDate).toLocaleDateString('en-US', { month: '2-digit', year: '2-digit' })
-        : '••/••'
+    const displayName = formatAccountPillName(card.name, card.currencyCode).replace(
+        new RegExp(`\\s*\\(${card.currencyCode}\\)\\s*$`, "i"),
+        ""
+    )
 
-    const handleCopy = () => {
-        if (card.lastFourDigits) {
-            navigator.clipboard.writeText(card.lastFourDigits)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
-        }
+    const money = (val: number) =>
+        isBalanceVisible ? formatMoney(val, card.currencyCode) : "••••••"
+
+    const closingDayNum = Number(card.closingDay)
+    const dueDayNum = Number(card.paymentDueDay)
+    const hasValidClosing = Number.isFinite(closingDayNum) && closingDayNum >= 1 && closingDayNum <= 31
+    const hasValidDue = Number.isFinite(dueDayNum) && dueDayNum >= 1 && dueDayNum <= 31
+
+    const TypeIcon =
+        card.accountType === "CREDIT_CARD"
+            ? CreditCardIcon
+            : card.accountType === "BANK"
+              ? Landmark
+              : card.accountType === "CASH"
+                ? Banknote
+                : card.accountType === "INVESTMENT"
+                  ? TrendingUp
+                  : Wallet
+
+    const handleCopy = (val: string) => {
+        navigator.clipboard.writeText(val)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
     }
 
     const handleDelete = async () => {
@@ -115,267 +128,338 @@ export function CreditCardDetailPanel({ card }: CreditCardDetailPanelProps) {
             await deleteAccount.mutateAsync(card.id)
             setShowDeleteDialog(false)
         } catch (error: any) {
-            setDeleteError(error.message || 'Error al eliminar la cuenta')
+            setDeleteError(error.message || "Error al eliminar la cuenta")
         }
-    }
-
-    const handleViewTransactions = () => {
-        router.push(`/dashboard/accounts/${card.id}`)
     }
 
     return (
         <>
-            <Card className="p-6 space-y-6 sticky top-4">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Detalles de Cuenta</h3>
-                    <CreditCardIcon className="h-5 w-5 text-muted-foreground" />
-                </div>
-
-                {/* Resumen de Línea - Transparente y Matemático */}
-                <div className="space-y-4 p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-100 dark:border-neutral-800/50">
-                    <div className="flex items-center justify-between text-xs font-bold text-neutral-400 uppercase tracking-widest">
-                        <span>Resumen de Crédito</span>
-                        <Badge variant="outline" className="text-[10px] font-black uppercase tracking-tighter">
-                            {card.cardNetwork || 'VISA'}
-                        </Badge>
-                    </div>
-
-                    <div className="space-y-3 pt-2">
-                        {/* 1. Límite Total */}
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground font-medium">Línea de Crédito</span>
-                            <span className="text-lg font-bold font-mono">
-                                {formatMoney(Number(card.creditLimit || 0), card.currencyCode)}
-                            </span>
+            <Card className="p-5 sm:p-6 space-y-5 rounded-3xl border-border/70 bg-card shadow-sm lg:sticky lg:top-24">
+                {/* HEADER */}
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-11 w-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <TypeIcon className="h-5 w-5" />
                         </div>
-
-                        {/* 2. Deuda / Consolidado */}
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-rose-600 font-bold">(-) Pago a Fecha (Deuda)</span>
-                            <span className="text-lg font-bold font-mono text-rose-600">
-                                {formatMoney(Math.abs(Number(card.usedBalance || 0)), card.currencyCode)}
-                            </span>
-                        </div>
-
-                        <div className="h-px bg-neutral-200 dark:bg-neutral-800" />
-
-                        {/* 3. Saldo Disponible (Resultado) */}
-                        <div className="flex justify-between items-end pt-1">
-                            <span className="text-sm text-emerald-600 font-black uppercase">(=) Saldo Disponible</span>
-                            <span className="text-3xl font-black font-mono text-emerald-600 tracking-tighter">
-                                {formatMoney(availableBalance, card.currencyCode)}
-                            </span>
+                        <div className="min-w-0">
+                            <h3 className="text-base font-extrabold text-foreground truncate">
+                                {displayName}
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                                {ACCOUNT_TYPE_LABELS[card.accountType] || card.accountType} · {card.currencyCode}
+                            </p>
                         </div>
                     </div>
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "rounded-full text-[10px] font-bold shrink-0",
+                            card.isActive
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                : "bg-muted text-muted-foreground"
+                        )}
+                    >
+                        {card.isActive ? "Activa" : "Inactiva"}
+                    </Badge>
                 </div>
 
-                <div className="h-px bg-border" />
+                {/* FINANCIAL SUMMARY — STRICTLY COHERENT BY ACCOUNT TYPE */}
+                {isCreditCard ? (
+                    <div className="space-y-4 p-4 rounded-2xl bg-muted/40 border border-border/60">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Resumen de Crédito
+                            </span>
+                            <Badge variant="outline" className="text-[10px] font-black uppercase rounded-full">
+                                {card.cardNetwork || "VISA"}
+                            </Badge>
+                        </div>
 
-                {/* Detalles de Ciclo y Vencimiento - NUEVO */}
-                {card.accountType === 'CREDIT_CARD' && (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 rounded-lg bg-muted/50 border space-y-1">
-                            <p className="text-[10px] uppercase font-bold text-muted-foreground">Próximo Cierre</p>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold">Día {card.closingDay}</span>
-                                {(() => {
-                                    const now = new Date()
-                                    const closingDay = Number(card.closingDay)
-                                    let daysLeft = closingDay - now.getDate()
-                                    if (daysLeft < 0) daysLeft += new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-
-                                    return (
-                                        <Badge variant="outline" className={cn(
-                                            "text-[10px]",
-                                            daysLeft <= 3 ? "text-orange-600 border-orange-200 bg-orange-50" : ""
-                                        )}>
-                                            {daysLeft} días
-                                        </Badge>
-                                    )
-                                })()}
+                        <div className="space-y-2.5 text-sm">
+                            <div className="flex justify-between items-center">
+                                <span className="text-muted-foreground">Línea total</span>
+                                <span className="font-bold tabular-nums">{money(creditLimit)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-rose-600 dark:text-rose-400 font-medium">
+                                    Deuda actual
+                                </span>
+                                <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                                    {money(usedBalance)}
+                                </span>
+                            </div>
+                            <div className="h-px bg-border/60" />
+                            <div className="flex justify-between items-baseline pt-0.5">
+                                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                                    Disponible
+                                </span>
+                                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                    {money(availableBalance)}
+                                </span>
                             </div>
                         </div>
 
-                        <div className="p-3 rounded-lg bg-muted/50 border space-y-1">
-                            <p className="text-[10px] uppercase font-bold text-muted-foreground">Límite Pago</p>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold">Día {card.paymentDueDay}</span>
-                                {(() => {
-                                    const now = new Date()
-                                    const dueDay = Number(card.paymentDueDay)
-                                    let daysLeft = dueDay - now.getDate()
-                                    if (daysLeft < 0) daysLeft += new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-
-                                    return (
-                                        <Badge variant="outline" className={cn(
-                                            "text-[10px]",
-                                            daysLeft <= 3 ? "text-destructive border-destructive/20 bg-destructive/5" : ""
-                                        )}>
-                                            {daysLeft} días
-                                        </Badge>
-                                    )
-                                })()}
+                        {creditLimit > 0 && (
+                            <div className="space-y-1.5 pt-1">
+                                <div className="flex justify-between text-[11px] font-semibold text-muted-foreground tabular-nums">
+                                    <span>Uso de línea</span>
+                                    <span>{usagePercent.toFixed(1)}%</span>
+                                </div>
+                                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                    <div
+                                        className={cn(
+                                            "h-full rounded-full transition-all",
+                                            usagePercent >= 80
+                                                ? "bg-rose-500"
+                                                : usagePercent >= 50
+                                                  ? "bg-amber-500"
+                                                  : "bg-primary"
+                                        )}
+                                        style={{ width: `${usagePercent}%` }}
+                                    />
+                                </div>
                             </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-3 p-4 rounded-2xl bg-muted/40 border border-border/60">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                            Resumen de Saldo
+                        </span>
+                        <div>
+                            <p className="text-3xl font-black tracking-tight tabular-nums text-foreground">
+                                {money(availableBalance)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center justify-between">
+                                <span>Saldo inicial: {money(initialBalance)}</span>
+                                <span
+                                    className={cn(
+                                        "font-bold tabular-nums",
+                                        netVariation >= 0
+                                            ? "text-emerald-600 dark:text-emerald-400"
+                                            : "text-rose-600 dark:text-rose-400"
+                                    )}
+                                >
+                                    {netVariation >= 0 ? "+" : ""}
+                                    {money(netVariation)}
+                                </span>
+                            </p>
                         </div>
                     </div>
                 )}
 
-                <div className="h-px bg-border" />
-
-                {/* Details Grid */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Tipo de Red</span>
-                        <span className="text-sm font-medium">
-                            {card.accountType === 'CREDIT_CARD'
-                                ? (card.cardNetwork?.toUpperCase() || 'VISA')
-                                : card.accountType.replace('_', ' ')}
-                        </span>
+                {/* CREDIT CARD BILLING CYCLE (ONLY IF CONFIGURED — NO NaN!) */}
+                {isCreditCard && (hasValidClosing || hasValidDue) && (
+                    <div className="grid grid-cols-2 gap-3">
+                        {hasValidClosing && (
+                            <div className="p-3 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
+                                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" /> Cierre
+                                </p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-extrabold">Día {closingDayNum}</span>
+                                    <span className="text-[11px] font-bold text-primary">
+                                        en {getDaysUntilDayOfMonth(closingDayNum)}d
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                        {hasValidDue && (
+                            <div className="p-3 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
+                                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" /> Límite Pago
+                                </p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-extrabold">Día {dueDayNum}</span>
+                                    <span
+                                        className={cn(
+                                            "text-[11px] font-bold",
+                                            getDaysUntilDayOfMonth(dueDayNum) <= 5
+                                                ? "text-rose-500"
+                                                : "text-muted-foreground"
+                                        )}
+                                    >
+                                        en {getDaysUntilDayOfMonth(dueDayNum)}d
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </div>
+                )}
 
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Titular</span>
-                        <span className="text-sm font-medium">{card.name}</span>
-                    </div>
-
-                    {card.lastFourDigits && (
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Número de Tarjeta</span>
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-mono">{cardNumber}</span>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={handleCopy}
+                {/* EXTRA METADATA (ONLY NON-EMPTY FIELDS) */}
+                {(card.lastFourDigits || card.bankName || card.accountNumber) && (
+                    <div className="space-y-2.5 text-xs pt-1">
+                        {card.bankName && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Entidad</span>
+                                <span className="font-bold text-foreground">{card.bankName}</span>
+                            </div>
+                        )}
+                        {card.lastFourDigits && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Terminación</span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleCopy(card.lastFourDigits!)}
+                                    className="inline-flex items-center gap-1.5 font-mono font-bold text-foreground hover:text-primary transition-colors"
                                 >
+                                    •••• {card.lastFourDigits}
                                     {copied ? (
-                                        <Check className="h-3 w-3 text-emerald-500" />
+                                        <Check className="h-3.5 w-3.5 text-emerald-500" />
                                     ) : (
-                                        <Copy className="h-3 w-3" />
+                                        <Copy className="h-3.5 w-3.5 opacity-60" />
                                     )}
-                                </Button>
+                                </button>
                             </div>
-                        </div>
-                    )}
-
-                    {card.accountType === 'CREDIT_CARD' && card.creditLimit && (
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">Uso de Línea</span>
-                                <span className="font-medium">
-                                    {((Number(card.usedBalance || 0) / Number(card.creditLimit)) * 100).toFixed(1)}%
-                                </span>
-                            </div>
-                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                <div
-                                    className={cn(
-                                        "h-full transition-all",
-                                        (Number(card.usedBalance || 0) / Number(card.creditLimit)) > 0.8 ? "bg-destructive" : "bg-primary"
+                        )}
+                        {card.accountNumber && (
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">N.º Cuenta</span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleCopy(card.accountNumber!)}
+                                    className="inline-flex items-center gap-1.5 font-mono font-bold text-foreground hover:text-primary transition-colors"
+                                >
+                                    {card.accountNumber}
+                                    {copied ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                    ) : (
+                                        <Copy className="h-3.5 w-3.5 opacity-60" />
                                     )}
-                                    style={{ width: `${Math.min(100, (Number(card.usedBalance || 0) / Number(card.creditLimit)) * 100)}%` }}
-                                />
+                                </button>
                             </div>
-                        </div>
-                    )}
-
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Estatus de Cuenta</span>
-                        <Badge variant={card.isActive ? "default" : "secondary"} className={card.isActive ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : ""}>
-                            {card.isActive ? 'Activa' : 'Inactiva'}
-                        </Badge>
+                        )}
                     </div>
-                </div>
+                )}
 
-                <div className="h-px bg-border" />
-
-                {/* Acciones Reales del Sistema */}
-                <div className="space-y-2">
-                    <h4 className="text-sm font-semibold mb-3">Acciones</h4>
-
-                    <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        size="sm"
-                        onClick={() => setShowEditModal(true)}
-                    >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Editar Cuenta
-                    </Button>
-
-                    <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        size="sm"
-                        onClick={() => setShowEditBalance(true)}
-                    >
-                        <CreditCardIcon className="h-4 w-4 mr-2" />
-                        Ajustar Saldo
-                    </Button>
-
-                    <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        size="sm"
-                        onClick={handleViewTransactions}
-                    >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Ver Transacciones
-                    </Button>
+                {/* QUICK ACTIONS */}
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                    <div className="grid grid-cols-2 gap-2">
+                        <Link href={`/dashboard/transactions/new?type=EXPENSE&accountId=${card.id}`}>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full rounded-2xl h-10 text-xs font-bold gap-1.5 border-rose-500/25 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+                            >
+                                <TrendingDown className="h-3.5 w-3.5" />
+                                Gasto
+                            </Button>
+                        </Link>
+                        <Link
+                            href={
+                                isCreditCard
+                                    ? `/dashboard/transactions/new?type=TRANSFER&toAccountId=${card.id}`
+                                    : `/dashboard/transactions/new?type=INCOME&accountId=${card.id}`
+                            }
+                        >
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full rounded-2xl h-10 text-xs font-bold gap-1.5 border-primary/25 text-primary hover:bg-primary/10"
+                            >
+                                <ArrowRightLeft className="h-3.5 w-3.5" />
+                                {isCreditCard ? "Pagar TC" : "Ingreso"}
+                            </Button>
+                        </Link>
+                    </div>
 
                     <Button
-                        variant="outline"
-                        className="w-full justify-start text-destructive hover:text-destructive"
+                        variant="default"
                         size="sm"
-                        onClick={() => setShowDeleteDialog(true)}
+                        className="w-full rounded-2xl h-10 text-xs font-bold bg-primary text-primary-foreground gap-2"
+                        onClick={() => router.push(`/dashboard/accounts/${card.id}`)}
                     >
-                        <Trash className="h-4 w-4 mr-2" />
-                        Eliminar Cuenta
+                        <Eye className="h-4 w-4" />
+                        Ver historial de movimientos
                     </Button>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-2xl h-9 text-xs font-bold gap-1.5"
+                            onClick={() => setShowEditModal(true)}
+                        >
+                            <Edit className="h-3.5 w-3.5" />
+                            Editar
+                        </Button>
+                        {!isCreditCard ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-2xl h-9 text-xs font-bold gap-1.5"
+                                onClick={() => setShowEditBalance(true)}
+                            >
+                                <SlidersHorizontal className="h-3.5 w-3.5" />
+                                Ajustar saldo
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-2xl h-9 text-xs font-bold gap-1.5 text-destructive hover:bg-destructive/10 border-destructive/20"
+                                onClick={() => setShowDeleteDialog(true)}
+                            >
+                                <Trash className="h-3.5 w-3.5" />
+                                Eliminar
+                            </Button>
+                        )}
+                    </div>
+
+                    {!isCreditCard && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full rounded-2xl h-9 text-xs font-bold text-destructive hover:text-destructive hover:bg-destructive/10 gap-1.5"
+                            onClick={() => setShowDeleteDialog(true)}
+                        >
+                            <Trash className="h-3.5 w-3.5" />
+                            Eliminar cuenta
+                        </Button>
+                    )}
                 </div>
             </Card>
 
-            {/* Modales Funcionales */}
+            {/* Modals */}
             <AccountFormModal
                 account={card as any}
                 open={showEditModal}
                 onOpenChange={setShowEditModal}
             />
 
-            {card && (
+            {!isCreditCard && (
                 <EditInitialBalanceModal
                     account={{
                         id: card.id,
                         name: card.name,
-                        initialBalance: Number(card.initialBalance || 0),
-                        currentBalance: Number(card.currentBalance || 0),
-                        currencyCode: card.currencyCode
+                        initialBalance,
+                        currentBalance: availableBalance,
+                        currencyCode: card.currencyCode,
                     }}
                     open={showEditBalance}
                     onOpenChange={setShowEditBalance}
                 />
             )}
 
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Eliminar cuenta?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Se eliminará permanentemente la cuenta "{card.name}".
-                            {deleteError && (
-                                <p className="mt-2 text-destructive text-sm">{deleteError}</p>
-                            )}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                            Eliminar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmAlertModal
+                open={showDeleteDialog}
+                onOpenChange={(open) => {
+                    setShowDeleteDialog(open)
+                    if (!open) setDeleteError(null)
+                }}
+                variant="danger"
+                title="¿Eliminar cuenta?"
+                description={
+                    <>
+                        Esta acción no se puede deshacer. Se eliminará permanentemente &ldquo;{displayName}&rdquo;.
+                    </>
+                }
+                confirmLabel="Eliminar"
+                autoCloseOnConfirm={false}
+                errorMessage={deleteError}
+                onConfirm={handleDelete}
+            />
         </>
     )
 }

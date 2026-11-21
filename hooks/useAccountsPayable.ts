@@ -1,16 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AccountPayable, CreateAccountPayableDTO } from '@/types/loans'
+import type { RegisterLoanPaymentPayload } from '@/hooks/useAccountsReceivable'
 import { toast } from 'sonner'
-
-// ============================================
-// FETCH Functions
-// ============================================
 
 async function fetchAccountsPayable(status?: string): Promise<AccountPayable[]> {
     const params = new URLSearchParams()
     if (status && status !== 'ALL') params.append('status', status)
 
-    const res = await fetch(`/api/accounts-payable?${params}`)
+    const qs = params.toString()
+    const res = await fetch(qs ? `/api/accounts-payable?${qs}` : '/api/accounts-payable')
     if (!res.ok) throw new Error('Error al cargar cuentas por pagar')
     return res.json()
 }
@@ -23,21 +21,14 @@ async function createAccountPayable(data: CreateAccountPayableDTO): Promise<Acco
     })
 
     if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Error al crear cuenta por pagar')
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.details || error.error || 'Error al crear cuenta por pagar')
     }
 
     return res.json()
 }
 
-async function registerPayment(data: {
-    id: string
-    paymentAmount: number
-    accountId: string
-    principalAmount?: number
-    interestAmount?: number
-    notes?: string
-}): Promise<AccountPayable> {
+async function registerPayment(data: RegisterLoanPaymentPayload): Promise<AccountPayable> {
     const res = await fetch('/api/accounts-payable', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -45,16 +36,12 @@ async function registerPayment(data: {
     })
 
     if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Error al registrar pago')
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.details || error.error || 'Error al registrar pago')
     }
 
     return res.json()
 }
-
-// ============================================
-// HOOKS
-// ============================================
 
 export function useAccountsPayable(status?: string) {
     return useQuery({
@@ -73,6 +60,7 @@ export function useCreateAccountPayable() {
             queryClient.invalidateQueries({ queryKey: ['accounts-payable'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            queryClient.invalidateQueries({ queryKey: ['budgets'] })
             toast.success('Deuda registrada')
         },
         onError: (error: Error) => {
@@ -85,12 +73,12 @@ export function useUpdateAccountPayable() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: (data: { id: string; paymentAmount: number; accountId: string; principalAmount?: number; interestAmount?: number; notes?: string }) =>
-            registerPayment(data),
+        mutationFn: registerPayment,
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['accounts-payable'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            queryClient.invalidateQueries({ queryKey: ['budgets'] })
 
             if (data.status === 'PAID') {
                 toast.success('¡Deuda pagada completamente!')
@@ -102,27 +90,4 @@ export function useUpdateAccountPayable() {
             toast.error(error.message)
         },
     })
-}
-
-// ============================================
-// SUMMARY HOOK
-// ============================================
-
-export function usePayablesSummary() {
-    const { data: payables } = useAccountsPayable()
-
-    if (!payables) return null
-
-    const summary = {
-        total: payables.length,
-        pending: payables.filter(p => p.status === 'PENDING').length,
-        partial: payables.filter(p => p.status === 'PARTIAL').length,
-        overdue: payables.filter(p => p.status === 'OVERDUE').length,
-        paid: payables.filter(p => p.status === 'PAID').length,
-        totalAmount: payables.reduce((sum, p) => sum + p.originalAmount, 0),
-        totalOutstanding: payables.filter(p => p.status !== 'PAID' && p.status !== 'CANCELLED')
-            .reduce((sum, p) => sum + p.outstandingBalance, 0),
-    }
-
-    return summary
 }

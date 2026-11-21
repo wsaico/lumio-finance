@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { PremiumDatePicker } from "@/components/ui/premium-date-picker"
+import { format } from "date-fns"
 
 interface EditContributionModalProps {
     contribution: {
@@ -61,12 +63,10 @@ export function EditContributionModal({
 
                     <div className="space-y-2">
                         <Label htmlFor="date">Fecha *</Label>
-                        <Input
-                            id="date"
-                            type="date"
+                        <PremiumDatePicker
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            required
+                            onChange={(d) => setDate(format(d, "yyyy-MM-dd"))}
+                            label="Fecha de aporte"
                         />
                     </div>
 

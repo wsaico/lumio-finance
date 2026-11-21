@@ -1,5 +1,7 @@
 'use server';
 
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
+
 import { createClient } from '@/lib/supabase/server';
 import { DashboardData, MonthlyMetric, BudgetAlert } from '@/types/analytics';
 import { getExchangeRatesMap, convertAmount } from '@/lib/currency';
@@ -39,7 +41,7 @@ export async function getDashboardData(): Promise<DashboardData> {
             type: acc.account_type
         }));
 
-        const targetCurrency = user.user_metadata?.currency || 'PEN';
+        const targetCurrency = user.user_metadata?.currency || DEFAULT_CURRENCY;
         const rateMap = await getExchangeRatesMap(supabase);
 
         const availableMoney = accounts.reduce((sum, acc) => {
@@ -161,8 +163,9 @@ export async function getDashboardData(): Promise<DashboardData> {
         // 6. Fetch Global Budget Comparison and Alerts
         const { data: budgets } = await supabase
             .from('budgets')
-            .select('amount, name, color, include_categories, exclude_categories')
+            .select('amount, name, color, type, currency_code, is_active, include_categories, exclude_categories')
             .eq('user_id', userId)
+            .eq('is_active', true)
             .eq('budget_month', currentMonthIdx + 1)
             .eq('budget_year', currentYear);
 
@@ -171,7 +174,8 @@ export async function getDashboardData(): Promise<DashboardData> {
         const budgetAlerts: BudgetAlert[] = [];
 
         (budgets || []).forEach(b => {
-            const amount = Number(b.amount);
+            if (b.type === 'SAVINGS') return;
+            const amount = convertAmount(Number(b.amount || 0), b.currency_code || targetCurrency, targetCurrency, rateMap);
             totalBudgetAmount += amount;
 
             const includeCats = b.include_categories || [];
@@ -181,8 +185,12 @@ export async function getDashboardData(): Promise<DashboardData> {
                 if (t.transaction_type !== 'EXPENSE') return sum;
                 const category = t.expense_category || t.subcategory?.expense_category;
                 const catName = category?.name || '';
-                const isIncluded = includeCats.length === 0 || includeCats.includes(catName);
-                const isExcluded = excludeCats.includes(catName);
+                const matchesCat = (list: string[]) =>
+                    (t.expense_category_id && list.includes(t.expense_category_id)) ||
+                    (t.subcategory_id && list.includes(t.subcategory_id)) ||
+                    (catName && list.includes(catName));
+                const isIncluded = includeCats.length === 0 || matchesCat(includeCats);
+                const isExcluded = excludeCats.length > 0 && matchesCat(excludeCats);
                 if (isIncluded && !isExcluded) {
                     const rawAmount = Number(t.amount);
                     const currency = t.currency_code || accounts.find(a => a.id === t.account_id)?.currency || targetCurrency;

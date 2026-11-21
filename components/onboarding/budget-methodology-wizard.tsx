@@ -191,7 +191,7 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
                             {step === 'CATEGORY_REVIEW' && 'Clasifica tus Gastos'}
                             {step === 'GOAL_CREATION' && 'Tu Primera Meta'}
                         </DialogTitle>
-                        <DialogDescription className="text-slate-300 text-base mt-2">
+                        <DialogDescription className="text-muted-foreground text-base mt-2">
                             {step === 'SELECTION' && 'Elige el sistema financiero que mejor se adapte a ti.'}
                             {step === 'INCOME' && 'Para darte los mejores consejos, necesitamos una base.'}
                             {step === 'CATEGORY_REVIEW' && 'Define qué es indispensable para ti y qué es un gusto.'}
@@ -328,7 +328,7 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
                                                 className={cn(
                                                     "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
                                                     cat.budgetRule === 'NEED'
-                                                        ? "bg-white shadow-sm text-blue-600"
+                                                        ? "bg-card shadow-sm text-blue-600"
                                                         : "text-muted-foreground hover:text-foreground"
                                                 )}
                                             >
@@ -339,7 +339,7 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
                                                 className={cn(
                                                     "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
                                                     cat.budgetRule !== 'NEED'
-                                                        ? "bg-white shadow-sm text-purple-600"
+                                                        ? "bg-card shadow-sm text-purple-600"
                                                         : "text-muted-foreground hover:text-foreground"
                                                 )}
                                             >
@@ -390,7 +390,7 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
                             </div>
 
                             {selectedGoalType && (
-                                <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                                <div className="bg-muted/50 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2">
                                     <div className="flex justify-between items-center">
                                         <Label className="text-xs font-bold text-muted-foreground uppercase">Meta Sugerida (20%)</Label>
                                         <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
@@ -398,7 +398,7 @@ export function BudgetMethodologyWizard({ shouldShow = false }: { shouldShow?: b
                                         </span>
                                     </div>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-500">S/</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">S/</span>
                                         <Input
                                             type="number"
                                             value={targetAmount}

@@ -21,16 +21,12 @@ const TransactionFilterBar = dynamic(
 export default function TransactionsPage() {
 
     return (
-        <div className="space-y-6">
-
-
-            <div className="bg-background/40 backdrop-blur-sm border border-muted-foreground/10 rounded-2xl p-4 shadow-sm">
+        <div className="space-y-3 sm:space-y-4">
+            <div className="bg-card/90 backdrop-blur-sm border border-border/60 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xs">
                 <TransactionFilterBar />
             </div>
 
-            <div className="rounded-2xl border bg-background/50 backdrop-blur-sm p-4 shadow-sm">
-                <TransactionList />
-            </div>
+            <TransactionList />
         </div>
     )
 }

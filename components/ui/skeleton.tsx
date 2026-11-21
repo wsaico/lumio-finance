@@ -16,7 +16,7 @@ export function Skeleton({
   return (
     <div
       className={cn(
-        'bg-neutral-200 dark:bg-neutral-800',
+        'bg-muted ',
         {
           'rounded-md': variant === 'rectangular',
           'rounded-full': variant === 'circular',
@@ -45,7 +45,7 @@ export function TransactionSkeleton() {
 
 export function CardSkeleton() {
   return (
-    <div className="p-6 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
+    <div className="p-6 bg-card rounded-xl border border-border">
       <div className="space-y-4">
         <Skeleton variant="text" className="w-1/3 h-6" />
         <Skeleton variant="rectangular" className="w-full h-32" />

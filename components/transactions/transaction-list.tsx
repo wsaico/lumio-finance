@@ -3,8 +3,9 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useTransactions } from "@/hooks/useTransactions"
 import { useTransactionFilters } from "@/hooks/useTransactionFilters"
-import { format, isToday, isYesterday } from "date-fns"
+import { format, isToday, isYesterday, isTomorrow, isAfter, endOfDay } from "date-fns"
 import { es } from "date-fns/locale"
+import { getDateKeyInTimezone } from "@/lib/timezone"
 import { Loader2, Repeat, HandCoins, CalendarClock, Calendar, Clock, Calculator, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Zap } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAccounts } from "@/hooks/useAccounts"
@@ -14,6 +15,7 @@ import { MonthSelector } from "./month-selector"
 import { Badge } from "@/components/ui/badge"
 import { CategoryIcon } from "@/components/icons/category-icon"
 import { useExchangeRates } from "@/hooks/useExchangeRates"
+import { DEFAULT_CURRENCY, getCurrencySymbol } from "@/lib/currencies"
 
 function useInView() {
     const [inView, setInView] = useState(false)
@@ -97,7 +99,13 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
         isFetchingNextPage
     } = useTransactions(hookFilters)
     const { accounts } = useAccounts()
-    const { currencyCode: userCurrency, isBalanceVisible } = useSettingsStore()
+    const {
+        currencyCode: userCurrency,
+        isBalanceVisible,
+        txListDensity,
+        txAmountTotalStyle,
+        timezone,
+    } = useSettingsStore()
     const { convert } = useExchangeRates()
 
     // Infinite Scroll Intersection Observer
@@ -133,10 +141,19 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                 return false
             }
 
-            // Apply category filter
-            if (filters.categoryId) {
-                const txCategoryId = tx.expenseCategoryId || tx.incomeCategoryId
-                if (txCategoryId !== filters.categoryId) {
+            // Apply category filter (supports single categoryId, categories array, 'uncategorized', and 'debt-repayment')
+            const targetCats: string[] = Array.isArray(filters.categories) && filters.categories.length > 0
+                ? filters.categories
+                : filters.categoryId
+                  ? [filters.categoryId]
+                  : []
+            if (targetCats.length > 0) {
+                const txCategoryId = tx.expenseCategoryId || tx.incomeCategoryId || "uncategorized"
+                const isDebtTx = Boolean(tx.loanId || tx.loan_id || tx.metadata?.isLoanMovement)
+                const matchesCat =
+                    targetCats.includes(txCategoryId) ||
+                    (targetCats.includes("debt-repayment") && isDebtTx)
+                if (!matchesCat) {
                     return false
                 }
             }
@@ -166,6 +183,14 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
             // Apply mode filter
             if (filters.mode && tx.metadata?.mode !== filters.mode) {
                 return false
+            }
+
+            // Apply tag filter
+            if (filters.tag) {
+                const txTags: string[] = Array.isArray(tx.tags) ? tx.tags : []
+                if (!txTags.includes(filters.tag)) {
+                    return false
+                }
             }
 
             // Apply strict date filter if provided in overrides
@@ -207,7 +232,7 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
         if (!filteredTransactions) return {}
         const groups: Record<string, any[]> = {}
         filteredTransactions.forEach((tx: any) => {
-            const key = format(new Date(tx.transactionDate), "yyyy-MM-dd")
+            const key = getDateKeyInTimezone(tx.transactionDate, timezone) || format(new Date(tx.transactionDate), "yyyy-MM-dd")
             if (!groups[key]) groups[key] = []
             groups[key].push(tx)
         })
@@ -232,10 +257,9 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                 </div>
             )}
 
-            <div className="space-y-6 px-1 pt-4">
+            <div className="space-y-4 pt-1">
                 {sortedKeys.map((key) => {
                     const group = groups[key]
-                    // Daily Totals logic...
                     let dailyIncome = 0
                     let dailyExpense = 0
                     group.forEach((tx: any) => {
@@ -243,140 +267,195 @@ export function TransactionList({ limit, overrideFilters, hideMonthSelector }: {
                         if (tx.transactionType === 'INCOME') dailyIncome += amount
                         if (tx.transactionType === 'EXPENSE') dailyExpense += amount
                     })
-                    const dailyNet = dailyIncome - dailyExpense
 
                     // Header Label
-                    let headerLabel = format(new Date(group[0].transactionDate), "EEEE, d 'de' MMMM", { locale: es })
-                    if (isToday(new Date(group[0].transactionDate))) headerLabel = "Hoy"
-                    else if (isYesterday(new Date(group[0].transactionDate))) headerLabel = "Ayer"
+                    const groupDate = new Date(group[0].transactionDate)
+                    const isFutureGroup = isAfter(groupDate, endOfDay(new Date()))
+                    let headerLabel = format(groupDate, "EEEE, d 'de' MMMM", { locale: es })
+                    if (isToday(groupDate)) headerLabel = "Hoy"
+                    else if (isYesterday(groupDate)) headerLabel = "Ayer"
+                    else if (isTomorrow(groupDate)) headerLabel = `Mañana · ${format(groupDate, "d 'de' MMMM", { locale: es })}`
 
                     return (
-                        <div key={key} className="space-y-2">
-                            {/* Hide date header if limited? Maybe keep it for context. User asked for "Latest Movements". */}
-                            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 backdrop-blur-sm rounded-lg sticky top-[150px] md:top-[166px] z-10 border border-transparent shadow-sm">
-                                <h3 className="text-sm font-semibold capitalize text-foreground">{headerLabel}</h3>
-                                <div className="flex gap-4 text-xs font-medium">
-                                    {dailyIncome > 0 && <span className="text-emerald-500">▲ {isBalanceVisible ? dailyIncome.toFixed(2) : '***'}</span>}
-                                    {dailyExpense > 0 && <span className="text-rose-500">▼ {isBalanceVisible ? dailyExpense.toFixed(2) : '***'}</span>}
+                        <div key={key} className="space-y-1.5">
+                            {/* Clean Native-App Day Header */}
+                            <div className="flex items-center justify-between px-1.5 pt-1">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground capitalize">
+                                        {headerLabel}
+                                    </h3>
+                                    {isFutureGroup && (
+                                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                            Próximo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2.5 text-[11px] font-bold tabular-nums">
+                                    {dailyIncome > 0 && (
+                                        <span className={txAmountTotalStyle === "neutral" ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-400"}>
+                                            +{isBalanceVisible ? dailyIncome.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '•••'}
+                                        </span>
+                                    )}
+                                    {dailyExpense > 0 && (
+                                        <span className={txAmountTotalStyle === "neutral" ? "text-muted-foreground" : "text-rose-500"}>
+                                            -{isBalanceVisible ? dailyExpense.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '•••'}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
+                            {/* Unified Day Sheet (Revolut / Copilot Style) */}
+                            <div className="rounded-2xl bg-card border border-border/60 divide-y divide-border/40 overflow-hidden shadow-xs">
                                 {group.map((tx: any) => {
                                     const account = getAccountDetails(tx)
                                     const metadata = tx.metadata as any
                                     const originalAmount = Number(metadata?.originalAmount || tx.amount)
-                                    const currency = metadata?.originalCurrency || tx.currencyCode || account?.currencyCode || 'USD'
+                                    const currency = metadata?.originalCurrency || tx.currencyCode || account?.currencyCode || userCurrency || DEFAULT_CURRENCY
 
                                     // Currency Conversion Logic
                                     const showConversion = currency !== userCurrency
                                     const convertedAmount = showConversion ? convert(originalAmount, currency, userCurrency) : originalAmount
 
-                                    // Dynamic Symbol (Simplified for now, ideally use a hook or lib)
-                                    const getSymbol = (c: string) => {
-                                        return c === 'USD' ? '$' : c === 'EUR' ? '€' : c === 'PEN' ? 'S/' : c === 'MXN' ? 'MX$' : c
-                                    }
-                                    const symbol = getSymbol(currency)
-                                    const userSymbol = getSymbol(userCurrency)
+                                    const symbol = getCurrencySymbol(currency)
+                                    const userSymbol = getCurrencySymbol(userCurrency)
 
                                     const isExpense = tx.transactionType === 'EXPENSE'
                                     const isIncome = tx.transactionType === 'INCOME'
                                     const isTransfer = tx.transactionType === 'TRANSFER'
-                                    // For transfers, never show income/expense categories even if mistakenly assigned
                                     const category = isTransfer ? null : (isExpense ? tx.expenseCategory : isIncome ? tx.incomeCategory : null)
                                     const categoryIcon = category?.icon
+                                    const categoryColor = category?.color
                                     const mode = metadata?.mode
-                                    const showModeBadge = mode && ['RECURRING', 'SCHEDULED', 'SUBSCRIPTION', 'LOAN_LENT', 'LOAN_BORROWED'].includes(mode)
+                                    const showModeBadge = mode && ['RECURRING', 'SCHEDULED', 'UPCOMING', 'SUBSCRIPTION', 'LOAN_LENT', 'LOAN_BORROWED'].includes(mode)
                                     const isAuto = metadata?.isAutoExecute
                                     const isFuture = new Date(tx.transactionDate) > new Date()
-                                    const contactName = tx.loan?.personName || metadata?.contactName
+
+                                    const title = tx.description?.trim() || (isTransfer ? "Transferencia" : category?.name || "Movimiento")
+                                    const timeLabel = format(new Date(tx.transactionDate), "HH:mm")
 
                                     return (
                                         <div
                                             key={tx.id}
-                                            className="group relative flex items-center justify-between p-3 rounded-xl bg-card border hover:border-primary/20 hover:shadow-md transition-all duration-200 cursor-pointer"
+                                            className={cn(
+                                                "group flex items-center justify-between gap-3 hover:bg-muted/35 active:bg-muted/50 transition-colors cursor-pointer",
+                                                txListDensity === "compact"
+                                                    ? "px-3 py-1.5 sm:px-3.5 sm:py-2"
+                                                    : "px-3 py-2.5 sm:px-4 sm:py-3"
+                                            )}
                                             onClick={() => router.push(`/dashboard/transactions/${tx.id}`)}
                                         >
+                                            {/* Left: Compact Category Icon */}
                                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                <div className={cn(
-                                                    "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm border shrink-0",
-                                                    isIncome ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                                                        isExpense ? "bg-rose-50 text-rose-600 border-rose-200" :
-                                                            "bg-blue-50 text-blue-600 border-blue-200"
-                                                )}>
+                                                <div
+                                                    className={cn(
+                                                        "flex items-center justify-center shrink-0 border",
+                                                        txListDensity === "compact" ? "h-8 w-8" : "h-10 w-10",
+                                                        "rounded-[var(--icon-radius,1rem)]",
+                                                        !categoryColor && (
+                                                            isIncome
+                                                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                                                : isExpense
+                                                                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                                                  : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
+                                                        )
+                                                    )}
+                                                    style={
+                                                        categoryColor
+                                                            ? {
+                                                                  backgroundColor: `${categoryColor}18`,
+                                                                  color: categoryColor,
+                                                                  borderColor: `${categoryColor}30`,
+                                                              }
+                                                            : undefined
+                                                    }
+                                                >
                                                     {categoryIcon ? (
-                                                        <CategoryIcon name={categoryIcon} className="h-5 w-5" />
+                                                        <CategoryIcon name={categoryIcon} className="h-[18px] w-[18px]" />
+                                                    ) : isTransfer ? (
+                                                        <ArrowRightLeft className="h-[18px] w-[18px]" />
+                                                    ) : isIncome ? (
+                                                        <ArrowDownLeft className="h-[18px] w-[18px]" />
                                                     ) : (
-                                                        isTransfer ? <ArrowRightLeft className="h-5 w-5" /> :
-                                                            isIncome ? <ArrowDownLeft className="h-5 w-5" /> :
-                                                                <ArrowUpRight className="h-5 w-5" />
+                                                        <ArrowUpRight className="h-[18px] w-[18px]" />
                                                     )}
                                                 </div>
-                                                <div className="flex flex-col gap-1 min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="font-semibold text-sm truncate">
-                                                            {tx.description || category?.name || "Sin descripción"}
+
+                                                {/* Center: Crisp 2-line Hierarchy */}
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <span className="font-bold text-[13.5px] sm:text-sm text-foreground truncate leading-snug">
+                                                            {title}
                                                         </span>
-                                                        {/* Account Badge */}
-                                                        {account && (
-                                                            <Badge
-                                                                variant="secondary"
-                                                                className="text-xs px-1.5 py-0.5 h-5 shrink-0 font-medium border"
-                                                                style={{
-                                                                    backgroundColor: `${account.color}15`,
-                                                                    borderColor: `${account.color}40`,
-                                                                    color: account.color
-                                                                }}
-                                                            >
-                                                                {account.name}
-                                                            </Badge>
-                                                        )}
-                                                        {/* Balance Adjustment Badge */}
                                                         {metadata?.isBalanceAdjustment && (
-                                                            <Badge
-                                                                variant="secondary"
-                                                                className="text-xs px-1.5 py-0.5 h-5 shrink-0 font-medium bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
-                                                            >
-                                                                <Calculator className="h-2.5 w-2.5 mr-0.5" />
-                                                                Ajuste Contable
-                                                            </Badge>
+                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                                                                <Calculator className="h-2.5 w-2.5" />
+                                                                Ajuste
+                                                            </span>
                                                         )}
                                                         {showModeBadge && (
-                                                            <Badge variant="outline" className={cn(
-                                                                "text-xs px-1.5 py-0 h-4 shrink-0 flex items-center gap-1",
-                                                                isFuture ? "border-amber-500/50 bg-amber-500/5 text-amber-600" : ""
-                                                            )}>
-                                                                {mode === 'RECURRING' && <><Repeat className="h-2.5 w-2.5" />Repetitivo</>}
-                                                                {mode === 'SUBSCRIPTION' && <><Repeat className="h-2.5 w-2.5" />Suscripción</>}
-                                                                {mode === 'SCHEDULED' && <><CalendarClock className="h-2.5 w-2.5" />Programado</>}
-                                                                {mode === 'LOAN_LENT' && <><HandCoins className="h-2.5 w-2.5" />Prestado</>}
-                                                                {mode === 'LOAN_BORROWED' && <><HandCoins className="h-2.5 w-2.5" />Deuda</>}
-                                                                {isAuto && <Zap className="h-2.5 w-2.5 fill-current ml-0.5" />}
-                                                                {isFuture && <span className="ml-1 opacity-70">• Próximo</span>}
-                                                            </Badge>
+                                                            <span
+                                                                className={cn(
+                                                                    "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold shrink-0",
+                                                                    isFuture
+                                                                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                                                                        : "bg-primary/10 text-primary"
+                                                                )}
+                                                            >
+                                                                {(mode === 'RECURRING' || mode === 'SUBSCRIPTION') && <Repeat className="h-2.5 w-2.5" />}
+                                                                {(mode === 'SCHEDULED' || mode === 'UPCOMING') && <CalendarClock className="h-2.5 w-2.5" />}
+                                                                {(mode === 'LOAN_LENT' || mode === 'LOAN_BORROWED') && <HandCoins className="h-2.5 w-2.5" />}
+                                                                {isAuto && <Zap className="h-2.5 w-2.5 fill-current" />}
+                                                            </span>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                        <Clock className="h-3 w-3" />
-                                                        <span>{format(new Date(tx.transactionDate), "dd/MM")} • {format(new Date(tx.transactionDate), "HH:mm")}</span>
-                                                        <span className="w-1 h-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                                                        <span className="capitalize truncate">
-                                                            {isIncome ? "Ingreso" : isExpense ? "Gasto" : "Transferencia"}
-                                                        </span>
+
+                                                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5 min-w-0">
+                                                        {account && (
+                                                            <span className="inline-flex items-center gap-1 truncate max-w-[130px] sm:max-w-[180px] font-medium">
+                                                                <span
+                                                                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                                                                    style={{ backgroundColor: account.color || "#7c3aed" }}
+                                                                />
+                                                                <span className="truncate">{account.name}</span>
+                                                            </span>
+                                                        )}
+                                                        {category?.name && (
+                                                            <>
+                                                                <span className="opacity-40 shrink-0">·</span>
+                                                                <span className="truncate">{category.name}</span>
+                                                            </>
+                                                        )}
+                                                        <span className="opacity-40 shrink-0">·</span>
+                                                        <span className="tabular-nums shrink-0 opacity-80">{timeLabel}</span>
+                                                        {Array.isArray(tx.tags) && tx.tags.length > 0 && (
+                                                            <>
+                                                                <span className="opacity-40 shrink-0">·</span>
+                                                                <span className="truncate text-[10px] font-semibold text-primary">
+                                                                    #{tx.tags[0]}{tx.tags.length > 1 ? ` +${tx.tags.length - 1}` : ""}
+                                                                </span>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col items-end gap-0.5 shrink-0">
-                                                <span className={cn(
-                                                    "text-base font-bold tracking-tight tabular-nums",
-                                                    isIncome ? "text-emerald-600" : isExpense ? "text-rose-600" : "text-blue-600"
-                                                )}>
-                                                    {isExpense ? '-' : '+'}{symbol} {isBalanceVisible ? originalAmount.toFixed(2) : '***'}
+                                            {/* Right: Tabular Amount */}
+                                            <div className="flex flex-col items-end shrink-0 pl-1">
+                                                <span
+                                                    className={cn(
+                                                        "text-sm sm:text-[15px] font-extrabold tracking-tight tabular-nums leading-snug",
+                                                        isIncome
+                                                            ? "text-emerald-600 dark:text-emerald-400"
+                                                            : isExpense
+                                                              ? "text-rose-500"
+                                                              : "text-indigo-600 dark:text-indigo-400"
+                                                    )}
+                                                >
+                                                    {isExpense ? '-' : '+'}{symbol}{isBalanceVisible ? originalAmount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '•••'}
                                                 </span>
                                                 {showConversion && (
-                                                    <span className="text-xs font-medium text-muted-foreground italic flex items-center gap-1">
-                                                        ~ {userSymbol} {isBalanceVisible ? convertedAmount.toFixed(2) : '***'}
+                                                    <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+                                                        ≈ {userSymbol}{isBalanceVisible ? convertedAmount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '•••'}
                                                     </span>
                                                 )}
                                             </div>

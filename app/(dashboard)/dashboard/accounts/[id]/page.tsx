@@ -6,14 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, Activity, Calendar } from "lucide-react"
+import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, Activity, Calendar, Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { BalanceOverTimeChart } from "@/components/accounts/charts/balance-over-time-chart"
 import { IncomeExpensePieChart } from "@/components/accounts/charts/income-expense-pie-chart"
 import { MonthlyComparisonChart } from "@/components/accounts/charts/monthly-comparison-chart"
 import { AccountTransactionsList } from "@/components/accounts/account-transactions-list"
-import { SmartSearchBar } from "@/components/transactions/smart-search-bar"
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/ui/fade-in"
 
 interface PageProps {
@@ -107,12 +106,32 @@ export default function AccountDetailPage({ params }: PageProps) {
     const change = balance - initialBalance
     const changePercent = initialBalance !== 0 ? (change / Math.abs(initialBalance)) * 100 : 0
 
-    // Calculate stats from transactions
-    const totalIncome = transactions.filter((t: any) => t.transactionType === 'INCOME')
-        .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
+    const isCreditCard = account.accountType === 'CREDIT_CARD'
 
-    const totalExpenses = transactions.filter((t: any) => t.transactionType === 'EXPENSE')
-        .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
+    // Calculate stats from transactions (for CREDIT_CARD include incoming payments & outgoing transfers)
+    const totalIncome = isCreditCard
+        ? transactions
+              .filter(
+                  (t: any) =>
+                      t.transactionType === 'INCOME' ||
+                      (t.transactionType === 'TRANSFER' && t.transferToAccountId === account.id)
+              )
+              .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
+        : transactions
+              .filter((t: any) => t.transactionType === 'INCOME')
+              .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
+
+    const totalExpenses = isCreditCard
+        ? transactions
+              .filter(
+                  (t: any) =>
+                      t.transactionType === 'EXPENSE' ||
+                      (t.transactionType === 'TRANSFER' && t.accountId === account.id)
+              )
+              .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
+        : transactions
+              .filter((t: any) => t.transactionType === 'EXPENSE')
+              .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0
 
     return (
         <FadeIn className="space-y-6 pb-8">
@@ -176,7 +195,9 @@ export default function AccountDetailPage({ params }: PageProps) {
                         <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/20 dark:to-emerald-900/10 border-emerald-200/50 dark:border-emerald-800/30">
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between space-y-0">
-                                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Ingresos Totales</p>
+                                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                                        {isCreditCard ? "Pagos y Abonos" : "Ingresos Totales"}
+                                    </p>
                                     <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-600 dark:text-emerald-400">
                                         <TrendingUp className="h-4 w-4" />
                                     </div>
@@ -186,7 +207,7 @@ export default function AccountDetailPage({ params }: PageProps) {
                                         {account.currencyCode} {totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </div>
                                     <p className="text-xs text-emerald-600/60 dark:text-emerald-400/50 mt-1 font-medium">
-                                        Entradas a esta cuenta
+                                        {isCreditCard ? "Abonos a la tarjeta" : "Entradas a esta cuenta"}
                                     </p>
                                 </div>
                             </CardContent>
@@ -195,7 +216,9 @@ export default function AccountDetailPage({ params }: PageProps) {
                         <Card className="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/20 dark:to-red-900/10 border-red-200/50 dark:border-red-800/30">
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between space-y-0">
-                                    <p className="text-sm font-medium text-red-700 dark:text-red-400">Gastos Totales</p>
+                                    <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                                        {isCreditCard ? "Consumos Totales" : "Gastos Totales"}
+                                    </p>
                                     <div className="p-2 bg-red-500/10 rounded-lg text-red-600 dark:text-red-400">
                                         <TrendingDown className="h-4 w-4" />
                                     </div>
@@ -205,7 +228,7 @@ export default function AccountDetailPage({ params }: PageProps) {
                                         {account.currencyCode} {totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </div>
                                     <p className="text-xs text-red-600/60 dark:text-red-400/50 mt-1 font-medium">
-                                        Salidas de esta cuenta
+                                        {isCreditCard ? "Cargos realizados" : "Salidas de esta cuenta"}
                                     </p>
                                 </div>
                             </CardContent>
@@ -242,14 +265,32 @@ export default function AccountDetailPage({ params }: PageProps) {
                         hasMore={hasNextPage}
                         isLoadingMore={isFetchingNextPage}
                         headerContent={
-                            <SmartSearchBar
-                                onSearch={(filters) => setSearchParams(prev => ({
-                                    ...prev,
-                                    ...filters,
-                                    year: filters.year || prev.year || new Date().getFullYear().toString(),
-                                    month: filters.month || (filters.year ? undefined : prev.month)
-                                }))}
-                            />
+                            <div className="relative w-full max-w-md">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    value={searchParams.query || ""}
+                                    onChange={(e) =>
+                                        setSearchParams((prev) => ({
+                                            ...prev,
+                                            query: e.target.value || "",
+                                        }))
+                                    }
+                                    placeholder="Buscar movimientos en esta cuenta..."
+                                    className="w-full h-10 rounded-full bg-muted/60 pl-10 pr-9 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                                />
+                                {searchParams.query && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setSearchParams((prev) => ({ ...prev, query: "" }))
+                                        }
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
                         }
                     />
                 </TabsContent>

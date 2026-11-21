@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { getCurrencySymbol, getCurrencyName } from "@/lib/currencies"
 
 interface AccountSelectorProps {
     selectedIds: string[]
@@ -16,12 +17,21 @@ export function AccountSelector({ selectedIds, onToggle }: AccountSelectorProps)
 
     if (isLoading) return <div className="text-sm text-muted-foreground p-2">Cargando cuentas...</div>
 
+    if (!accounts || accounts.length === 0) {
+        return (
+            <div className="text-sm text-muted-foreground p-4 border rounded-xl text-center">
+                No tienes cuentas registradas aún.
+            </div>
+        )
+    }
+
     return (
         <ScrollArea className="h-[200px] w-full border rounded-md p-2">
             <div className="space-y-1">
-                {accounts?.map((account) => {
+                {accounts.map((account) => {
                     const isSelected = selectedIds.includes(account.id)
-                    const currencySymbol = account.currencyCode === 'PEN' ? 'S/' : '$'
+                    const currencySymbol = getCurrencySymbol(account.currencyCode)
+                    const currencyName = getCurrencyName(account.currencyCode)
 
                     return (
                         <button
@@ -49,7 +59,7 @@ export function AccountSelector({ selectedIds, onToggle }: AccountSelectorProps)
                                         {account.name}
                                     </span>
                                     <span className="text-[10px] text-muted-foreground font-medium mt-1">
-                                        {account.currencyCode === 'PEN' ? 'Soles' : 'Dólares'}
+                                        {currencyName}
                                     </span>
                                 </div>
                                 <Badge

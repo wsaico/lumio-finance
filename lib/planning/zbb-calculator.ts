@@ -12,6 +12,8 @@ export interface MoneyPool {
     pen: PoolData;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export class ZBBCalculator {
     /**
      * Calcula el estado actual del dinero por asignar (Separado por moneda y tipo de destino)
@@ -20,20 +22,19 @@ export class ZBBCalculator {
         totalIncomeUSD: number,
         totalIncomePEN: number,
         allocations: Array<{
-            allocated_amount_usd: number;
-            allocated_amount_pen: number;
+            allocated_amount_usd: number | string;
+            allocated_amount_pen: number | string;
             goal_id?: string | null;
             category?: { name: string; budget_rule?: string } | null;
         }>
     ): MoneyPool {
+        const incUSD = Number(totalIncomeUSD || 0);
+        const incPEN = Number(totalIncomePEN || 0);
 
-        // Smart Detection: Goal ID OR Budget Rule = 'SAVINGS'
-        // This relies on the database field 'budget_rule' being passed in the category object.
         const isSavings = (a: any) => {
             if (a.goal_id) return true;
             if (a.category?.budget_rule === 'SAVINGS') return true;
 
-            // Fallback: Check keywords if budget_rule is missing but name implies savings
             if (a.category?.name) {
                 const name = a.category.name.toLowerCase();
                 return name.includes('inversi') || name.includes('ahorr') || name.includes('fondo') || name.includes('bolsa');
@@ -41,44 +42,55 @@ export class ZBBCalculator {
             return false;
         };
 
-        // USD Calculation
-        const assignedExpensesUSD = allocations
-            .filter(a => !isSavings(a))
-            .reduce((sum, a) => sum + (a.allocated_amount_usd || 0), 0);
+        // USD Calculation (strict Number conversion + 2-decimal precision)
+        const assignedExpensesUSD = round2(
+            allocations
+                .filter(a => !isSavings(a))
+                .reduce((sum, a) => sum + Number(a.allocated_amount_usd || 0), 0)
+        );
 
-        const assignedSavingsUSD = allocations
-            .filter(a => isSavings(a))
-            .reduce((sum, a) => sum + (a.allocated_amount_usd || 0), 0);
+        const assignedSavingsUSD = round2(
+            allocations
+                .filter(a => isSavings(a))
+                .reduce((sum, a) => sum + Number(a.allocated_amount_usd || 0), 0)
+        );
 
-        const assignedUSD = assignedExpensesUSD + assignedSavingsUSD;
+        const assignedUSD = round2(assignedExpensesUSD + assignedSavingsUSD);
 
         // PEN Calculation
-        const assignedExpensesPEN = allocations
-            .filter(a => !isSavings(a))
-            .reduce((sum, a) => sum + (a.allocated_amount_pen || 0), 0);
+        const assignedExpensesPEN = round2(
+            allocations
+                .filter(a => !isSavings(a))
+                .reduce((sum, a) => sum + Number(a.allocated_amount_pen || 0), 0)
+        );
 
-        const assignedSavingsPEN = allocations
-            .filter(a => isSavings(a))
-            .reduce((sum, a) => sum + (a.allocated_amount_pen || 0), 0);
+        const assignedSavingsPEN = round2(
+            allocations
+                .filter(a => isSavings(a))
+                .reduce((sum, a) => sum + Number(a.allocated_amount_pen || 0), 0)
+        );
 
-        const assignedPEN = assignedExpensesPEN + assignedSavingsPEN;
+        const assignedPEN = round2(assignedExpensesPEN + assignedSavingsPEN);
+
+        const unassignedUSD = round2(incUSD - assignedUSD);
+        const unassignedPEN = round2(incPEN - assignedPEN);
 
         return {
             usd: {
-                total: totalIncomeUSD,
+                total: incUSD,
                 assigned: assignedUSD,
                 assignedToExpenses: assignedExpensesUSD,
                 assignedToSavings: assignedSavingsUSD,
-                unassigned: totalIncomeUSD - assignedUSD,
-                percentage: totalIncomeUSD > 0 ? (assignedUSD / totalIncomeUSD) * 100 : 0,
+                unassigned: Math.abs(unassignedUSD) < 0.01 ? 0 : unassignedUSD,
+                percentage: incUSD > 0 ? (assignedUSD / incUSD) * 100 : 0,
             },
             pen: {
-                total: totalIncomePEN,
+                total: incPEN,
                 assigned: assignedPEN,
                 assignedToExpenses: assignedExpensesPEN,
                 assignedToSavings: assignedSavingsPEN,
-                unassigned: totalIncomePEN - assignedPEN,
-                percentage: totalIncomePEN > 0 ? (assignedPEN / totalIncomePEN) * 100 : 0,
+                unassigned: Math.abs(unassignedPEN) < 0.01 ? 0 : unassignedPEN,
+                percentage: incPEN > 0 ? (assignedPEN / incPEN) * 100 : 0,
             },
         };
     }
@@ -90,13 +102,11 @@ export class ZBBCalculator {
         const errors: string[] = [];
         const TOLERANCE = 0.01;
 
-        // 1. Check USD
         if (Math.abs(pool.usd.unassigned) > TOLERANCE) {
             if (pool.usd.unassigned > 0) errors.push(`Te faltan asignar $${pool.usd.unassigned.toFixed(2)} USD`);
             else errors.push(`Has asignado $${Math.abs(pool.usd.unassigned).toFixed(2)} USD de más`);
         }
 
-        // 2. Check PEN
         if (Math.abs(pool.pen.unassigned) > TOLERANCE) {
             if (pool.pen.unassigned > 0) errors.push(`Te faltan asignar S/ ${pool.pen.unassigned.toFixed(2)} PEN`);
             else errors.push(`Has asignado S/ ${Math.abs(pool.pen.unassigned).toFixed(2)} PEN de más`);
@@ -105,6 +115,6 @@ export class ZBBCalculator {
         return {
             isValid: errors.length === 0,
             errors
-        }
+        };
     }
 }

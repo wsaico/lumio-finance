@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { DEFAULT_CURRENCY } from '@/lib/currencies'
+import { getExchangeRatesMap, convertAmount } from '@/lib/currency'
 
 export async function GET(req: Request) {
     try {
@@ -23,6 +25,15 @@ export async function GET(req: Request) {
         const startDate = new Date(Number(year), Number(month) - 1, 1).toISOString()
         const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59).toISOString()
 
+        const currency = user.user_metadata?.currency || DEFAULT_CURRENCY
+        const [rateMap, accountsRes] = await Promise.all([
+            getExchangeRatesMap(supabase),
+            supabase.from('accounts').select('id, currency_code').eq('user_id', user.id)
+        ])
+        const accountCurrencyMap: Record<string, string> = {}
+        ;(accountsRes.data || []).forEach(a => { accountCurrencyMap[a.id] = a.currency_code })
+        const toBase = (amount: number, tx: any) => convertAmount(Number(amount) || 0, tx.currency_code || accountCurrencyMap[tx.account_id], currency, rateMap)
+
         // 0. Fetch Categories explicitly (Robust Split queries for RLS safety)
         const [userExp, sysExp] = await Promise.all([
             supabase.from('expense_categories').select('id, budget_rule').eq('user_id', user.id),
@@ -35,7 +46,7 @@ export async function GET(req: Request) {
         // 1. Fetch Total Income (Base for 100%)
         const { data: incomeData, error: incomeError } = await supabase
             .from('transactions')
-            .select('amount')
+            .select('amount, currency_code, account_id')
             .eq('user_id', user.id)
             .eq('transaction_type', 'INCOME')
             .gte('transaction_date', startDate)
@@ -43,12 +54,12 @@ export async function GET(req: Request) {
 
         if (incomeError) throw incomeError
 
-        const totalIncome = incomeData.reduce((sum, t) => sum + Number(t.amount), 0)
+        const totalIncome = incomeData.reduce((sum, t) => sum + toBase(t.amount, t), 0)
 
         // 2. Fetch All Outflows (Expenses, Loan Payments, Savings Deposits)
         const { data: outflows, error: outflowError } = await supabase
             .from('transactions')
-            .select('amount, transaction_type, loan_id, savings_goal_id, expense_category_id')
+            .select('amount, currency_code, account_id, transaction_type, loan_id, savings_goal_id, expense_category_id')
             .eq('user_id', user.id)
             .in('transaction_type', ['EXPENSE', 'LOAN_PAYMENT', 'SAVINGS_DEPOSIT', 'DEBT_PAYMENT'])
             .gte('transaction_date', startDate)
@@ -63,7 +74,7 @@ export async function GET(req: Request) {
 
         // Process Outflows
         outflows.forEach((tx: any) => {
-            const amount = Number(tx.amount)
+            const amount = toBase(tx.amount, tx)
             const type = tx.transaction_type
             const rule = tx.expense_category_id ? categoryMap[tx.expense_category_id] : null
             const hasLoan = !!tx.loan_id
@@ -103,11 +114,9 @@ export async function GET(req: Request) {
         // Fetch user profile for budgeting method
         const { data: profile } = await supabase
             .from('profiles')
-            .select('budgeting_method, default_currency')
+            .select('budgeting_method')
             .eq('id', user.id)
             .single()
-
-        const currency = profile?.default_currency || user.user_metadata?.currency || 'USD'
 
         return NextResponse.json({
             budgetingMethod: profile?.budgeting_method || 'TRADITIONAL',

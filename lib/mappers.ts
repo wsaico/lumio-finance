@@ -22,6 +22,7 @@ export function mapAccount(row: any) {
         color: row.color,
         icon: row.icon,
         isActive: row.is_active,
+        isDemo: Boolean(row.is_demo),
         sortOrder: row.sort_order,
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -57,6 +58,9 @@ export function mapTransaction(row: any) {
         transactionDate: row.transaction_date,
         description: row.description,
         notes: row.notes,
+        tags: Array.isArray(row.tags) ? row.tags : [],
+        isDemo: Boolean(row.is_demo || row.metadata?.is_demo),
+        attachmentUrl: row.attachment_url || row.receipt_url || null,
         metadata: row.metadata,
         createdAt: row.created_at,
         updatedAt: row.updated_at,

@@ -42,3 +42,4 @@ paypal_id.json
 fix_results*.json
 rates_*.json
 seed_output.json
+.lumio-saas-state.json

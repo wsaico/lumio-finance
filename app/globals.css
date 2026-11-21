@@ -1,3 +1,4 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -7,7 +8,7 @@
   --breakpoint-xs: 400px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-outfit), var(--font-geist-sans), sans-serif;
+  --font-sans: var(--app-font, var(--font-outfit));
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -25,6 +26,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -38,475 +40,361 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-2xl: calc(var(--radius) + 10px);
+  --radius-3xl: calc(var(--radius) + 18px);
+  --radius-4xl: calc(var(--radius) + 26px);
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 }
 
 @layer base {
+  /* Tailwind v4 usa currentColor por defecto: lo normalizamos para evitar bordes negros */
+  *,
+  ::before,
+  ::after,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
 
-  html,
+  html {
+    scrollbar-gutter: stable;
+    overflow-x: clip;
+  }
+
   body {
-    overflow-x: hidden;
-    position: relative;
-    max-width: 100vw;
+    overflow-x: clip;
+    width: 100%;
+    font-family: var(--app-font, var(--font-outfit));
+  }
+
+  /* Neutraliza el margen/padding de compensación de react-remove-scroll;
+     html ya reserva el ancho del scrollbar vía scrollbar-gutter: stable,
+     sin crear un segundo scrollbar en body. */
+  html body[data-scroll-locked] {
+    margin-right: 0px !important;
+    padding-right: 0px !important;
+    --removed-body-scroll-bar-size: 0px !important;
   }
 }
 
 @keyframes accordion-down {
-  from {
-    height: 0
-  }
-
-  to {
-    height: var(--radix-accordion-content-height)
-  }
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
 }
 
 @keyframes accordion-up {
-  from {
-    height: var(--radix-accordion-content-height)
-  }
-
-  to {
-    height: 0
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
-@keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes pulse-glow {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
 }
 
 :root {
-  /* Mobile-first radius (slightly smaller for touch) */
-  --radius: 0.875rem;
+  --font-outfit: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Premium Color Palette - Light Mode */
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  /* Ultra-modern rounded radius (20px standard) */
+  --radius: 1.25rem;
+
+  /* Modern Palette - Light Mode inspired by Dribbble */
+  --background: oklch(0.978 0.008 270); /* #F4F6FB clean soft lavender-white */
+  --foreground: oklch(0.18 0.02 265);   /* Crisp dark neutral */
+  --card: oklch(1 0 0);                /* Pure white */
+  --card-foreground: oklch(0.18 0.02 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.18 0.02 265);
 
-  /* Primary: Vibrant Violet-Fuchsia gradient base */
-  --primary: oklch(0.558 0.288 302.321);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-light: oklch(0.627 0.265 303.9);
-  --primary-dark: oklch(0.488 0.243 304.5);
+  /* Color de marca: lo cambia Ajustes > Apariencia (SettingsEffects). Todo lo demás deriva de aquí. */
+  --brand: oklch(0.58 0.24 275);
+  --primary: var(--brand);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-light: color-mix(in oklab, var(--brand) 75%, white);
+  --primary-dark: color-mix(in oklab, var(--brand) 80%, black);
 
-  /* Secondary: Refined neutrals */
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  /* Secondary */
+  --secondary: oklch(0.96 0.01 270);
+  --secondary-foreground: oklch(0.25 0.02 265);
 
-  /* Muted: Softer backgrounds */
-  --muted: oklch(0.965 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* Muted */
+  --muted: oklch(0.95 0.008 270);
+  --muted-foreground: oklch(0.52 0.02 265);
 
-  /* Accent: Subtle highlights */
-  --accent: oklch(0.96 0.01 302);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Accent */
+  --accent: color-mix(in oklab, var(--brand) 10%, white);
+  --accent-foreground: color-mix(in oklab, var(--brand) 85%, black);
 
-  /* Destructive: Warm red */
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
+  /* Destructive */
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
 
   /* Borders & Inputs */
-  --border: oklch(0.91 0 0);
-  --input: oklch(0.94 0 0);
-  --ring: oklch(0.558 0.288 302.321);
+  --border: oklch(0.92 0.008 270);
+  --input: oklch(0.93 0.008 270);
+  --ring: var(--brand);
 
-  /* Premium Chart Colors */
-  --chart-1: oklch(0.558 0.288 302.321);
-  /* Violet */
-  --chart-2: oklch(0.623 0.214 259.815);
-  /* Blue */
-  --chart-3: oklch(0.769 0.188 70.08);
-  /* Yellow-Green */
-  --chart-4: oklch(0.828 0.189 84.429);
-  /* Yellow */
-  --chart-5: oklch(0.645 0.246 16.439);
-  /* Orange */
+  /* Semantic Highlights */
+  --income: oklch(0.65 0.19 145);     /* Emerald */
+  --expense: oklch(0.63 0.24 12);     /* Rose */
+  --savings: var(--brand);
 
-  /* Financial Semantic Colors */
-  --income: oklch(0.65 0.19 145);
-  /* Emerald */
-  --expense: oklch(0.63 0.24 12);
-  /* Rose */
-  --savings: oklch(0.55 0.22 220);
-  /* Blue */
-  --loan-lent: oklch(0.68 0.19 65);
-  /* Amber/Gold */
-  --loan-borrowed: oklch(0.58 0.21 250);
-  /* Indigo */
+  /* Charts */
+  --chart-1: var(--brand);
+  --chart-2: oklch(0.68 0.18 220); /* Sky Blue */
+  --chart-3: oklch(0.75 0.17 145); /* Emerald */
+  --chart-4: oklch(0.78 0.18 65);  /* Amber */
+  --chart-5: oklch(0.66 0.22 25);  /* Coral */
 
-  /* Premium Dashboard Palette - Light */
-  --premium-cyan: oklch(0.85 0.22 190);
-  --premium-blue: oklch(0.80 0.20 210);
-  --premium-pink: oklch(0.75 0.35 0);
-  --premium-dark: oklch(0.12 0.04 260);
-  --premium-glass: oklch(1 0 0 / 0.7);
-  --premium-glass-border: oklch(1 0 0 / 0.12);
-
-  /* Glassmorphism 2.0 - Depth & Refinement (Boutique Standard) */
-  --glass-bg: oklch(1 0 0 / 0.02);
-  --glass-border: oklch(1 0 0 / 0.08);
-  --glass-blur: 32px;
-  --glass-shine: linear-gradient(135deg, oklch(1 0 0 / 0.03), transparent 60%);
-
-  /* Boutique Shadows - Multi-layered & Diffuse */
-  --shadow-boutique: 0 1px 2px oklch(0 0 0 / 0.02),
-    0 8px 16px -4px oklch(0 0 0 / 0.04),
-    0 24px 48px -12px oklch(0 0 0 / 0.06);
-  --shadow-raised: 0 0 0 1px oklch(1 0 0 / 0.05),
-    0 4px 6px -1px oklch(0 0 0 / 0.1),
-    0 2px 4px -1px oklch(0 0 0 / 0.06);
-
-  --shadow-premium-sm: 0 2px 4px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.02);
-  --shadow-premium-md: 0 10px 20px -5px oklch(0 0 0 / 0.08), 0 4px 6px -2px oklch(0 0 0 / 0.03);
-  --shadow-premium-lg: 0 20px 40px -10px oklch(0 0 0 / 0.12), 0 10px 15px -3px oklch(0 0 0 / 0.05);
-  --shadow-glow-cyan: 0 0 25px -5px oklch(var(--premium-cyan) / 0.4);
-  --shadow-glow-pink: 0 0 25px -5px oklch(var(--premium-pink) / 0.4);
-
-  /* Smooth Transitions */
-  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --transition-fast: all 0.15s ease-out;
-
-  /* Sidebar */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.91 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Sidebar Tokens */
+  --sidebar: var(--brand);
+  --sidebar-foreground: oklch(0.99 0 0);
+  --sidebar-primary: oklch(1 0 0);
+  --sidebar-primary-foreground: var(--brand);
+  --sidebar-accent: color-mix(in oklab, var(--brand) 80%, white);
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.12);
+  --sidebar-ring: oklch(1 0 0 / 0.3);
 }
 
 .dark {
-  /* Premium Color Palette - Elite Dark Mode (Deep Slate / Charcoal) */
-  --background: oklch(0.12 0.02 260);
-  /* Deep Navy Slate */
-  --foreground: oklch(0.95 0.01 260);
-  --card: oklch(0.16 0.02 260);
-  /* Slate Card */
-  --card-foreground: oklch(0.95 0.01 260);
-  --popover: oklch(0.18 0.02 260);
-  --popover-foreground: oklch(0.95 0.01 260);
+  --radius: 1.25rem;
 
-  /* Primary: Vibrant Violet with subtle glow */
-  --primary: oklch(0.65 0.25 300);
+  --background: oklch(0.12 0.015 265); /* #121318 deep charcoal */
+  --foreground: oklch(0.96 0.005 265);
+  --card: oklch(0.17 0.015 265);       /* #1c1d24 card */
+  --card-foreground: oklch(0.96 0.005 265);
+  --popover: oklch(0.19 0.015 265);
+  --popover-foreground: oklch(0.96 0.005 265);
+
+  --primary: color-mix(in oklab, var(--brand) 82%, white);
   --primary-foreground: oklch(0.99 0 0);
-  --primary-light: oklch(0.72 0.22 300);
-  --primary-dark: oklch(0.58 0.28 300);
+  --primary-light: color-mix(in oklab, var(--brand) 65%, white);
+  --primary-dark: color-mix(in oklab, var(--brand) 85%, black);
 
-  /* Secondary: Elegant Slate Blue neutrals */
-  --secondary: oklch(0.22 0.03 260);
-  --secondary-foreground: oklch(0.95 0.01 260);
+  --secondary: oklch(0.22 0.015 265);
+  --secondary-foreground: oklch(0.96 0.005 265);
 
-  /* Muted: Soft Navy backgrounds */
-  --muted: oklch(0.18 0.02 260);
-  --muted-foreground: oklch(0.65 0.02 260);
+  --muted: oklch(0.20 0.015 265);
+  --muted-foreground: oklch(0.65 0.015 265);
 
-  /* Accent: Electric highlights */
-  --accent: oklch(0.25 0.05 300);
+  --accent: color-mix(in oklab, var(--brand) 20%, var(--card));
   --accent-foreground: oklch(0.99 0 0);
 
-  /* Destructive */
   --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-foreground: oklch(0.99 0 0);
 
-  /* Borders & Inputs: Refined with transparency */
-  --border: oklch(1 0 0 / 0.08);
-  --input: oklch(1 0 0 / 0.1);
-  --ring: oklch(0.65 0.25 300);
+  --border: oklch(1 0 0 / 0.09);
+  --input: oklch(1 0 0 / 0.12);
+  --ring: color-mix(in oklab, var(--brand) 82%, white);
 
-  /* Premium Chart Colors (optimized for deep slate) */
-  --chart-1: oklch(0.65 0.25 300);
-  --chart-2: oklch(0.68 0.18 250);
-  --chart-3: oklch(0.78 0.18 145);
-  --chart-4: oklch(0.82 0.15 85);
-  --chart-5: oklch(0.7 0.22 25);
-
-  /* Financial Semantic Colors (dark mode) */
-  --loan-borrowed: oklch(0.65 0.2 280);
-
-  /* Premium Dashboard Palette - Dark */
-  --premium-cyan: #00D1FF;
-  --premium-blue: #007AFF;
-  --premium-pink: #FF007A;
-  --premium-dark: #09090B;
-
-  /* Dark Mode Refinement (Boutique Standard) */
-  --glass-bg: oklch(0.12 0.02 260 / 0.45);
-  --glass-border: oklch(1 0 0 / 0.08);
-  --glass-blur: 32px;
-  --glass-shine: linear-gradient(135deg, oklch(1 0 0 / 0.05), transparent 50%);
-
-  /* Multi-layered shadows for dark mode */
-  --shadow-boutique: 0 1px 2px oklch(0 0 0 / 0.1),
-    0 8px 16px -4px oklch(0 0 0 / 0.2),
-    0 24px 48px -12px oklch(0 0 0 / 0.3);
-
-  --shadow-premium-sm: 0 2px 4px oklch(0 0 0 / 0.2);
-  --shadow-premium-md: 0 12px 24px -6px oklch(0 0 0 / 0.4);
-  --shadow-premium-lg: 0 24px 48px -12px oklch(0 0 0 / 0.6);
-
-  /* Sidebar (Elite Dark) */
-  --sidebar: oklch(0.12 0.02 260);
-  /* Same as background for a unified look */
-  --sidebar-foreground: oklch(0.95 0.01 260);
-  --sidebar-primary: oklch(0.65 0.25 300);
+  --sidebar: oklch(0.15 0.015 265);
+  --sidebar-foreground: oklch(0.96 0.005 265);
+  --sidebar-primary: color-mix(in oklab, var(--brand) 82%, white);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.18 0.02 260);
-  --sidebar-accent-foreground: oklch(0.95 0.01 260);
+  --sidebar-accent: oklch(0.22 0.02 265);
+  --sidebar-accent-foreground: oklch(0.96 0.005 265);
   --sidebar-border: oklch(1 0 0 / 0.08);
-  --sidebar-ring: oklch(0.65 0.25 300);
+  --sidebar-ring: color-mix(in oklab, var(--brand) 82%, white);
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Mobile-optimized touch targets */
-  @media (max-width: 768px) {
-
-    button,
-    a,
-    [role="button"] {
-      min-height: 44px;
-      min-width: 44px;
-    }
-  }
+/* Glassmorphism & Soft Shadows Helper Classes */
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-@layer utilities {
-
-  /* Premium Gradient Utilities */
-  .gradient-primary {
-    background: linear-gradient(135deg, oklch(0.558 0.288 302.321), oklch(0.627 0.265 303.9));
-  }
-
-  .gradient-primary-dark {
-    background: linear-gradient(135deg, oklch(0.488 0.243 304.5), oklch(0.558 0.288 302.321));
-  }
-
-  .gradient-income {
-    background: linear-gradient(135deg, oklch(0.6 0.19 145), oklch(0.7 0.18 150));
-  }
-
-  .gradient-expense {
-    background: linear-gradient(135deg, oklch(0.58 0.24 12), oklch(0.68 0.22 15));
-  }
-
-  .gradient-savings {
-    background: linear-gradient(135deg, oklch(0.5 0.22 220), oklch(0.6 0.2 225));
-  }
-
-  /* Glassmorphism 2.0 */
-  .glass {
-    position: relative;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    transition: var(--transition-smooth);
-  }
-
-  .glass::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: var(--glass-shine);
-    border-radius: inherit;
-    z-index: -1;
-  }
-
-  /* Compact premium dashboard widgets */
-  .dashboard-compact [data-slot="card"] {
-    gap: 0.75rem;
-    border-radius: 1.25rem;
-  }
-
-  .dashboard-compact [data-slot="card-header"] {
-    padding: 0.75rem 1rem 0.35rem;
-  }
-
-  .dashboard-compact [data-slot="card-content"] {
-    padding: 0 1rem 0.85rem;
-  }
-
-  .dashboard-compact [data-slot="card-footer"] {
-    padding: 0 1rem 0.85rem;
-  }
-
-  .dashboard-compact [data-slot="card-title"] {
-    font-size: 0.8rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .dashboard-compact [data-slot="card-description"] {
-    font-size: 0.75rem;
-  }
-
-  /* Boutique Shadows - Multi-layered & Diffuse are now in :root */
-
-  /* Dashboard Premium Shell - BOUTIQUE REFINEMENT */
-  .dashboard-premium .widget-surface {
-    position: relative;
-    overflow: hidden;
-    border-radius: 2rem;
-    border: 1px solid oklch(1 0 0 / 0.08);
-    background: white;
-    box-shadow: var(--shadow-boutique);
-    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .dashboard-premium .widget-surface:hover {
-    transform: translateY(-4px) scale(1.01);
-    box-shadow: 0 40px 80px -20px oklch(0 0 0 / 0.12);
-  }
-
-  .dark .dashboard-premium .widget-surface {
-    background: oklch(0.12 0.02 260);
-    border: 1px solid oklch(1 0 0 / 0.1);
-    box-shadow:
-      0 0 0 1px oklch(1 0 0 / 0.03),
-      0 40px 80px -20px oklch(0 0 0 / 0.6);
-  }
-
-  .dark .dashboard-premium .widget-surface:hover {
-    border-color: oklch(1 0 0 / 0.2);
-    background: oklch(0.14 0.02 260);
-  }
-
-  .dashboard-premium .widget-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 1.5rem 1.75rem 1rem;
-  }
-
-  .dashboard-premium .widget-kicker {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: oklch(var(--muted-foreground));
-  }
-
-  .dashboard-premium .widget-title {
-    font-size: 0.9375rem;
-    font-weight: 500;
-    color: oklch(var(--foreground));
-  }
-
-  .dashboard-premium .widget-subtitle {
-    font-size: 0.75rem;
-    font-weight: 400;
-    color: oklch(var(--muted-foreground));
-  }
-
-  /* Premium Shadow Utilities */
-  .shadow-premium-sm {
-    box-shadow: var(--shadow-sm);
-  }
-
-  .shadow-premium-md {
-    box-shadow: var(--shadow-md);
-  }
-
-  .shadow-premium-lg {
-    box-shadow: var(--shadow-lg);
-  }
-
-  .shadow-premium-xl {
-    box-shadow: var(--shadow-xl);
-  }
-
-  .shadow-glow {
-    box-shadow: var(--shadow-glow);
-  }
-
-  /* Smooth Transition Utilities */
-  .transition-smooth {
-    transition: var(--transition-smooth);
-  }
-
-  .transition-bounce {
-    transition: var(--transition-bounce);
-  }
-
-  /* Mobile-optimized spacing */
-  @media (max-width: 640px) {
-    .container {
-      padding-right: 1rem;
-    }
-  }
-
-  /* Custom Premium Scrollbar */
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: oklch(0.5 0 0 / 0.1);
-    border-radius: 10px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.5 0 0 / 0.2);
-  }
+.dark .glass {
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* Ultra Soft Dribbble-style Cards */
+.card-modern {
+  border-radius: var(--radius-2xl);
+  background-color: var(--card);
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.06), 0 2px 8px -2px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease-in-out;
+}
+
+.card-modern:hover {
+  box-shadow: 0 16px 36px -10px rgba(99, 102, 241, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Mobile App Safe Area & Scrollbar Utilities */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==========================================================================
+   Tarjetas Hero Dinámicas (Columna derecha del Dashboard)
+   Se adaptan automáticamente a cualquier color personalizado (--brand)
+   y lucen espectaculares tanto en Modo Claro como en Modo Oscuro.
+   ========================================================================== */
+
+/* 1. Tarjeta Wave Superior (Flujo Neto) */
+.card-brand-wave {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--brand) 92%, white) 0%, var(--brand) 55%, color-mix(in oklab, var(--brand) 80%, black) 100%);
+  color: #ffffff;
+  box-shadow: 0 16px 36px -10px color-mix(in oklab, var(--brand) 38%, transparent);
+}
+
+.dark .card-brand-wave {
+  background: linear-gradient(145deg, color-mix(in oklab, var(--brand) 35%, var(--card)) 0%, color-mix(in oklab, var(--brand) 18%, var(--card)) 100%);
+  color: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--brand) 35%, transparent);
+  box-shadow: 0 16px 36px -12px color-mix(in oklab, var(--brand) 30%, transparent);
+}
+
+/* 2. Tarjeta con Anillo Circular de Ahorro (Centro) */
+.card-brand-savings {
+  background: linear-gradient(180deg, var(--brand) 0%, color-mix(in oklab, var(--brand) 85%, black) 50%, color-mix(in oklab, var(--brand) 70%, black) 100%);
+  color: #ffffff;
+  box-shadow: 0 20px 40px -12px color-mix(in oklab, var(--brand) 40%, transparent);
+}
+
+.dark .card-brand-savings {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--brand) 40%, var(--card)) 0%, color-mix(in oklab, var(--brand) 22%, var(--card)) 100%);
+  color: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--brand) 40%, transparent);
+  box-shadow: 0 20px 40px -12px color-mix(in oklab, var(--brand) 25%, transparent);
+}
+
+/* Capa decorativa rotada detrás de la tarjeta de ahorro */
+.card-brand-tilted {
+  background-color: color-mix(in oklab, var(--brand) 65%, black);
+}
+
+.dark .card-brand-tilted {
+  background-color: color-mix(in oklab, var(--brand) 22%, black);
+  border: 1px solid color-mix(in oklab, var(--brand) 20%, transparent);
+}
+
+/* 3. Tiles Rápidas Inferiores (Movimientos y Presupuesto) */
+.card-brand-tile-1 {
+  background: linear-gradient(135deg, var(--brand) 0%, color-mix(in oklab, var(--brand) 80%, black) 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 28px -10px color-mix(in oklab, var(--brand) 32%, transparent);
+}
+
+.dark .card-brand-tile-1 {
+  background: linear-gradient(145deg, color-mix(in oklab, var(--brand) 32%, var(--card)) 0%, color-mix(in oklab, var(--brand) 16%, var(--card)) 100%);
+  color: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--brand) 30%, transparent);
+  box-shadow: 0 14px 28px -10px color-mix(in oklab, var(--brand) 20%, transparent);
+}
+
+.card-brand-tile-2 {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--brand) 90%, black) 0%, color-mix(in oklab, var(--brand) 70%, black) 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 28px -10px color-mix(in oklab, var(--brand) 32%, transparent);
+}
+
+.dark .card-brand-tile-2 {
+  background: linear-gradient(145deg, color-mix(in oklab, var(--brand) 26%, var(--card)) 0%, color-mix(in oklab, var(--brand) 12%, var(--card)) 100%);
+  color: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--brand) 25%, transparent);
+  box-shadow: 0 14px 28px -10px color-mix(in oklab, var(--brand) 18%, transparent);
+}
+
+/* Botones de acción circular dentro de las tarjetas de marca (Pills) */
+.btn-brand-pill {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.btn-brand-pill:hover {
+  background: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
+.dark .btn-brand-pill {
+  background: color-mix(in oklab, var(--brand) 30%, rgba(255, 255, 255, 0.15));
+  color: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--brand) 45%, rgba(255, 255, 255, 0.3));
+}
+
+.dark .btn-brand-pill:hover {
+  background: color-mix(in oklab, var(--brand) 45%, rgba(255, 255, 255, 0.25));
+}
+
+/* ==========================================================================
+   Cashew Style Extensions: Material You, Alto Contraste, Movimiento & Íconos
+   ========================================================================== */
+
+:root {
+  --icon-radius: 1rem;
+}
+
+/* Material You ("Interfaz colorida"): tiñe suavemente fondos y tarjetas con tu color */
+html.material-you {
+  --background: color-mix(in oklab, var(--brand) 6%, #F8FAFC);
+  --card: color-mix(in oklab, var(--brand) 2.5%, #FFFFFF);
+  --muted: color-mix(in oklab, var(--brand) 9%, #F1F5F9);
+  --secondary: color-mix(in oklab, var(--brand) 10%, #F1F5F9);
+  --border: color-mix(in oklab, var(--brand) 16%, #E2E8F0);
+}
+
+html.dark.material-you {
+  --background: color-mix(in oklab, var(--brand) 10%, #0E1016);
+  --card: color-mix(in oklab, var(--brand) 7%, #171923);
+  --muted: color-mix(in oklab, var(--brand) 14%, #1E202B);
+  --secondary: color-mix(in oklab, var(--brand) 14%, #1E202B);
+  --border: color-mix(in oklab, var(--brand) 24%, rgba(255, 255, 255, 0.08));
+}
+
+/* Texto de alto contraste real */
+html.high-contrast {
+  --foreground: #09090B;
+  --card-foreground: #09090B;
+  --muted-foreground: #334155;
+  --border: #CBD5E1;
+}
+
+html.dark.high-contrast {
+  --foreground: #FFFFFF;
+  --card-foreground: #FFFFFF;
+  --muted-foreground: #CBD5E1;
+  --border: rgba(255, 255, 255, 0.24);
+}
+
+/* Animaciones y movimiento */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.08s !important;
+  transition-duration: 0.08s !important;
+}
+
+html.no-motion *,
+html.no-motion *::before,
+html.no-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+
+
+

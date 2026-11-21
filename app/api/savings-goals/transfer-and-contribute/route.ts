@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { TransactionService } from '@/lib/services/transaction-service'
 import { z } from 'zod'
 
 const transferContributeSchema = z.object({
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
         // Verify goal belongs to user
         const { data: goal, error: goalError } = await supabase
             .from('savings_goals')
-            .select('*, primary_account:accounts!primary_account_id(id)')
+            .select('*, primary_account:accounts!primary_account_id(id, currency_code)')
             .eq('id', validatedData.goalId)
             .eq('user_id', user.id)
             .single()
@@ -42,14 +43,20 @@ export async function POST(request: NextRequest) {
 
         if (!toAccountId) {
             return NextResponse.json({
-                error: 'La meta no tiene cuenta vinculada. Especifica una cuenta destino.'
+                error: 'La meta no tiene cuenta vinculada. Selecciona una cuenta destino.'
             }, { status: 400 })
         }
 
-        // Verify both accounts belong to user
+        if (validatedData.fromAccountId === toAccountId) {
+            return NextResponse.json({
+                error: 'La cuenta origen y la cuenta destino deben ser diferentes'
+            }, { status: 400 })
+        }
+
+        // Fetch both accounts to validate ownership and balance
         const { data: accounts } = await supabase
             .from('accounts')
-            .select('id')
+            .select('id, name, current_balance, currency_code, account_type')
             .eq('user_id', user.id)
             .in('id', [validatedData.fromAccountId, toAccountId])
 
@@ -57,38 +64,44 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Una o ambas cuentas no encontradas' }, { status: 404 })
         }
 
-        const transactionDate = validatedData.date || new Date().toISOString().split('T')[0]
-
-        // Create transfer transaction
-        const { data: transaction, error: transactionError } = await supabase
-            .from('transactions')
-            .insert({
-                user_id: user.id,
-                type: 'TRANSFER',
-                amount: validatedData.amount,
-                date: transactionDate,
-                description: `Transferencia a meta: ${goal.name}`,
-                notes: validatedData.notes,
-                from_account_id: validatedData.fromAccountId,
-                to_account_id: toAccountId,
-                status: 'COMPLETED'
-            })
-            .select()
-            .single()
-
-        if (transactionError) {
-            console.error('Error creating transaction:', transactionError)
-            return NextResponse.json({ error: 'Error al crear la transferencia' }, { status: 500 })
+        const fromAccount = accounts.find((a) => a.id === validatedData.fromAccountId)!
+        if (fromAccount.account_type !== 'CREDIT_CARD' && Number(fromAccount.current_balance) < validatedData.amount) {
+            return NextResponse.json({
+                error: `Saldo insuficiente en "${fromAccount.name}"`
+            }, { status: 400 })
         }
 
-        // Create contribution linked to transaction
+        const isoDate = validatedData.date
+            ? new Date(validatedData.date).toISOString()
+            : new Date().toISOString()
+        const dateOnly = isoDate.split('T')[0]
+
+        // 1. Create transfer transaction and update account balances via TransactionService
+        const transaction = await TransactionService.processTransaction(supabase, {
+            userId: user.id,
+            type: 'TRANSFER',
+            accountId: validatedData.fromAccountId,
+            transferToAccountId: toAccountId,
+            amount: validatedData.amount,
+            currency: fromAccount.currency_code || goal.currency || 'PEN',
+            transactionDate: isoDate,
+            description: `Aporte a meta: ${goal.name}`,
+            notes: validatedData.notes,
+            savingsGoalId: validatedData.goalId,
+            metadata: {
+                isSavingsContribution: true,
+                savingsGoalId: validatedData.goalId,
+            },
+        })
+
+        // 2. Create contribution linked to transaction
         const { data: contribution, error: contributionError } = await supabase
             .from('goal_contributions')
             .insert({
                 goal_id: validatedData.goalId,
                 user_id: user.id,
                 amount: validatedData.amount,
-                contribution_date: transactionDate,
+                contribution_date: dateOnly,
                 notes: validatedData.notes,
                 transaction_id: transaction.id
             })
@@ -97,22 +110,24 @@ export async function POST(request: NextRequest) {
 
         if (contributionError) {
             console.error('Error creating contribution:', contributionError)
-            // Rollback transaction
-            await supabase.from('transactions').delete().eq('id', transaction.id)
-            return NextResponse.json({ error: 'Error al crear la contribución' }, { status: 500 })
+            return NextResponse.json({ error: 'Error al registrar la contribución' }, { status: 500 })
         }
 
-        // Update goal
-        const newCurrentAmount = Number(goal.current_amount) + validatedData.amount
+        // 3. Update goal progress & auto-complete if reached 100%
+        const newCurrentAmount = Number(goal.current_amount || 0) + validatedData.amount
+        const isNowCompleted = newCurrentAmount >= Number(goal.target_amount || 0)
+
         await supabase
             .from('savings_goals')
             .update({
                 current_amount: newCurrentAmount,
-                total_contributions: goal.total_contributions + 1
+                total_contributions: Number(goal.total_contributions || 0) + 1,
+                ...(isNowCompleted && goal.status !== 'COMPLETED'
+                    ? { status: 'COMPLETED', completed_date: dateOnly }
+                    : {}),
             })
             .eq('id', validatedData.goalId)
 
-        // Get updated goal
         const { data: updatedGoal } = await supabase
             .from('savings_goals')
             .select('*')
@@ -120,17 +135,15 @@ export async function POST(request: NextRequest) {
             .single()
 
         return NextResponse.json({
-            message: 'Transferencia y contribución exitosa',
+            message: 'Aporte y transferencia registrados con éxito',
             transaction,
             contribution,
             goal: updatedGoal
         }, { status: 201 })
     } catch (error: any) {
-        // Next.js dynamic usage error detection - MUST re-throw immediately and silently
         if (error && (error.digest === 'DYNAMIC_SERVER_USAGE' || String(error).includes('Dynamic server usage'))) {
-            throw error;
+            throw error
         }
-
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
         }

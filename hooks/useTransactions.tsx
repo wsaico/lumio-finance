@@ -74,23 +74,29 @@ export function useTransactions(filters: Filters) {
                 if (errorData.details) {
                     console.error('[CREATE_TRANSACTION] Validation details:', errorData.details)
                 }
-                throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+                const err: any = new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+                err.details = errorData.details
+                throw err
             }
             return res.json()
         },
         onSuccess: (data: any) => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] }) // Balance changes!
+            queryClient.invalidateQueries({ queryKey: ['dashboard-analytics'] })
             notifyTransactionChange('created') // Notify budgets to refresh
 
             // CENTRALIZED SUCCESS TOAST - Only place where transaction success is shown
-            toast.success('Transacción guardada exitosamente')
+            toast.success('Transacción guardada exitosamente', { id: 'tx-saved' })
 
             // Budget warnings are now handled by the centralized alert system in budgets/page.tsx
         },
         onError: (error: any) => {
             console.error('[CREATE_TRANSACTION] Full error:', error)
-            toast.error(error.message || 'Error al registrar transacción')
+            toast.error(
+                error.message || 'Error al registrar transacción',
+                error.details ? { description: error.details } : undefined
+            )
         },
     })
 
@@ -110,18 +116,25 @@ export function useTransactions(filters: Filters) {
                     errorData = { error: text || 'Unknown error' }
                 }
                 console.error('[UPDATE_TRANSACTION] Error:', errorData)
-                throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+                const err: any = new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+                err.details = errorData.details
+                throw err
             }
             return res.json()
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
+            queryClient.invalidateQueries({ queryKey: ['transaction'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-analytics'] })
             notifyTransactionChange('updated') // Notify budgets to refresh
             toast.success('Transacción actualizada')
         },
-        onError: (error) => {
-            toast.error('Error al actualizar transacción')
+        onError: (error: any) => {
+            toast.error(
+                error?.message || 'Error al actualizar transacción',
+                error?.details ? { description: error.details } : undefined
+            )
             console.error(error)
         },
     })
@@ -137,6 +150,7 @@ export function useTransactions(filters: Filters) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] })
             queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-analytics'] })
             notifyTransactionChange('deleted')
             toast.success('Transacción eliminada')
         },
