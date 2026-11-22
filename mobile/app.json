@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Lumio Finance",
+    "slug": "wsaico",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "lumio",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#5B35D5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lumio.finance",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Desbloquea Lumio Finance de forma rápida y segura con Face ID.",
+        "NSCameraUsageDescription": "Escanea boletas y comprobantes con la IA de Lumio.",
+        "NSPhotoLibraryUsageDescription": "Adjunta comprobantes de pago e imagen de perfil."
+      }
+    },
+    "android": {
+      "package": "com.lumio.finance",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#5B35D5"
+      },
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permite usar Face ID para proteger tus finanzas en Lumio."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite seleccionar comprobantes y foto de perfil.",
+          "cameraPermission": "Permite fotografiar boletas para escanearlas con IA."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1b062d7e-cb5a-4fee-9d8d-b521ec042fca"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1b062d7e-cb5a-4fee-9d8d-b521ec042fca"
+      }
+    },
+    "owner": "wpboxs-team"
+  }
+}
