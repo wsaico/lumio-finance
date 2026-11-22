@@ -1,6 +1,7 @@
 
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient as createSupabaseJsClient } from '@supabase/supabase-js'
+import { cookies, headers } from 'next/headers'
 
 export async function createClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -26,6 +27,48 @@ export async function createClient() {
                 })
             })
         } as any;
+    }
+
+    // Dual-auth bridge: support Bearer JWT from mobile app alongside SSR cookies
+    const headerStore = await headers();
+    const authHeader = headerStore.get('authorization') || headerStore.get('Authorization');
+    if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+        const token = authHeader.slice(7).trim();
+        if (token) {
+            const bearerClient = createSupabaseJsClient(supabaseUrl, supabaseAnonKey, {
+                global: {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                },
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false,
+                },
+            });
+
+            const origGetUser = bearerClient.auth.getUser.bind(bearerClient.auth);
+            bearerClient.auth.getUser = (jwt?: string) => origGetUser(jwt || token);
+            bearerClient.auth.getSession = async () => {
+                const { data, error } = await origGetUser(token);
+                return {
+                    data: {
+                        session: data.user
+                            ? ({
+                                  access_token: token,
+                                  refresh_token: '',
+                                  expires_in: 3600,
+                                  token_type: 'bearer',
+                                  user: data.user,
+                              } as any)
+                            : null,
+                    },
+                    error,
+                };
+            };
+
+            return bearerClient as any;
+        }
     }
 
     // Attempt to get cookies - if this throws during build, let it propagate!

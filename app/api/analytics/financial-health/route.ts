@@ -47,7 +47,7 @@ export async function GET(request: Request) {
             db
                 .from("accounts")
                 .select(
-                    "id, name, currency_code, current_balance, credit_limit, used_balance, account_type, is_active, exclude_from_stats"
+                    "id, name, currency_code, current_balance, credit_limit, used_balance, account_type, payment_due_day, is_active, exclude_from_stats"
                 )
                 .eq("user_id", user.id)
                 .eq("is_active", true),
@@ -541,8 +541,8 @@ export async function GET(request: Request) {
             })
             .sort((a: any, b: any) => b.percent - a.percent)
 
-        // 7. Active Loans (Receivables + Payables + Legacy Loans table)
-        const [receivablesRes, payablesRes, legacyLoansRes] = await Promise.all([
+        // 7. Active Loans (Receivables + Payables + Legacy Loans table) + Recurring Rules
+        const [receivablesRes, payablesRes, legacyLoansRes, recurringRes] = await Promise.all([
             db
                 .from("accounts_receivable")
                 .select("*")
@@ -560,6 +560,11 @@ export async function GET(request: Request) {
                 .select("*")
                 .eq("user_id", user.id)
                 .eq("status", "ACTIVE"),
+            db
+                .from("recurring_rules")
+                .select("id, amount, currency_code, transaction_type, next_occurrence, frequency, is_active")
+                .eq("user_id", user.id)
+                .eq("is_active", true),
         ])
 
         const mappedLoans: any[] = []
@@ -615,6 +620,199 @@ export async function GET(request: Request) {
         const totalPayable = mappedLoans
             .filter((l) => l.type === "BORROWED")
             .reduce((acc, c) => acc + c.remaining, 0)
+
+        // 7B. Month-End Balance Projection (handles variable income + upcoming bills)
+        const todayDateStr = format(now, "yyyy-MM-dd")
+        const monthEndDateStr = format(endOfMonth(now), "yyyy-MM-dd")
+        const activeRules = recurringRes.data || []
+
+        let upcomingFixedBills = 0
+        let scheduledRemainingIncome = 0
+
+        for (const r of activeRules) {
+            const nextDate = r.next_occurrence ? String(r.next_occurrence).slice(0, 10) : ""
+            if (!nextDate || nextDate <= todayDateStr || nextDate > monthEndDateStr) continue
+            const amtBase = toBase(Number(r.amount || 0), r.currency_code)
+            if (r.transaction_type === "EXPENSE") {
+                upcomingFixedBills += amtBase
+            } else if (r.transaction_type === "INCOME") {
+                scheduledRemainingIncome += amtBase
+            }
+        }
+
+        for (const p of payablesRes.data || []) {
+            if ((p.metadata as any)?.isCreditCardMirror) continue
+            const rem = toBase(Number(p.outstanding_balance || 0), p.currency_code)
+            if (rem <= 0 || !p.due_date) continue
+            const dueStr = String(p.due_date).slice(0, 10)
+            if (dueStr <= monthEndDateStr) {
+                upcomingFixedBills += rem
+            }
+        }
+
+        for (const acc of accounts) {
+            if (acc.account_type !== "CREDIT_CARD") continue
+            const used = Math.max(0, Number(acc.used_balance || 0))
+            const dueDay = Number(acc.payment_due_day || 0)
+            if (used > 0 && dueDay >= currentDayOfMonth && dueDay <= daysInCurrentMonth) {
+                upcomingFixedBills += toBase(used, acc.currency_code)
+            }
+        }
+
+        const txAmountBase = (tx: any) =>
+            toBase(
+                Number(tx.amount || 0),
+                tx.currency_code || accountCurrencyMap[tx.account_id] || targetCurrency
+            )
+
+        const variableThisMonthExpense = thisMonthExpenseTxs.reduce((sum: number, tx: any) => {
+            const m = String(tx.metadata?.mode || "")
+            if (m === "SUBSCRIPTION" || m === "RECURRING") return sum
+            return sum + txAmountBase(tx)
+        }, 0)
+
+        const rawDailyVar = variableThisMonthExpense / currentDayOfMonth
+        const histDailyVar = avgMonthlyExpense > 0 ? avgMonthlyExpense / daysInCurrentMonth : rawDailyVar
+        const dailyVarBurn =
+            currentDayOfMonth >= 5
+                ? rawDailyVar * 0.7 + histDailyVar * 0.3
+                : rawDailyVar * 0.35 + histDailyVar * 0.65
+
+        const remainingVariableExpense = dailyVarBurn * remainingDaysInMonth
+        const remainingProjectedExpense = remainingVariableExpense + upcomingFixedBills
+
+        const priorIncomes = trendOrder
+            .slice(0, -1)
+            .slice(-3)
+            .map((k) => Number(trendBuckets[k]?.income || 0))
+            .filter((v) => v > 0)
+
+        const avgPriorIncome =
+            priorIncomes.length > 0
+                ? priorIncomes.reduce((s, v) => s + v, 0) / priorIncomes.length
+                : 0
+        const minPriorIncome = priorIncomes.length > 0 ? Math.min(...priorIncomes) : 0
+        const maxPriorIncome = priorIncomes.length > 0 ? Math.max(...priorIncomes) : 0
+        const incomeIsVariable =
+            priorIncomes.length >= 2 && avgPriorIncome > 0
+                ? (maxPriorIncome - minPriorIncome) / avgPriorIncome > 0.25
+                : priorIncomes.length <= 1
+
+        let expectedRemainingIncome = scheduledRemainingIncome
+        if (
+            expectedRemainingIncome <= 0 &&
+            !incomeIsVariable &&
+            avgPriorIncome > 0 &&
+            thisMonthIncome < avgPriorIncome * 0.85
+        ) {
+            expectedRemainingIncome = Math.max(0, avgPriorIncome - thisMonthIncome)
+        }
+        const optimisticRemainingIncome =
+            minPriorIncome > 0 && thisMonthIncome < minPriorIncome
+                ? Math.max(expectedRemainingIncome, minPriorIncome - thisMonthIncome)
+                : expectedRemainingIncome
+
+        const projectedMonthEndBalance =
+            totalLiquidity + expectedRemainingIncome - remainingProjectedExpense
+        const conservativeMonthEndBalance = totalLiquidity - remainingProjectedExpense
+        const optimisticMonthEndBalance =
+            totalLiquidity + optimisticRemainingIncome - remainingProjectedExpense
+        const safetyBuffer = Math.max(200, avgMonthlyExpense * 0.15)
+        const shortfallRisk: "SAFE" | "TIGHT" | "SHORTFALL" =
+            projectedMonthEndBalance < 0
+                ? "SHORTFALL"
+                : projectedMonthEndBalance < safetyBuffer
+                  ? "TIGHT"
+                  : "SAFE"
+        const shortfallAmount =
+            projectedMonthEndBalance < 0 ? Math.abs(projectedMonthEndBalance) : 0
+
+        // 7C. Detector de Gastos Hormiga & Reto Día sin Gasto
+        const antThreshold = Math.round(toBase(40, "PEN") * 100) / 100
+        const thirtyDaysAgoIso = startOfDay(subDays(now, 29)).toISOString()
+        const antSourceTxs =
+            currentDayOfMonth < 7 && thisMonthExpenseTxs.length < 5
+                ? windowTxs.filter(
+                      (tx: any) =>
+                          tx.transaction_type === "EXPENSE" &&
+                          new Date(tx.transaction_date).toISOString() >= thirtyDaysAgoIso
+                  )
+                : thisMonthExpenseTxs
+
+        const antGroups: Record<
+            string,
+            { name: string; categoryName: string; color: string; count: number; total: number }
+        > = {}
+        const sourceExpenseTotal = antSourceTxs.reduce(
+            (s: number, tx: any) => s + txAmountBase(tx),
+            0
+        )
+
+        for (const tx of antSourceTxs) {
+            const amt = txAmountBase(tx)
+            if (amt <= 0 || amt > antThreshold) continue
+            const cat = tx.expense_category_id ? idToCategory[tx.expense_category_id] : null
+            const rawDesc = String(tx.description || "")
+                .replace(/yape\s*(a|de)?\s*/gi, "")
+                .replace(/plin\s*(a|de)?\s*/gi, "")
+                .replace(/[^\p{L}\p{N}\s]/gu, " ")
+                .trim()
+            const tokens = rawDesc.split(/\s+/).filter((w) => w.length >= 2).slice(0, 2)
+            const key =
+                tokens.length > 0
+                    ? tokens.join(" ").toLowerCase()
+                    : `cat:${cat?.id || "otros"}`
+            const displayLabel =
+                tokens.length > 0
+                    ? tokens.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+                    : cat?.name || "Gasto pequeño"
+
+            if (!antGroups[key]) {
+                antGroups[key] = {
+                    name: displayLabel,
+                    categoryName: cat?.name || "Varios",
+                    color: cat?.color || "#FF7A33",
+                    count: 0,
+                    total: 0,
+                }
+            }
+            antGroups[key].count += 1
+            antGroups[key].total += amt
+        }
+
+        const allAntGroups = Object.values(antGroups)
+        let matchedAnt = allAntGroups.filter((g) => g.count >= 3)
+        if (matchedAnt.length === 0) {
+            matchedAnt = allAntGroups.filter((g) => g.count >= 2)
+        }
+        matchedAnt.sort((a, b) => b.total - a.total)
+
+        const antTotalMonthly = matchedAnt.reduce((s, g) => s + g.total, 0)
+        const antCount = matchedAnt.reduce((s, g) => s + g.count, 0)
+        const antPercentOfExpense =
+            sourceExpenseTotal > 0 ? Math.round((antTotalMonthly / sourceExpenseTotal) * 1000) / 10 : 0
+        const topLeaks = matchedAnt.slice(0, 4).map((g) => ({
+            name: g.name,
+            categoryName: g.categoryName,
+            color: g.color,
+            count: g.count,
+            avgTicket: Math.round((g.total / g.count) * 100) / 100,
+            total: Math.round(g.total * 100) / 100,
+            yearlyProjection: Math.round(g.total * 12 * 100) / 100,
+        }))
+
+        const topAnt = topLeaks[0]
+        const concreteTip = topAnt
+            ? `Si reduces "${topAnt.name}" a la mitad, liberarías ${(topAnt.total / 2).toFixed(0)} ${targetCurrency} al mes (${Math.round(topAnt.yearlyProjection / 2)} ${targetCurrency} al año).`
+            : "Aún no se detectan gastos hormiga frecuentes este mes."
+
+        const spendDaySet = new Set<number>()
+        for (const tx of thisMonthExpenseTxs) {
+            const d = new Date(tx.transaction_date).getDate()
+            if (d >= 1 && d <= currentDayOfMonth) spendDaySet.add(d)
+        }
+        const noSpendCount = Math.max(0, currentDayOfMonth - spendDaySet.size)
+        const todayIsNoSpend = !spendDaySet.has(currentDayOfMonth)
 
         // 8. Smart Financial Insights
         const insights: { type: string; title: string; message: string; impact: string }[] = []
@@ -727,6 +925,29 @@ export async function GET(request: Request) {
             forecast: {
                 predictedMonthEndExpense: Math.round(predictedMonthEndExpense * 100) / 100,
                 estimatedYearlySavings: Math.round(estimatedYearlySavings * 100) / 100,
+                projectedMonthEndBalance: Math.round(projectedMonthEndBalance * 100) / 100,
+                conservativeMonthEndBalance: Math.round(conservativeMonthEndBalance * 100) / 100,
+                optimisticMonthEndBalance: Math.round(optimisticMonthEndBalance * 100) / 100,
+                remainingProjectedExpense: Math.round(remainingProjectedExpense * 100) / 100,
+                upcomingFixedBills: Math.round(upcomingFixedBills * 100) / 100,
+                expectedRemainingIncome: Math.round(expectedRemainingIncome * 100) / 100,
+                daysLeftInMonth: remainingDaysInMonth,
+                incomeIsVariable,
+                shortfallRisk,
+                shortfallAmount: Math.round(shortfallAmount * 100) / 100,
+            },
+            antExpenses: {
+                threshold: antThreshold,
+                totalMonthly: Math.round(antTotalMonthly * 100) / 100,
+                count: antCount,
+                percentOfExpense: antPercentOfExpense,
+                topLeaks,
+                concreteTip,
+                noSpendDays: {
+                    countThisMonth: noSpendCount,
+                    elapsedDays: currentDayOfMonth,
+                    todayIsNoSpend,
+                },
             },
             annualizedImpact,
             budgets: mappedBudgets,

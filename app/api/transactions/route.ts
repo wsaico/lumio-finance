@@ -9,6 +9,8 @@ import { mapTransaction } from '@/lib/mappers'
 import { TransactionService } from '@/lib/services/transaction-service'
 import { getMonthDateRangeInTimezone, getDayDateRangeInTimezone } from '@/lib/timezone'
 import { getUserEntitlementsServer } from '@/lib/server/entitlements'
+import { syncSmartNotifications } from '@/lib/server/smart-notifications'
+import { getCurrencySymbol } from '@/lib/currencies'
 
 const transactionSchema = z.object({
     type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'SAVINGS_DEPOSIT', 'SAVINGS_WITHDRAWAL']),
@@ -186,6 +188,27 @@ export async function POST(req: Request) {
 
         // VALIDATION: Reject loan creation attempts
         const metadata = validData.metadata || {}
+        const clientRequestId =
+            typeof metadata.clientRequestId === 'string' && metadata.clientRequestId.trim().length >= 8
+                ? metadata.clientRequestId.trim()
+                : null
+
+        if (clientRequestId) {
+            const { data: existingTx } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('metadata->>clientRequestId', clientRequestId)
+                .maybeSingle()
+
+            if (existingTx) {
+                return NextResponse.json(
+                    { ...mapTransaction(existingTx), deduplicated: true },
+                    { status: 200 }
+                )
+            }
+        }
+
         if (metadata.mode === 'LOAN_LENT' || metadata.mode === 'LOAN_BORROWED') {
             return new NextResponse(
                 JSON.stringify({
@@ -217,6 +240,12 @@ export async function POST(req: Request) {
                 metadata.mode === 'RECURRING') &&
             metadata.initialPaymentState === 'PENDING'
 
+        let expenseAccount: {
+            name: string
+            account_type: string
+            currency_code?: string | null
+        } | null = null
+
         // VALIDATION: Check balance for EXPENSE and TRANSFER only when immediately paid today
         if (
             (validData.type === 'EXPENSE' || validData.type === 'TRANSFER') &&
@@ -226,21 +255,22 @@ export async function POST(req: Request) {
         ) {
             const { data: account } = await supabase
                 .from('accounts')
-                .select('current_balance, name, account_type, credit_limit, used_balance')
+                .select('current_balance, name, account_type, credit_limit, used_balance, currency_code')
                 .eq('id', validData.accountId)
                 .eq('user_id', user.id)
                 .single()
 
             if (account) {
+                expenseAccount = account
                 const requestedAmount = validData.amount
 
-                // Validar límites para cuentas de tipo CREDIT_CARD
+                // Validar límites para cuentas de tipo CREDIT_CARD (solo si tiene línea configurada > 0)
                 if (account.account_type === 'CREDIT_CARD') {
                     const creditLimit = Number(account.credit_limit || 0)
                     const usedBalance = Math.abs(Number(account.used_balance || 0))
                     const availableCredit = creditLimit - usedBalance
 
-                    if (requestedAmount > availableCredit) {
+                    if (creditLimit > 0 && requestedAmount > availableCredit) {
                         const shortage = requestedAmount - availableCredit
                         return new NextResponse(
                             JSON.stringify({
@@ -388,8 +418,67 @@ export async function POST(req: Request) {
             }
         }
 
-        // 3. Update Budgets (Background)
+        // 4. Smart Alerts on immediate EXPENSE (credit card rule + 80%/100% budget thresholds)
+        if (validData.type === 'EXPENSE') {
+            let isCreditCardExpense =
+                expenseAccount?.account_type === 'CREDIT_CARD' || Boolean(validData.creditCardId)
+            let cardName = expenseAccount?.name || 'Tarjeta de crédito'
 
+            if (!expenseAccount && validData.accountId) {
+                const { data: accFallback } = await supabase
+                    .from('accounts')
+                    .select('name, account_type, currency_code')
+                    .eq('id', validData.accountId)
+                    .eq('user_id', user.id)
+                    .maybeSingle()
+                if (accFallback) {
+                    expenseAccount = accFallback
+                    if (accFallback.account_type === 'CREDIT_CARD') {
+                        isCreditCardExpense = true
+                        cardName = accFallback.name || cardName
+                    }
+                }
+            }
+
+            if (isCreditCardExpense) {
+                if (expenseAccount?.account_type !== 'CREDIT_CARD' && validData.creditCardId) {
+                    const { data: cardRow } = await supabase
+                        .from('credit_cards')
+                        .select('name')
+                        .eq('id', validData.creditCardId)
+                        .eq('user_id', user.id)
+                        .maybeSingle()
+                    if (cardRow?.name) cardName = cardRow.name
+                }
+
+                const sym = getCurrencySymbol(validData.currency || expenseAccount?.currency_code || 'PEN')
+                const amountFormatted = Number(validData.amount).toLocaleString('es-PE', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                })
+
+                const { error: notifErr } = await supabase
+                    .from('notifications')
+                    .insert({
+                        user_id: user.id,
+                        type: 'WARNING',
+                        title: 'Alerta: gasto registrado con tarjeta de crédito',
+                        message: `Registraste un gasto de ${sym} ${amountFormatted} en "${cardName}". Regla activa: evita nuevos gastos con tarjeta mientras liquidas tu deuda.`,
+                        data: {
+                            module: 'accounts',
+                            actionUrl: '/dashboard/accounts',
+                            transactionId: transaction.id,
+                            accountId: validData.accountId,
+                            alertType: 'CREDIT_CARD_EXPENSE',
+                        },
+                    })
+                if (notifErr) console.error('[TX_CC_ALERT]', notifErr)
+            }
+
+            await syncSmartNotifications(supabase, user.id).catch((err) =>
+                console.error('[TX_NOTIF_SYNC]', err)
+            )
+        }
 
         return NextResponse.json(transaction)
 

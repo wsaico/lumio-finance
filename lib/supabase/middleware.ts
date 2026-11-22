@@ -28,6 +28,31 @@ export async function updateSession(request: NextRequest) {
 
     const isApiRoute = pathname.startsWith('/api/')
 
+    // Handle CORS & OPTIONS preflight for API routes (supports Expo Web + Mobile clients)
+    if (isApiRoute) {
+        const origin = request.headers.get('origin')
+        const corsHeaders: Record<string, string> = {
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Client-Info, apikey',
+            'Vary': 'Origin',
+        }
+        if (origin) {
+            corsHeaders['Access-Control-Allow-Origin'] = origin
+            corsHeaders['Access-Control-Allow-Credentials'] = 'true'
+        } else {
+            corsHeaders['Access-Control-Allow-Origin'] = '*'
+        }
+
+        if (request.method === 'OPTIONS') {
+            return new NextResponse(null, { status: 204, headers: corsHeaders })
+        }
+
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+            supabaseResponse.headers.set(key, value)
+        })
+        return supabaseResponse
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
 

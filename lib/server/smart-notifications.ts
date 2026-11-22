@@ -23,6 +23,15 @@ function fmtMoney(amount: number, currencyCode?: string): string {
     })}`
 }
 
+function getIsoWeekKey(date: Date): string {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+    const dayNum = d.getUTCDay() || 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
+}
+
 export async function processDueRecurringRules(supabase: SupabaseClient, userId?: string) {
     const now = new Date()
     const todayStr = toDateOnly(now)
@@ -172,10 +181,23 @@ export async function processDueRecurringRules(supabase: SupabaseClient, userId?
  * Smart Notification Engine across ALL modules for the authenticated user.
  * Deduplicates notifications using data.dedupeKey so the user never gets spammed.
  */
-export async function syncSmartNotifications(supabase: SupabaseClient, userId: string) {
+export type SmartAlertCategory =
+    | 'subscriptions'
+    | 'budgets'
+    | 'shortfall'
+    | 'payments'
+    | 'unusual_expense'
+    | 'savings'
+
+export async function syncSmartNotifications(
+    supabase: SupabaseClient,
+    userId: string,
+    options?: { mutedTypes?: string[] }
+) {
     const now = new Date()
     const todayStr = toDateOnly(now)
     const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const mutedSet = new Set(options?.mutedTypes || [])
 
     // 1. Execute any due recurring rules first
     const recurringSummary = await processDueRecurringRules(supabase, userId)
@@ -210,8 +232,10 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
         message: string,
         module: string,
         actionUrl: string,
-        extra?: Record<string, any>
+        extra?: Record<string, any>,
+        alertCategory?: SmartAlertCategory
     ) => {
+        if (alertCategory && mutedSet.has(alertCategory)) return
         if (existingKeys.has(dedupeKey)) return
         existingKeys.add(dedupeKey)
         toInsert.push({
@@ -219,12 +243,20 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
             type,
             title,
             message,
-            data: { dedupeKey, module, actionUrl, ...(extra || {}) },
+            data: {
+                dedupeKey,
+                module,
+                actionUrl,
+                ...(alertCategory ? { alertCategory } : {}),
+                ...(extra || {}),
+            },
         })
     }
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+    const ninetyDaysAgo = new Date(now)
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
 
     // 3. Parallel scan across all modules
     const [
@@ -236,10 +268,12 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
         payablesRes,
         cardsRes,
         goalsRes,
+        liquidAccountsRes,
+        historyExpensesRes,
     ] = await Promise.allSettled([
         supabase
             .from('recurring_rules')
-            .select('id, rule_name, description, amount, currency_code, next_occurrence, execution_method')
+            .select('id, rule_name, description, amount, currency_code, transaction_type, next_occurrence, execution_method')
             .eq('user_id', userId)
             .eq('is_active', true),
         supabase
@@ -249,12 +283,12 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
             .or('metadata->>mode.eq.UPCOMING,metadata->>mode.eq.SCHEDULED'),
         supabase
             .from('budgets')
-            .select('id, name, amount, currency_code, category_id, include_categories, period, is_active')
+            .select('id, name, amount, currency_code, include_categories, period, is_active, type, budget_year, budget_month')
             .eq('user_id', userId)
             .eq('is_active', true),
         supabase
             .from('transactions')
-            .select('amount, expense_category_id, metadata')
+            .select('amount, expense_category_id, subcategory_id, metadata')
             .eq('user_id', userId)
             .eq('transaction_type', 'EXPENSE')
             .gte('transaction_date', monthStart)
@@ -266,7 +300,7 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
             .in('status', ['PENDING', 'PARTIAL', 'OVERDUE']),
         supabase
             .from('accounts_payable')
-            .select('id, contact_name, outstanding_balance, currency_code, due_date, status')
+            .select('id, contact_name, outstanding_balance, currency_code, due_date, status, metadata')
             .eq('user_id', userId)
             .in('status', ['PENDING', 'PARTIAL', 'OVERDUE']),
         supabase
@@ -277,9 +311,23 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
             .eq('is_active', true),
         supabase
             .from('savings_goals')
-            .select('id, name, target_amount, current_amount, currency_code, target_date, status')
+            .select('id, name, target_amount, current_amount, currency, priority, target_date, status')
             .eq('user_id', userId)
             .neq('status', 'CANCELLED'),
+        supabase
+            .from('accounts')
+            .select('id, current_balance, currency_code, account_type, exclude_from_stats')
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .neq('account_type', 'CREDIT_CARD'),
+        supabase
+            .from('transactions')
+            .select('id, amount, description, expense_category_id, currency_code, transaction_date, metadata')
+            .eq('user_id', userId)
+            .eq('transaction_type', 'EXPENSE')
+            .gte('transaction_date', ninetyDaysAgo.toISOString())
+            .order('transaction_date', { ascending: false })
+            .limit(400),
     ])
 
     // A. Upcoming & Overdue Recurring Rules (honoring each rule's configured reminderDays)
@@ -300,7 +348,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Cobro vencido: ${label}`,
                     `Estaba programado hace ${Math.abs(days)} día(s) por ${fmtMoney(Number(r.amount), r.currency_code)}. Toca "¿Pagar?" para confirmarlo.`,
                     'subscriptions',
-                    '/dashboard/subscriptions'
+                    '/dashboard/subscriptions',
+                    undefined,
+                    'subscriptions'
                 )
             } else if (days >= 1 && days <= Math.max(1, reminderWindow)) {
                 const autoText = isAuto ? 'se cobrará automáticamente' : 'pendiente de confirmación ("¿Pagar?")'
@@ -311,7 +361,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Próximo vencimiento: ${label}`,
                     `${fmtMoney(Number(r.amount), r.currency_code)} vence ${when} (${autoText}).`,
                     'subscriptions',
-                    '/dashboard/subscriptions'
+                    '/dashboard/subscriptions',
+                    undefined,
+                    'subscriptions'
                 )
             }
         }
@@ -330,7 +382,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                         `Pago próximo atrasado: ${label}`,
                         `Estaba programado hace ${Math.abs(days)} día(s) por ${fmtMoney(Number(tx.amount), tx.currency_code)}.`,
                         'transactions',
-                        '/dashboard/transactions'
+                        '/dashboard/transactions',
+                        undefined,
+                        'subscriptions'
                     )
                 } else {
                     const when = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`
@@ -340,7 +394,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                         `Pago próximo: ${label}`,
                         `Tienes programado ${fmtMoney(Number(tx.amount), tx.currency_code)} para ${when}.`,
                         'transactions',
-                        '/dashboard/transactions'
+                        '/dashboard/transactions',
+                        undefined,
+                        'subscriptions'
                     )
                 }
             }
@@ -353,17 +409,29 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
             (tx: any) => tx.metadata?.mode !== 'UPCOMING' && tx.metadata?.mode !== 'SCHEDULED'
         )
         for (const b of budgetsRes.value.data) {
+            if (b.type === 'SAVINGS' || b.type === 'INCOME') continue
+            if (
+                b.budget_year &&
+                b.budget_month &&
+                (Number(b.budget_year) !== now.getFullYear() ||
+                    Number(b.budget_month) !== now.getMonth() + 1)
+            ) {
+                continue
+            }
+
             const limit = Number(b.amount || 0)
             if (limit <= 0) continue
 
-            const catIds: string[] = Array.isArray(b.include_categories) && b.include_categories.length > 0
+            const catIds: string[] = Array.isArray(b.include_categories)
                 ? b.include_categories
-                : b.category_id
-                    ? [b.category_id]
-                    : []
+                : []
 
             const spent = expenses.reduce((sum: number, tx: any) => {
-                if (catIds.length === 0 || (tx.expense_category_id && catIds.includes(tx.expense_category_id))) {
+                if (
+                    catIds.length === 0 ||
+                    (tx.expense_category_id && catIds.includes(tx.expense_category_id)) ||
+                    (tx.subcategory_id && catIds.includes(tx.subcategory_id))
+                ) {
                     return sum + Number(tx.amount || 0)
                 }
                 return sum
@@ -377,7 +445,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Presupuesto excedido: ${b.name}`,
                     `Llevas ${fmtMoney(spent, b.currency_code)} de ${fmtMoney(limit, b.currency_code)} (${pct}%).`,
                     'budgets',
-                    '/dashboard/budgets'
+                    '/dashboard/budgets',
+                    undefined,
+                    'budgets'
                 )
             } else if (pct >= 80) {
                 queueNotif(
@@ -386,7 +456,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Presupuesto al ${pct}%: ${b.name}`,
                     `Has usado ${fmtMoney(spent, b.currency_code)} de tu límite de ${fmtMoney(limit, b.currency_code)}.`,
                     'budgets',
-                    '/dashboard/budgets'
+                    '/dashboard/budgets',
+                    undefined,
+                    'budgets'
                 )
             }
         }
@@ -405,7 +477,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Préstamo vencido (${actionLabel})`,
                     `${loan.contact_name}: saldo pendiente de ${fmtMoney(Number(loan.outstanding_balance), loan.currency_code)}.`,
                     'loans',
-                    '/dashboard/loans'
+                    '/dashboard/loans',
+                    undefined,
+                    'payments'
                 )
             } else if (days <= 3) {
                 const when = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`
@@ -415,7 +489,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Préstamo vence ${when} (${actionLabel})`,
                     `${loan.contact_name}: ${fmtMoney(Number(loan.outstanding_balance), loan.currency_code)} pendientes.`,
                     'loans',
-                    '/dashboard/loans'
+                    '/dashboard/loans',
+                    undefined,
+                    'payments'
                 )
             }
         }
@@ -448,7 +524,27 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                         `Pago de tarjeta: ${card.name}`,
                         `Tu fecha límite es ${when}. Saldo usado: ${fmtMoney(used, card.currency_code)}.`,
                         'accounts',
-                        '/dashboard/accounts'
+                        '/dashboard/accounts',
+                        undefined,
+                        'payments'
+                    )
+                }
+                if (daysUntilDue >= 0 && daysUntilDue <= 3) {
+                    const title3d =
+                        daysUntilDue === 0
+                            ? `Hoy vence pago de tarjeta: ${card.name}`
+                            : daysUntilDue === 1
+                              ? `Mañana vence pago de tarjeta: ${card.name}`
+                              : `En ${daysUntilDue} días vence tarjeta: ${card.name}`
+                    queueNotif(
+                        `card_due_3d_${card.id}_${toDateOnly(dueThisMonth)}`,
+                        'REMINDER',
+                        title3d,
+                        `Recuerda pagar el "Pago del mes" completo para evitar intereses por compras nuevas. Saldo usado: ${fmtMoney(used, card.currency_code)}.`,
+                        'accounts',
+                        '/dashboard/accounts',
+                        undefined,
+                        'payments'
                     )
                 }
             }
@@ -461,7 +557,9 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `Uso alto de tarjeta: ${card.name}`,
                     `Estás utilizando el ${pct}% de tu línea de crédito (${fmtMoney(used, card.currency_code)}).`,
                     'accounts',
-                    '/dashboard/accounts'
+                    '/dashboard/accounts',
+                    undefined,
+                    'payments'
                 )
             }
         }
@@ -472,6 +570,7 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
         for (const goal of goalsRes.value.data) {
             const target = Number(goal.target_amount || 0)
             const current = Number(goal.current_amount || 0)
+            const goalCurrency = goal.currency || 'PEN'
             if (target <= 0) continue
 
             if (current >= target) {
@@ -479,9 +578,11 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                     `goal_done_${goal.id}`,
                     'SUCCESS',
                     `¡Meta alcanzada: ${goal.name}!`,
-                    `Completaste el 100% de tu objetivo (${fmtMoney(target, goal.currency_code)}).`,
+                    `Completaste el 100% de tu objetivo (${fmtMoney(target, goalCurrency)}).`,
                     'savings',
-                    '/dashboard/savings-goals'
+                    '/dashboard/savings-goals',
+                    undefined,
+                    'savings'
                 )
             } else if (goal.target_date) {
                 const days = diffDays(goal.target_date, now)
@@ -492,11 +593,183 @@ export async function syncSmartNotifications(supabase: SupabaseClient, userId: s
                         `goal_soon_${goal.id}_${goal.target_date.split('T')[0]}`,
                         'REMINDER',
                         `Meta próxima a vencer: ${goal.name}`,
-                        `Faltan ${fmtMoney(remaining, goal.currency_code)} y la fecha objetivo es ${when}.`,
+                        `Faltan ${fmtMoney(remaining, goalCurrency)} y la fecha objetivo es ${when}.`,
                         'savings',
-                        '/dashboard/savings-goals'
+                        '/dashboard/savings-goals',
+                        undefined,
+                        'savings'
                     )
                 }
+            }
+        }
+    }
+
+    // G. Weekly Debt & Goal Progress Summary
+    const activeCards = cardsRes.status === 'fulfilled' && cardsRes.value.data ? cardsRes.value.data : []
+    const activePayables =
+        payablesRes.status === 'fulfilled' && payablesRes.value.data ? payablesRes.value.data : []
+    const allGoals = goalsRes.status === 'fulfilled' && goalsRes.value.data ? goalsRes.value.data : []
+    const activeGoals = allGoals.filter((g: any) => g.status === 'ACTIVE' && Number(g.target_amount || 0) > 0)
+
+    const cardDebtTotal = activeCards.reduce(
+        (sum: number, c: any) => sum + Math.max(0, Number(c.used_balance || 0)),
+        0
+    )
+    const loanDebtTotal = activePayables
+        .filter((p: any) => !(p.metadata as any)?.isCreditCardMirror)
+        .reduce((sum: number, p: any) => sum + Math.max(0, Number(p.outstanding_balance || 0)), 0)
+    const totalDebt = Math.round((cardDebtTotal + loanDebtTotal) * 100) / 100
+
+    if (totalDebt > 0 || activeGoals.length > 0) {
+        const priorityRank: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+        const sortedGoals = [...activeGoals].sort(
+            (a: any, b: any) =>
+                (priorityRank[String(a.priority || 'MEDIUM')] ?? 9) -
+                (priorityRank[String(b.priority || 'MEDIUM')] ?? 9)
+        )
+        const primaryGoal = sortedGoals[0]
+        const parts: string[] = []
+        if (totalDebt > 0) {
+            parts.push(
+                cardDebtTotal > 0
+                    ? `Deuda total restante: ${fmtMoney(totalDebt, 'PEN')} (Tarjeta: ${fmtMoney(cardDebtTotal, 'PEN')})`
+                    : `Deuda total restante: ${fmtMoney(totalDebt, 'PEN')}`
+            )
+        }
+        if (primaryGoal) {
+            const target = Number(primaryGoal.target_amount || 0)
+            const current = Number(primaryGoal.current_amount || 0)
+            const pct = target > 0 ? Math.min(100, Math.round((current / target) * 1000) / 10) : 0
+            const remaining = Math.max(0, target - current)
+            parts.push(
+                `Meta "${primaryGoal.name}": ${pct}% completado, restan ${fmtMoney(remaining, primaryGoal.currency || 'PEN')}`
+            )
+        }
+
+        queueNotif(
+            `weekly_summary_${getIsoWeekKey(now)}`,
+            'INFO',
+            'Resumen semanal: deuda y avance de meta',
+            `${parts.join(' · ')}.`,
+            'savings',
+            '/dashboard/savings-goals',
+            undefined,
+            'savings'
+        )
+    }
+
+    // H. Riesgo de fin de mes (proyección de liquidez frente a gasto + pagos fijos restantes)
+    if (!mutedSet.has('shortfall') && now.getDate() >= 5 && liquidAccountsRes.status === 'fulfilled') {
+        const liquidAccounts = (liquidAccountsRes.value.data || []).filter(
+            (a: any) => !a.exclude_from_stats
+        )
+        const liquidTotal = liquidAccounts.reduce(
+            (sum: number, a: any) => sum + Number(a.current_balance || 0),
+            0
+        )
+
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+        const currentDay = Math.max(1, now.getDate())
+        const remainingDays = Math.max(0, daysInMonth - currentDay)
+        const monthEndStr = toDateOnly(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+
+        const monthVarExpenses = (
+            monthExpensesRes.status === 'fulfilled' && monthExpensesRes.value.data
+                ? monthExpensesRes.value.data
+                : []
+        ).reduce((sum: number, tx: any) => {
+            const m = String(tx.metadata?.mode || '')
+            if (m === 'SUBSCRIPTION' || m === 'RECURRING' || m === 'UPCOMING' || m === 'SCHEDULED') {
+                return sum
+            }
+            return sum + Number(tx.amount || 0)
+        }, 0)
+
+        const projectedVarOutflow = (monthVarExpenses / currentDay) * remainingDays
+        let upcomingBills = 0
+        if (rulesRes.status === 'fulfilled' && rulesRes.value.data) {
+            for (const r of rulesRes.value.data) {
+                if (r.transaction_type === 'INCOME') continue
+                const nextOcc = r.next_occurrence ? String(r.next_occurrence).slice(0, 10) : ''
+                if (nextOcc > todayStr && nextOcc <= monthEndStr) {
+                    upcomingBills += Number(r.amount || 0)
+                }
+            }
+        }
+        for (const p of activePayables) {
+            if ((p.metadata as any)?.isCreditCardMirror || !p.due_date) continue
+            if (String(p.due_date).slice(0, 10) <= monthEndStr) {
+                upcomingBills += Number(p.outstanding_balance || 0)
+            }
+        }
+        for (const card of activeCards) {
+            const used = Math.max(0, Number(card.used_balance || 0))
+            const dueDay = Number(card.payment_due_day || 0)
+            if (used > 0 && dueDay >= currentDay && dueDay <= daysInMonth) {
+                upcomingBills += used
+            }
+        }
+
+        const projectedEndBalance = liquidTotal - (projectedVarOutflow + upcomingBills)
+        if (projectedEndBalance < 0 && (monthVarExpenses > 0 || upcomingBills > 0)) {
+            const shortfall = Math.abs(projectedEndBalance)
+            queueNotif(
+                `month_end_shortfall_${yearMonth}`,
+                'WARNING',
+                'Riesgo de quedar corto este mes',
+                `Al ritmo actual y con tus pagos próximos (${fmtMoney(upcomingBills, 'PEN')}) podrías cerrar el mes con un faltante estimado de ${fmtMoney(shortfall, 'PEN')}.`,
+                'analysis',
+                '/dashboard/analysis',
+                { shortfall: Math.round(shortfall * 100) / 100 },
+                'shortfall'
+            )
+        }
+    }
+
+    // I. Gasto inusual (últimos 7 días >= 2.5x del promedio histórico en la misma categoría)
+    if (
+        !mutedSet.has('unusual_expense') &&
+        historyExpensesRes.status === 'fulfilled' &&
+        historyExpensesRes.value.data
+    ) {
+        const histTxs = (historyExpensesRes.value.data || []).filter(
+            (tx: any) => tx.metadata?.mode !== 'UPCOMING' && tx.metadata?.mode !== 'SCHEDULED'
+        )
+        const byCat: Record<string, any[]> = {}
+        for (const tx of histTxs) {
+            if (!tx.expense_category_id) continue
+            if (!byCat[tx.expense_category_id]) byCat[tx.expense_category_id] = []
+            byCat[tx.expense_category_id].push(tx)
+        }
+
+        const sevenDaysAgoMs = now.getTime() - 7 * 86400000
+        let unusualCount = 0
+
+        for (const tx of histTxs) {
+            if (unusualCount >= 2) break
+            if (!tx.expense_category_id) continue
+            const txMs = new Date(tx.transaction_date).getTime()
+            if (txMs < sevenDaysAgoMs) continue
+            const amt = Number(tx.amount || 0)
+            if (amt < 100) continue
+
+            const peers = (byCat[tx.expense_category_id] || []).filter((p) => p.id !== tx.id)
+            if (peers.length < 3) continue
+            const avg =
+                peers.reduce((s, p) => s + Number(p.amount || 0), 0) / Math.max(1, peers.length)
+            if (avg > 0 && amt >= avg * 2.5) {
+                const factor = (amt / avg).toFixed(1)
+                queueNotif(
+                    `unusual_expense_${tx.id}`,
+                    'WARNING',
+                    'Gasto inusual detectado',
+                    `"${tx.description || 'Movimiento'}" por ${fmtMoney(amt, tx.currency_code)} es ${factor} veces tu promedio en esta categoría.`,
+                    'transactions',
+                    '/dashboard/transactions',
+                    { transactionId: tx.id },
+                    'unusual_expense'
+                )
+                unusualCount += 1
             }
         }
     }
