@@ -15,7 +15,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { safeGoBack } from '@/lib/navigation';
 import { showAppToast } from '@/stores/toast-store';
 import { PremiumButton } from '@/components/ui/PremiumButton';
@@ -34,6 +34,15 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!isSupabaseConfigured) {
+      showAppToast.error({
+        title: 'Configuración de servidor incompleta',
+        description:
+          'Configura EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY en las variables de entorno de Expo.',
+      });
+      return;
+    }
+
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       showAppToast.warning({ title: 'Ingresa un correo válido' });
@@ -75,6 +84,15 @@ export default function LoginScreen() {
   };
 
   const handleGoogleOAuth = async () => {
+    if (!isSupabaseConfigured) {
+      showAppToast.error({
+        title: 'Configuración de servidor incompleta',
+        description:
+          'Configura EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY en las variables de entorno de Expo.',
+      });
+      return;
+    }
+
     setGoogleLoading(true);
     try {
       const redirectTo = Linking.createURL('auth/callback');

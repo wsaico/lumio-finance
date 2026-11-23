@@ -1,13 +1,14 @@
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 function resolveApiBaseUrl(): string {
-  if (typeof window !== 'undefined') {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
       return `${window.location.protocol}//${host}:3000`;
     }
   }
-  return (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+  return (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://lumio.esaico.com').replace(/\/+$/, '');
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -93,6 +93,10 @@ function RootNavigator() {
         setActiveUserId(sess.user.id);
       }
       setSessionChecked(true);
+    }).catch(() => {
+      if (mounted) {
+        setSessionChecked(true);
+      }
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -183,8 +187,30 @@ function RootNavigator() {
   );
 }
 
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={styles.errorContainer}>
+      <ScrollView
+        contentContainerStyle={styles.errorContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.errorTitle}>Ocurrió un error inesperado</Text>
+        <Text style={styles.errorMessage}>
+          {error?.message || 'No se pudo cargar la aplicación correctamente.'}
+        </Text>
+        <Pressable
+          onPress={retry}
+          style={({ pressed }) => [styles.retryButton, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Outfit_400Regular,
     Outfit_500Medium,
     Outfit_600SemiBold,
@@ -207,13 +233,15 @@ export default function RootLayout() {
     Montserrat_800ExtraBold,
   });
 
+  const fontsReady = fontsLoaded || Boolean(fontError);
+
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsReady) {
       SplashScreen.hideAsync().catch(() => undefined);
     }
-  }, [fontsLoaded]);
+  }, [fontsReady]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsReady) return null;
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -231,5 +259,41 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#F5F6FB',
+    paddingHorizontal: 24,
+    paddingVertical: 48,
+  },
+  errorContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#18192B',
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: 8,
+    backgroundColor: '#5B35D5',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

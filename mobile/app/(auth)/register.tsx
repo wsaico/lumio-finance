@@ -24,7 +24,7 @@ import {
   User,
 } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { apiPost } from '@/lib/api-client';
 import { detectDeviceRegion } from '@/lib/regions';
 import { showAppToast } from '@/stores/toast-store';
@@ -67,7 +67,16 @@ export default function RegisterScreen() {
   const sendOtpCode = async (
     payload: NonNullable<typeof pendingPayload>,
     isResend = false
-  ) => {
+  ): Promise<boolean> => {
+    if (!isSupabaseConfigured) {
+      showAppToast.error({
+        title: 'Configuración de servidor incompleta',
+        description:
+          'Configura EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY en las variables de entorno de Expo.',
+      });
+      return false;
+    }
+
     await apiPost(
       '/api/auth/register',
       { action: 'check', email: payload.email, isResend },
@@ -95,6 +104,7 @@ export default function RegisterScreen() {
           : otpError.message
       );
     }
+    return true;
   };
 
   const handleStartRegister = async () => {
@@ -124,7 +134,8 @@ export default function RegisterScreen() {
         currency: region.currencyCode,
         timezone: region.timezone,
       };
-      await sendOtpCode(payload, false);
+      const sent = await sendOtpCode(payload, false);
+      if (!sent) return;
       setPendingPayload(payload);
       setOtpDigits(Array(otpLength).fill(''));
       setCooldown(60);
@@ -147,7 +158,8 @@ export default function RegisterScreen() {
     if (!pendingPayload || cooldown > 0 || resending) return;
     setResending(true);
     try {
-      await sendOtpCode(pendingPayload, true);
+      const sent = await sendOtpCode(pendingPayload, true);
+      if (!sent) return;
       setOtpDigits(Array(otpLength).fill(''));
       setCooldown(60);
       otpRefs.current[0]?.focus();
