@@ -8,7 +8,7 @@ function resolveApiBaseUrl(): string {
       return `${window.location.protocol}//${host}:3000`;
     }
   }
-  return (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://lumio.esaico.com').replace(/\/+$/, '');
+  return (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://lumio-finance.vercel.app').replace(/\/+$/, '');
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
