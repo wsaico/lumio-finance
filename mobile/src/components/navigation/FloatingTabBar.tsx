@@ -42,32 +42,32 @@ const SPEED_DIAL = [
     href: '/transactions/new?type=EXPENSE',
     color: '#F43F5E',
     Icon: TrendingDown,
-    x: -108,
-    y: -52,
+    left: 4,
+    bottom: 80,
   },
   {
     label: 'Ingreso',
     href: '/transactions/new?type=INCOME',
     color: '#10B981',
     Icon: TrendingUp,
-    x: -40,
-    y: -112,
+    left: 74,
+    bottom: 146,
   },
   {
     label: 'Transferir',
     href: '/transactions/new?type=TRANSFER',
     color: '#6366F1',
     Icon: ArrowRightLeft,
-    x: 40,
-    y: -112,
+    left: 164,
+    bottom: 146,
   },
   {
     label: 'Escanear',
     href: '/transactions/new?type=EXPENSE&scan=1',
     color: '#FF7A33',
     Icon: Camera,
-    x: 108,
-    y: -52,
+    left: 234,
+    bottom: 80,
   },
 ] as const;
 
@@ -199,7 +199,7 @@ export function FloatingTabBar() {
           </View>
         </View>
 
-        {/* Central Elevated Quick-Add FAB + Radial Speed-Dial */}
+        {/* Central Elevated Quick-Add FAB */}
         <View
           pointerEvents="box-none"
           style={[
@@ -207,62 +207,6 @@ export function FloatingTabBar() {
             { bottom: Math.max(insets.bottom, 10) + 18 },
           ]}
         >
-          {quickOpen &&
-            SPEED_DIAL.map((item, idx) => {
-              const Icon = item.Icon;
-              return (
-                <Animated.View
-                  key={item.label}
-                  entering={
-                    theme.motion === 'none'
-                      ? undefined
-                      : ZoomIn.delay(idx * 35).springify().damping(18)
-                  }
-                  exiting={theme.motion === 'none' ? undefined : ZoomOut.duration(120)}
-                  style={[
-                    styles.dialItem,
-                    {
-                      transform: [{ translateX: item.x }, { translateY: item.y }],
-                    },
-                  ]}
-                >
-                  <Pressable
-                    onPress={() => {
-                      setQuickOpen(false);
-                      triggerHaptic('medium');
-                      router.push(item.href as any);
-                    }}
-                    style={styles.dialBtnWrap}
-                  >
-                    <View
-                      style={[
-                        styles.dialCircle,
-                        { backgroundColor: item.color, shadowColor: item.color },
-                      ]}
-                    >
-                      <Icon size={21} color="#FFFFFF" strokeWidth={2.3} />
-                    </View>
-                    <View
-                      style={[
-                        styles.dialLabelPill,
-                        { backgroundColor: theme.card, borderColor: theme.border },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: theme.text,
-                          fontFamily: theme.font('800'),
-                          fontSize: 10.5,
-                        }}
-                      >
-                        {item.label}
-                      </Text>
-                    </View>
-                  </Pressable>
-                </Animated.View>
-              );
-            })}
-
           <Pressable
             onPress={() => {
               triggerHaptic('medium');
@@ -290,6 +234,80 @@ export function FloatingTabBar() {
           </Pressable>
         </View>
       </View>
+
+      {/* Full-screen overlay for Radial Speed-Dial so Android never clips touches and Reanimated ZoomIn never resets position */}
+      {quickOpen ? (
+        <View pointerEvents="box-none" style={styles.dialOverlay}>
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.dialStage,
+              { marginBottom: Math.max(insets.bottom, 10) + 18 },
+            ]}
+          >
+            {SPEED_DIAL.map((item, idx) => {
+              const Icon = item.Icon;
+              return (
+                <View
+                  key={item.label}
+                  pointerEvents="box-none"
+                  style={[
+                    styles.dialItem,
+                    {
+                      left: item.left,
+                      bottom: item.bottom,
+                    },
+                  ]}
+                >
+                  <Animated.View
+                    entering={
+                      theme.motion === 'none'
+                        ? undefined
+                        : ZoomIn.delay(idx * 35).springify().damping(18)
+                    }
+                    exiting={theme.motion === 'none' ? undefined : ZoomOut.duration(120)}
+                  >
+                    <Pressable
+                      onPress={() => {
+                        setQuickOpen(false);
+                        triggerHaptic('medium');
+                        router.push(item.href as any);
+                      }}
+                      style={styles.dialBtnWrap}
+                    >
+                      <View
+                        style={[
+                          styles.dialCircle,
+                          { backgroundColor: item.color, shadowColor: item.color },
+                        ]}
+                      >
+                        <Icon size={21} color="#FFFFFF" strokeWidth={2.3} />
+                      </View>
+                      <View
+                        style={[
+                          styles.dialLabelPill,
+                          { backgroundColor: theme.card, borderColor: theme.border },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: theme.text,
+                            fontFamily: theme.font('800'),
+                            fontSize: 10.5,
+                          }}
+                        >
+                          {item.label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </Animated.View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
     </>
   );
 }
@@ -371,9 +389,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dialOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    zIndex: 70,
+  },
+  dialStage: {
+    position: 'relative',
+    width: 320,
+    height: 230,
+  },
   dialItem: {
     position: 'absolute',
-    zIndex: 70,
+    width: 82,
+    alignItems: 'center',
   },
   dialBtnWrap: {
     alignItems: 'center',
