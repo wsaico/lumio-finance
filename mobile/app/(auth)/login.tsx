@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -32,6 +32,8 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
+  const passwordRef = useRef<React.ComponentRef<typeof TextInput> | null>(null);
 
   const handleLogin = async () => {
     if (!isSupabaseConfigured) {
@@ -134,12 +136,15 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.bg }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={styles.flex}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
         >
           <Pressable
@@ -189,6 +194,10 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   autoComplete="email"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 140)}
                   style={[styles.input, { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(14) }]}
                 />
               </View>
@@ -208,12 +217,16 @@ export default function LoginScreen() {
               <View style={[styles.inputBox, { backgroundColor: theme.muted, borderColor: theme.border }]}>
                 <Lock size={17} color={theme.textMuted} />
                 <TextInput
+                  ref={passwordRef}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
                   secureTextEntry={!showPass}
                   autoComplete="password"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 140)}
                   style={[styles.input, { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(14) }]}
                 />
                 <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8}>
@@ -254,7 +267,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, padding: 20, gap: 20, justifyContent: 'center' },
+  scroll: { flexGrow: 1, padding: 20, paddingBottom: 32, gap: 20, justifyContent: 'center' },
   backBtn: {
     width: 42,
     height: 42,

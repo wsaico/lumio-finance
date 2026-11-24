@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { TopAppHeader } from '@/components/navigation/TopAppHeader';
@@ -29,14 +29,23 @@ export default function SettingsSectionScreen() {
     <View style={[styles.screen, { backgroundColor: theme.bg }]}>
       <TopAppHeader title={meta.title} subtitle={meta.subtitle} showBack />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {key === 'general' && <GeneralSection />}
-        {key === 'appearance' && <AppearanceSection />}
-        {key === 'transactions' && <TransactionsSection />}
-        {key === 'localization' && <LocalizationSection />}
-        {key === 'data' && <DataSection />}
-        {key === 'about' && <AboutSection />}
-      </ScrollView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
+        style={styles.screen}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scroll}
+        >
+          {key === 'general' && <GeneralSection />}
+          {key === 'appearance' && <AppearanceSection />}
+          {key === 'transactions' && <TransactionsSection />}
+          {key === 'localization' && <LocalizationSection />}
+          {key === 'data' && <DataSection />}
+          {key === 'about' && <AboutSection />}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

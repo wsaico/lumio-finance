@@ -57,6 +57,7 @@ export default function RegisterScreen() {
   } | null>(null);
 
   const otpRefs = useRef<Array<React.ComponentRef<typeof TextInput> | null>>([]);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -274,12 +275,15 @@ export default function RegisterScreen() {
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.bg }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={styles.flex}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
         >
           <Pressable
@@ -333,6 +337,7 @@ export default function RegisterScreen() {
                       placeholderTextColor={theme.textMuted}
                       autoCapitalize="none"
                       keyboardType="email-address"
+                      onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 140)}
                       style={[styles.input, { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(14) }]}
                     />
                   </View>
@@ -350,6 +355,7 @@ export default function RegisterScreen() {
                       placeholder="••••••••"
                       placeholderTextColor={theme.textMuted}
                       secureTextEntry={!showPass}
+                      onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 140)}
                       style={[styles.input, { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(14) }]}
                     />
                     <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={8}>
@@ -468,7 +474,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, padding: 20, gap: 20, justifyContent: 'center' },
+  scroll: { flexGrow: 1, padding: 20, paddingBottom: 36, gap: 20, justifyContent: 'center' },
   backBtn: {
     width: 42,
     height: 42,

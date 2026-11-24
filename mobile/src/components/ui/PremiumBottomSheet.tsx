@@ -35,9 +35,15 @@ export function PremiumBottomSheet({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
+    <Modal
+      visible={open}
+      transparent
+      statusBarTranslucent
+      animationType="none"
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={styles.root}
       >
         <Animated.View
@@ -100,6 +106,7 @@ export function PremiumBottomSheet({
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollBody}
             >

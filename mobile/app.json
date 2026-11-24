@@ -24,6 +24,7 @@
     },
     "android": {
       "package": "com.lumio.finance",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#5B35D5"

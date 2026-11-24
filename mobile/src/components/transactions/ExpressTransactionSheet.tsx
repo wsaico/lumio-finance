@@ -260,11 +260,12 @@ export function ExpressTransactionSheet(props: ExpressTransactionSheetProps) {
     <Modal
       visible={open}
       transparent
+      statusBarTranslucent
       animationType="slide"
       onRequestClose={() => onOpenChange(false)}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={styles.backdrop}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={() => onOpenChange(false)} />

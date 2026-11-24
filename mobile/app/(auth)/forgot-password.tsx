@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -25,6 +25,7 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
 
   const handleSend = async () => {
     const clean = email.trim().toLowerCase();
@@ -56,10 +57,16 @@ export default function ForgotPasswordScreen() {
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.bg }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={styles.flex}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
+        >
           <Pressable
             onPress={() => router.back()}
             style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -105,6 +112,7 @@ export default function ForgotPasswordScreen() {
                     placeholderTextColor={theme.textMuted}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 140)}
                     style={[styles.input, { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(14) }]}
                   />
                 </View>
