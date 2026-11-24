@@ -1,3 +1,5 @@
+import { getRegionByCountry } from './regions';
+
 export interface CurrencyInfo {
   code: string;
   name: string;
@@ -63,6 +65,35 @@ export function getCurrencyName(code?: string | null): string {
 export function getCurrencyInfo(code?: string | null): CurrencyInfo | undefined {
   if (!code) return CURRENCIES.find((c) => c.code === DEFAULT_CURRENCY);
   return CURRENCIES.find((c) => c.code === code);
+}
+
+/**
+ * Returns only currencies relevant to the user's configured country/base currency
+ * (local currency + major reference currencies USD/EUR) instead of suggesting unrelated countries.
+ */
+export function getQuickCurrenciesForUser(
+  countryCode?: string | null,
+  baseCurrency?: string | null,
+  selectedCode?: string | null
+): CurrencyInfo[] {
+  const regionCurrency = getRegionByCountry(countryCode).currencyCode;
+  const primary = (baseCurrency || regionCurrency || DEFAULT_CURRENCY).toUpperCase();
+  const preferredCodes = Array.from(
+    new Set([primary, regionCurrency, 'USD', 'EUR', selectedCode?.toUpperCase()].filter(Boolean) as string[])
+  );
+  return preferredCodes
+    .map((code) => CURRENCIES.find((c) => c.code === code))
+    .filter((c): c is CurrencyInfo => Boolean(c));
+}
+
+export function getAllCurrenciesOrdered(
+  countryCode?: string | null,
+  baseCurrency?: string | null
+): CurrencyInfo[] {
+  const quick = getQuickCurrenciesForUser(countryCode, baseCurrency);
+  const quickSet = new Set(quick.map((c) => c.code));
+  const rest = CURRENCIES.filter((c) => !quickSet.has(c.code));
+  return [...quick, ...rest];
 }
 
 export const NUMBER_FORMATS = [

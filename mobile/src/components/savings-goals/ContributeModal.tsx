@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowRightLeft, PiggyBank, Wallet } from 'lucide-react-native';
+import { ArrowRightLeft, PiggyBank } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useAddContribution, useTransferAndContribute, type SavingsGoal } from '@/hooks/useSavingsGoals';
-import { useFormat } from '@/hooks/useFormat';
-import { alphaHex } from '@/lib/color-math';
 import { showAppToast } from '@/stores/toast-store';
 
 export function ContributeModal({
@@ -21,7 +20,6 @@ export function ContributeModal({
   goal: SavingsGoal | null;
 }) {
   const theme = useAppTheme();
-  const { formatMaskedMoney } = useFormat();
   const { accounts } = useAccounts();
   const addContribution = useAddContribution();
   const transferAndContribute = useTransferAndContribute();
@@ -149,34 +147,12 @@ export function ContributeModal({
                 Selecciona la cuenta desde donde transfieres
               </Text>
             </View>
-            <View style={styles.accList}>
-              {accounts
-                .filter((a) => a.accountType !== 'CREDIT_CARD')
-                .map((acc) => {
-                  const selected = fromAccountId === acc.id;
-                  return (
-                    <Pressable
-                      key={acc.id}
-                      onPress={() => setFromAccountId(acc.id)}
-                      style={[
-                        styles.accRow,
-                        {
-                          backgroundColor: selected ? alphaHex(theme.brand, 0.12) : theme.muted,
-                          borderColor: selected ? theme.brand : theme.border,
-                        },
-                      ]}
-                    >
-                      <Wallet size={15} color={selected ? theme.brand : theme.textMuted} />
-                      <Text style={{ flex: 1, color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(13) }}>
-                        {acc.name}
-                      </Text>
-                      <Text style={{ color: theme.textSecondary, fontFamily: theme.font('600'), fontSize: theme.sp(12) }}>
-                        {formatMaskedMoney(acc.currentBalance, acc.currencyCode)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-            </View>
+            <PremiumAccountPicker
+              accounts={accounts.filter((a) => a.accountType !== 'CREDIT_CARD')}
+              selectedId={fromAccountId}
+              onSelectSingle={setFromAccountId}
+              placeholder="Elegir cuenta origen"
+            />
           </View>
         )}
 

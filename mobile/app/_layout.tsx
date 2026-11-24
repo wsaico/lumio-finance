@@ -40,6 +40,8 @@ import { ThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useUser } from '@/hooks/useUser';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { useStartupSync } from '@/hooks/useStartupSync';
+import { StartupSyncBanner } from '@/components/ui/StartupSyncBanner';
 import { AppToastHost } from '@/components/alerts/AppToastHost';
 import { PinLockOverlay } from '@/components/security/PinLockOverlay';
 import { OnboardingWizardModal } from '@/components/security/OnboardingWizardModal';
@@ -51,6 +53,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       staleTime: 1000 * 45,
+      refetchOnWindowFocus: false,
     },
   },
 });
@@ -73,6 +76,7 @@ function RootNavigator() {
   const setTimezone = useSettingsStore((s) => s.setTimezone);
 
   const { profile, isLoading: profileLoading } = useUser();
+  const syncPhase = useStartupSync(hasSession, profile?.id || activeUserId);
   useOfflineSync(hasSession);
 
   useEffect(() => {
@@ -181,6 +185,7 @@ function RootNavigator() {
 
       <OnboardingWizardModal visible={showOnboarding} />
       <PinLockOverlay isAuthenticated={hasSession} />
+      <StartupSyncBanner phase={syncPhase} />
       <AppToastHost />
     </View>
   );

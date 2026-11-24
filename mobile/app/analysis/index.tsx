@@ -40,9 +40,11 @@ import { DonutBreakdownChart } from '@/components/charts/DonutBreakdownChart';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
 import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
 import { ShimmerSkeleton } from '@/components/ui/ShimmerSkeleton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
 import { useFinancialAnalysis } from '@/hooks/useFinancialAnalysis';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useFormat } from '@/hooks/useFormat';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -76,6 +78,9 @@ export default function AnalysisScreen() {
   const { accounts } = useAccounts();
   useCategories();
   const analysis = useFinancialAnalysis({ period, type, accountId, categoryId });
+  const { refreshing: manualRefreshing, onRefresh: handleManualRefresh } = useManualRefresh(() =>
+    analysis.refetch()
+  );
   const txQuery = useTransactions({
     accountId: accountId !== 'ALL' ? accountId : undefined,
     type: type !== 'ALL' ? type : undefined,
@@ -439,10 +444,8 @@ export default function AnalysisScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
-            refreshing={analysis.isFetching}
-            onRefresh={() => {
-              void analysis.refetch();
-            }}
+            refreshing={manualRefreshing}
+            onRefresh={handleManualRefresh}
             tintColor={theme.brand}
           />
         }
@@ -520,43 +523,56 @@ export default function AnalysisScreen() {
             })}
           </ScrollView>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            <Pressable
-              onPress={() => setAccountId('ALL')}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: accountId === 'ALL' ? alphaHex(theme.coral, 0.14) : theme.card,
-                  borderColor: accountId === 'ALL' ? theme.coral : theme.border,
-                },
-              ]}
-            >
-              <Wallet size={12} color={accountId === 'ALL' ? theme.coral : theme.textMuted} />
-              <Text style={{ color: accountId === 'ALL' ? theme.coral : theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(11.5) }}>
-                Todas las cuentas
-              </Text>
-            </Pressable>
-            {accounts.map((acc) => {
-              const active = accountId === acc.id;
-              return (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => setAccountId(active ? 'ALL' : acc.id)}
-                  style={[
-                    styles.filterChip,
-                    {
-                      backgroundColor: active ? alphaHex(theme.coral, 0.14) : theme.card,
-                      borderColor: active ? theme.coral : theme.border,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: active ? theme.coral : theme.textSecondary, fontFamily: theme.font('600'), fontSize: theme.sp(11.5) }}>
-                    {acc.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          {accounts.length > 4 ? (
+            <PremiumAccountPicker
+              accounts={accounts}
+              includeAllOption
+              allValue="ALL"
+              allLabel="Todas las cuentas"
+              selectedId={accountId}
+              onSelectSingle={setAccountId}
+              showBalance={false}
+              inlineThreshold={0}
+            />
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+              <Pressable
+                onPress={() => setAccountId('ALL')}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: accountId === 'ALL' ? alphaHex(theme.coral, 0.14) : theme.card,
+                    borderColor: accountId === 'ALL' ? theme.coral : theme.border,
+                  },
+                ]}
+              >
+                <Wallet size={12} color={accountId === 'ALL' ? theme.coral : theme.textMuted} />
+                <Text style={{ color: accountId === 'ALL' ? theme.coral : theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(11.5) }}>
+                  Todas las cuentas
+                </Text>
+              </Pressable>
+              {accounts.map((acc) => {
+                const active = accountId === acc.id;
+                return (
+                  <Pressable
+                    key={acc.id}
+                    onPress={() => setAccountId(active ? 'ALL' : acc.id)}
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: active ? alphaHex(theme.coral, 0.14) : theme.card,
+                        borderColor: active ? theme.coral : theme.border,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: active ? theme.coral : theme.textSecondary, fontFamily: theme.font('600'), fontSize: theme.sp(11.5) }}>
+                      {acc.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
 
           <SegmentedControl
             value={viewTab}

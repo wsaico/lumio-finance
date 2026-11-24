@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Check, ChevronDown, ChevronRight, Search, Sparkles } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronRight, Layers, Search, Sparkles, X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { CategoryIcon } from './CategoryIcon';
 import { PremiumBottomSheet } from './PremiumBottomSheet';
+import { PremiumButton } from './PremiumButton';
 import { alphaHex } from '@/lib/color-math';
 import { triggerHaptic } from '@/lib/haptics';
+
+const PAGE_STEP = 40;
 
 export function PremiumCategoryPicker({
   open,
@@ -13,25 +16,53 @@ export function PremiumCategoryPicker({
   categories,
   selectedCategoryId,
   selectedSubcategoryId,
+  selectedCategoryIds = [],
   recentCategoryIds = [],
-  type,
+  type = 'EXPENSE',
+  multiSelect = false,
+  includeAllOption = false,
+  allLabel = 'Todas las categorías',
+  title,
+  subtitle,
   onSelect,
+  onConfirmMulti,
 }: {
   open: boolean;
   onClose: () => void;
   categories: any[];
   selectedCategoryId?: string;
   selectedSubcategoryId?: string;
+  selectedCategoryIds?: string[];
   recentCategoryIds?: string[];
-  type: 'EXPENSE' | 'INCOME';
-  onSelect: (categoryId: string, subcategoryId?: string) => void;
+  type?: 'EXPENSE' | 'INCOME' | 'ALL';
+  multiSelect?: boolean;
+  includeAllOption?: boolean;
+  allLabel?: string;
+  title?: string;
+  subtitle?: string;
+  onSelect?: (categoryId: string, subcategoryId?: string) => void;
+  onConfirmMulti?: (categoryIds: string[]) => void;
 }) {
   const theme = useAppTheme();
   const [search, setSearch] = useState('');
   const [expandedCatId, setExpandedCatId] = useState<string | null>(selectedCategoryId || null);
+  const [draftIds, setDraftIds] = useState<string[]>(selectedCategoryIds);
+  const [visibleLimit, setVisibleLimit] = useState(PAGE_STEP);
+
+  useEffect(() => {
+    if (open) {
+      setDraftIds(selectedCategoryIds);
+      setVisibleLimit(PAGE_STEP);
+    } else {
+      setSearch('');
+    }
+  }, [open, selectedCategoryIds]);
 
   const filtered = useMemo(() => {
-    const byType = (categories || []).filter((c) => !c.type || c.type === type);
+    const byType =
+      type === 'ALL'
+        ? categories || []
+        : (categories || []).filter((c) => !c.type || c.type === type);
     const q = search.trim().toLowerCase();
     if (!q) return byType;
     return byType.filter(
@@ -41,26 +72,74 @@ export function PremiumCategoryPicker({
     );
   }, [categories, type, search]);
 
+  const displayedCategories = useMemo(
+    () => (search.trim() ? filtered : filtered.slice(0, visibleLimit)),
+    [filtered, search, visibleLimit]
+  );
+
   const recentCats = useMemo(() => {
-    if (search.trim()) return [];
+    if (search.trim() || multiSelect) return [];
     return recentCategoryIds
       .map((id) => filtered.find((c) => c.id === id))
       .filter(Boolean)
       .slice(0, 4);
-  }, [recentCategoryIds, filtered, search]);
+  }, [recentCategoryIds, filtered, search, multiSelect]);
 
   const handlePick = (cat: any, subId?: string) => {
     triggerHaptic('selection');
-    onSelect(cat.id, subId || '');
+    if (multiSelect) {
+      setDraftIds((prev) =>
+        prev.includes(cat.id) ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]
+      );
+      return;
+    }
+    onSelect?.(cat.id, subId || '');
     onClose();
   };
+
+  const resolvedTitle =
+    title ||
+    (multiSelect
+      ? 'Elegir categorías'
+      : type === 'INCOME'
+        ? 'Categoría de ingreso'
+        : type === 'ALL'
+          ? 'Filtrar por categoría'
+          : 'Categoría de gasto');
+
+  const resolvedSubtitle =
+    subtitle ||
+    (multiSelect
+      ? `Selecciona las categorías a incluir (${filtered.length} disponibles)`
+      : 'Toca una categoría o despliega sus subcategorías');
 
   return (
     <PremiumBottomSheet
       open={open}
       onClose={onClose}
-      title={type === 'INCOME' ? 'Categoría de ingreso' : 'Categoría de gasto'}
-      subtitle="Toca una categoría o despliega sus subcategorías"
+      title={resolvedTitle}
+      subtitle={resolvedSubtitle}
+      footer={
+        multiSelect ? (
+          <View style={styles.footerRow}>
+            <PremiumButton
+              title={draftIds.length > 0 ? 'Todas (Limpiar)' : 'Todas'}
+              variant="outline"
+              onPress={() => setDraftIds([])}
+              style={{ flex: 1 }}
+            />
+            <PremiumButton
+              title={draftIds.length === 0 ? 'Aplicar todas' : `Aplicar (${draftIds.length})`}
+              variant="coral"
+              onPress={() => {
+                onConfirmMulti?.(draftIds);
+                onClose();
+              }}
+              style={{ flex: 1.5 }}
+            />
+          </View>
+        ) : undefined
+      }
     >
       <View
         style={[
@@ -79,7 +158,56 @@ export function PremiumCategoryPicker({
             { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(13.5) },
           ]}
         />
+        {search ? (
+          <Pressable onPress={() => setSearch('')} hitSlop={8}>
+            <X size={15} color={theme.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
+
+      {includeAllOption && !multiSelect ? (
+        <Pressable
+          onPress={() => {
+            triggerHaptic('selection');
+            onSelect?.('', '');
+            onClose();
+          }}
+          style={[
+            styles.catCard,
+            {
+              backgroundColor: !selectedCategoryId ? alphaHex(theme.brand, 0.1) : theme.card,
+              borderColor: !selectedCategoryId ? theme.brand : theme.border,
+            },
+          ]}
+        >
+          <View style={styles.catRow}>
+            <View style={styles.catMain}>
+              <View
+                style={[
+                  styles.catIcon,
+                  {
+                    backgroundColor: theme.brand,
+                    borderRadius: Math.min(theme.iconRadius, 14),
+                  },
+                ]}
+              >
+                <Layers size={18} color="#FFFFFF" />
+              </View>
+              <Text
+                style={{
+                  flex: 1,
+                  color: theme.text,
+                  fontFamily: theme.font('700'),
+                  fontSize: theme.sp(14),
+                }}
+              >
+                {allLabel}
+              </Text>
+              {!selectedCategoryId ? <Check size={17} color={theme.brand} strokeWidth={2.8} /> : null}
+            </View>
+          </View>
+        </Pressable>
+      ) : null}
 
       {recentCats.length > 0 && (
         <View style={{ gap: 8 }}>
@@ -127,121 +255,151 @@ export function PremiumCategoryPicker({
       )}
 
       <View style={{ gap: 8 }}>
-        {filtered.map((cat: any) => {
-          const isSelected = selectedCategoryId === cat.id;
-          const hasSubs = Array.isArray(cat.subcategories) && cat.subcategories.length > 0;
-          const isExpanded = expandedCatId === cat.id;
-          const catColor = cat.color || theme.brand;
+        {displayedCategories.length === 0 ? (
+          <Text
+            style={{
+              color: theme.textMuted,
+              fontFamily: theme.font('500'),
+              fontSize: theme.sp(12.5),
+              textAlign: 'center',
+              paddingVertical: 16,
+            }}
+          >
+            No se encontraron categorías con &quot;{search.trim()}&quot;.
+          </Text>
+        ) : (
+          displayedCategories.map((cat: any) => {
+            const isSelected = multiSelect
+              ? draftIds.includes(cat.id)
+              : selectedCategoryId === cat.id;
+            const hasSubs = !multiSelect && Array.isArray(cat.subcategories) && cat.subcategories.length > 0;
+            const isExpanded = expandedCatId === cat.id;
+            const catColor = cat.color || theme.brand;
 
-          return (
-            <View
-              key={cat.id}
-              style={[
-                styles.catCard,
-                {
-                  backgroundColor: isSelected ? alphaHex(catColor, 0.08) : theme.card,
-                  borderColor: isSelected ? catColor : theme.border,
-                },
-              ]}
-            >
-              <View style={styles.catRow}>
-                <Pressable
-                  onPress={() => handlePick(cat)}
-                  style={styles.catMain}
-                >
-                  <View
-                    style={[
-                      styles.catIcon,
-                      {
-                        backgroundColor: catColor,
-                        borderRadius: Math.min(theme.iconRadius, 14),
-                      },
-                    ]}
+            return (
+              <View
+                key={cat.id}
+                style={[
+                  styles.catCard,
+                  {
+                    backgroundColor: isSelected ? alphaHex(catColor, 0.08) : theme.card,
+                    borderColor: isSelected ? catColor : theme.border,
+                  },
+                ]}
+              >
+                <View style={styles.catRow}>
+                  <Pressable
+                    onPress={() => handlePick(cat)}
+                    style={styles.catMain}
                   >
-                    <CategoryIcon name={cat.icon} size={18} color="#FFFFFF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: theme.text,
-                        fontFamily: theme.font('700'),
-                        fontSize: theme.sp(14),
-                      }}
+                    <View
+                      style={[
+                        styles.catIcon,
+                        {
+                          backgroundColor: catColor,
+                          borderRadius: Math.min(theme.iconRadius, 14),
+                        },
+                      ]}
                     >
-                      {cat.name}
-                    </Text>
-                    {hasSubs ? (
+                      <CategoryIcon name={cat.icon} size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
                       <Text
                         style={{
-                          color: theme.textMuted,
-                          fontFamily: theme.font('500'),
-                          fontSize: theme.sp(11),
+                          color: theme.text,
+                          fontFamily: theme.font('700'),
+                          fontSize: theme.sp(14),
                         }}
                       >
-                        {cat.subcategories.length} subcategorías
+                        {cat.name}
                       </Text>
-                    ) : null}
-                  </View>
-                  {isSelected && !selectedSubcategoryId ? (
-                    <Check size={17} color={catColor} strokeWidth={2.8} />
-                  ) : null}
-                </Pressable>
-
-                {hasSubs ? (
-                  <Pressable
-                    onPress={() => {
-                      triggerHaptic('light');
-                      setExpandedCatId(isExpanded ? null : cat.id);
-                    }}
-                    style={[styles.expandBtn, { backgroundColor: theme.muted }]}
-                  >
-                    {isExpanded ? (
-                      <ChevronDown size={16} color={theme.textSecondary} />
-                    ) : (
-                      <ChevronRight size={16} color={theme.textSecondary} />
-                    )}
-                  </Pressable>
-                ) : null}
-              </View>
-
-              {hasSubs && isExpanded ? (
-                <View style={styles.subsWrap}>
-                  {cat.subcategories.map((sub: any) => {
-                    const subSelected = selectedSubcategoryId === sub.id;
-                    return (
-                      <Pressable
-                        key={sub.id}
-                        onPress={() => handlePick(cat, sub.id)}
-                        style={[
-                          styles.subChip,
-                          {
-                            backgroundColor: subSelected ? catColor : theme.muted,
-                            borderColor: subSelected ? catColor : theme.border,
-                          },
-                        ]}
-                      >
-                        <CategoryIcon
-                          name={sub.icon || cat.icon}
-                          size={13}
-                          color={subSelected ? '#FFFFFF' : catColor}
-                        />
+                      {hasSubs ? (
                         <Text
                           style={{
-                            color: subSelected ? '#FFFFFF' : theme.text,
-                            fontFamily: theme.font('700'),
-                            fontSize: theme.sp(12),
+                            color: theme.textMuted,
+                            fontFamily: theme.font('500'),
+                            fontSize: theme.sp(11),
                           }}
                         >
-                          {sub.name}
+                          {cat.subcategories.length} subcategorías
                         </Text>
-                      </Pressable>
-                    );
-                  })}
+                      ) : null}
+                    </View>
+                    {isSelected && (!selectedSubcategoryId || multiSelect) ? (
+                      <Check size={17} color={catColor} strokeWidth={2.8} />
+                    ) : null}
+                  </Pressable>
+
+                  {hasSubs ? (
+                    <Pressable
+                      onPress={() => {
+                        triggerHaptic('light');
+                        setExpandedCatId(isExpanded ? null : cat.id);
+                      }}
+                      style={[styles.expandBtn, { backgroundColor: theme.muted }]}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown size={16} color={theme.textSecondary} />
+                      ) : (
+                        <ChevronRight size={16} color={theme.textSecondary} />
+                      )}
+                    </Pressable>
+                  ) : null}
                 </View>
-              ) : null}
-            </View>
-          );
-        })}
+
+                {hasSubs && isExpanded ? (
+                  <View style={styles.subsWrap}>
+                    {cat.subcategories.map((sub: any) => {
+                      const subSelected = selectedSubcategoryId === sub.id;
+                      return (
+                        <Pressable
+                          key={sub.id}
+                          onPress={() => handlePick(cat, sub.id)}
+                          style={[
+                            styles.subChip,
+                            {
+                              backgroundColor: subSelected ? catColor : theme.muted,
+                              borderColor: subSelected ? catColor : theme.border,
+                            },
+                          ]}
+                        >
+                          <CategoryIcon
+                            name={sub.icon || cat.icon}
+                            size={13}
+                            color={subSelected ? '#FFFFFF' : catColor}
+                          />
+                          <Text
+                            style={{
+                              color: subSelected ? '#FFFFFF' : theme.text,
+                              fontFamily: theme.font('700'),
+                              fontSize: theme.sp(12),
+                            }}
+                          >
+                            {sub.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })
+        )}
+
+        {!search.trim() && filtered.length > visibleLimit ? (
+          <Pressable
+            onPress={() => setVisibleLimit((n) => n + PAGE_STEP)}
+            style={[
+              styles.moreBtn,
+              { backgroundColor: theme.brandSoft, borderColor: theme.border },
+            ]}
+          >
+            <Text style={{ color: theme.brand, fontFamily: theme.font('800'), fontSize: theme.sp(12.5) }}>
+              Mostrar {Math.min(PAGE_STEP, filtered.length - visibleLimit)} más ({filtered.length - visibleLimit} restantes)
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </PremiumBottomSheet>
   );
@@ -324,6 +482,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 99,
+    borderWidth: 1,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  moreBtn: {
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: 14,
     borderWidth: 1,
   },
 });

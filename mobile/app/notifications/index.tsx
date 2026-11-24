@@ -16,6 +16,7 @@ import { es } from 'date-fns/locale';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { CurvedHeroHeader } from '@/components/ui/CurvedHeroHeader';
 import { TopAppHeader } from '@/components/navigation/TopAppHeader';
 import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
@@ -70,12 +71,14 @@ export default function NotificationsScreen() {
     notifications,
     unreadCount,
     isLoading,
-    isSyncing,
     syncSmartNotifications,
     markAsRead,
     markAllRead,
     deleteNotification,
   } = useNotifications();
+  const { refreshing: manualRefreshing, onRefresh: handleManualRefresh } = useManualRefresh(
+    syncSmartNotifications
+  );
 
   const handleTap = async (item: AppNotification) => {
     if (!item.is_read) await markAsRead(item.id);
@@ -139,8 +142,8 @@ export default function NotificationsScreen() {
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading || isSyncing}
-            onRefresh={syncSmartNotifications}
+            refreshing={manualRefreshing}
+            onRefresh={handleManualRefresh}
             tintColor={theme.brand}
           />
         }

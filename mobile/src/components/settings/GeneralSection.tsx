@@ -58,7 +58,16 @@ export function GeneralSection() {
 
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const [biometricsSupported, setBiometricsSupported] = useState(false);
+  const [enableBiometricsAfterPin, setEnableBiometricsAfterPin] = useState(false);
+  const [bioInfo, setBioInfo] = useState<{
+    hasHardware: boolean;
+    enrolled: boolean;
+    label: string;
+  }>({
+    hasHardware: false,
+    enrolled: false,
+    label: 'Huella digital o Face ID',
+  });
 
   const [homeModalOpen, setHomeModalOpen] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
@@ -66,16 +75,29 @@ export function GeneralSection() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      setBiometricsSupported(false);
+      setBioInfo({ hasHardware: false, enrolled: false, label: 'Solo disponible en app móvil' });
       return;
     }
     void (async () => {
       try {
         const hasHw = await LocalAuthentication.hasHardwareAsync();
-        const enrolled = await LocalAuthentication.isEnrolledAsync();
-        setBiometricsSupported(hasHw && enrolled);
+        const enrolled = hasHw ? await LocalAuthentication.isEnrolledAsync() : false;
+        const types = hasHw
+          ? await LocalAuthentication.supportedAuthenticationTypesAsync()
+          : [];
+        const hasFinger = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+        const hasFace = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+        const label =
+          hasFinger && hasFace
+            ? 'Huella digital o Face ID'
+            : hasFinger
+              ? 'Huella digital'
+              : hasFace
+                ? 'Face ID'
+                : 'Biometría del dispositivo';
+        setBioInfo({ hasHardware: hasHw, enrolled, label });
       } catch {
-        setBiometricsSupported(false);
+        setBioInfo({ hasHardware: false, enrolled: false, label: 'Biometría' });
       }
     })();
   }, []);
@@ -142,8 +164,48 @@ export function GeneralSection() {
     }
     await setStoredPinCode(clean);
     store.setPinLockEnabled(true);
+    if (enableBiometricsAfterPin) {
+      store.setBiometricsEnabled(true);
+      setEnableBiometricsAfterPin(false);
+      setPinModalOpen(false);
+      showAppToast.success({ title: `${bioInfo.label} y PIN activados` });
+      return;
+    }
     setPinModalOpen(false);
     showAppToast.success({ title: 'PIN de 4 dígitos activado' });
+  };
+
+  const handleToggleBiometrics = async (enable: boolean) => {
+    if (!enable) {
+      store.setBiometricsEnabled(false);
+      return;
+    }
+    if (!bioInfo.hasHardware) {
+      showAppToast.warning({
+        title: 'Sensor biométrico no disponible',
+        description: 'Este dispositivo no tiene soporte biométrico habilitado.',
+      });
+      return;
+    }
+    if (!bioInfo.enrolled) {
+      showAppToast.warning({
+        title: 'Sin huellas registradas en el teléfono',
+        description: 'Registra primero una huella o biometría en Ajustes del sistema.',
+      });
+      return;
+    }
+
+    const existingPin = await getStoredPinCode();
+    if (existingPin.length === 4) {
+      store.setPinLockEnabled(true);
+      store.setBiometricsEnabled(true);
+      showAppToast.success({ title: `${bioInfo.label} activada` });
+      return;
+    }
+
+    setEnableBiometricsAfterPin(true);
+    setPinInput('');
+    setPinModalOpen(true);
   };
 
   const handleToggleDemo = async () => {
@@ -258,6 +320,7 @@ export function GeneralSection() {
           description={store.pinLockEnabled ? 'Activo en este dispositivo' : 'Protege tu app al abrir'}
           onPress={async () => {
             const current = await getStoredPinCode();
+            setEnableBiometricsAfterPin(false);
             setPinInput(current);
             setPinModalOpen(true);
           }}
@@ -267,28 +330,43 @@ export function GeneralSection() {
               onValueChange={async (v) => {
                 if (v) {
                   const current = await getStoredPinCode();
+                  setEnableBiometricsAfterPin(false);
                   setPinInput(current);
                   setPinModalOpen(true);
                 } else {
                   store.setPinLockEnabled(false);
+                  store.setBiometricsEnabled(false);
                 }
               }}
             />
           }
         />
-        {biometricsSupported && store.pinLockEnabled && (
-          <SettingsRow
-            Icon={Fingerprint}
-            title="Desbloqueo biométrico"
-            description="Face ID o huella dactilar"
-            right={
-              <SettingsSwitch
-                value={store.biometricsEnabled}
-                onValueChange={store.setBiometricsEnabled}
-              />
-            }
-          />
-        )}
+        <SettingsRow
+          Icon={Fingerprint}
+          title={`Desbloqueo con ${bioInfo.label}`}
+          description={
+            Platform.OS === 'web'
+              ? 'Disponible en la aplicación móvil Android/iOS'
+              : !bioInfo.hasHardware
+                ? 'Este dispositivo no tiene sensor biométrico'
+                : !bioInfo.enrolled
+                  ? 'Registra una huella o biometría en los Ajustes del teléfono'
+                  : store.biometricsEnabled
+                    ? 'Activo · entra al instante sin escribir tu PIN'
+                    : 'Actívalo para desbloquear Lumio con tu huella'
+          }
+          onPress={() => {
+            void handleToggleBiometrics(!store.biometricsEnabled);
+          }}
+          right={
+            <SettingsSwitch
+              value={store.biometricsEnabled && bioInfo.hasHardware && bioInfo.enrolled}
+              onValueChange={(v) => {
+                void handleToggleBiometrics(v);
+              }}
+            />
+          }
+        />
         <SettingsRow
           Icon={Home}
           title="Editar página de inicio"
@@ -376,11 +454,22 @@ export function GeneralSection() {
       {/* PIN Modal */}
       <PremiumBottomSheet
         open={pinModalOpen}
-        onClose={() => setPinModalOpen(false)}
-        title="Configurar PIN de 4 dígitos"
-        subtitle="Se solicitará al abrir o reanudar la aplicación"
+        onClose={() => {
+          setPinModalOpen(false);
+          setEnableBiometricsAfterPin(false);
+        }}
+        title={enableBiometricsAfterPin ? 'PIN de respaldo para tu huella' : 'Configurar PIN de 4 dígitos'}
+        subtitle={
+          enableBiometricsAfterPin
+            ? 'Define un PIN de 4 dígitos y activaremos el desbloqueo biométrico'
+            : 'Se solicitará al abrir o reanudar la aplicación'
+        }
         footer={
-          <PremiumButton title="Activar PIN" variant="coral" onPress={handleSavePin} />
+          <PremiumButton
+            title={enableBiometricsAfterPin ? 'Guardar PIN y activar huella' : 'Activar PIN'}
+            variant="coral"
+            onPress={handleSavePin}
+          />
         }
       >
         <TextInput

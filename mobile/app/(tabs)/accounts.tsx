@@ -1,17 +1,28 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Banknote, Building2, Plus, Smartphone, TrendingUp, Wallet } from 'lucide-react-native';
+import {
+  Banknote,
+  Building2,
+  Plus,
+  Search,
+  Smartphone,
+  TrendingUp,
+  Wallet,
+  X,
+} from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useFormat } from '@/hooks/useFormat';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { CurvedHeroHeader } from '@/components/ui/CurvedHeroHeader';
 import { TopAppHeader } from '@/components/navigation/TopAppHeader';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
@@ -29,6 +40,14 @@ const TYPE_ICONS: Record<string, typeof Wallet> = {
   INVESTMENT: TrendingUp,
 };
 
+const REGULAR_FILTERS = [
+  { id: 'ALL', label: 'Todas' },
+  { id: 'BANK', label: 'Bancos' },
+  { id: 'DIGITAL', label: 'Billeteras' },
+  { id: 'CASH', label: 'Efectivo' },
+  { id: 'INVESTMENT', label: 'Inversión' },
+] as const;
+
 export default function AccountsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -38,13 +57,52 @@ export default function AccountsScreen() {
     liquidBalanceConverted,
     totalCreditDebtConverted,
     netWorthConverted,
-    isLoading,
     refetch,
   } = useAccounts();
 
+  const { refreshing, onRefresh } = useManualRefresh(refetch);
+
   const [modalOpen, setModalOpen] = useState(false);
+  const [defaultModalType, setDefaultModalType] = useState<
+    'CASH' | 'BANK' | 'DIGITAL' | 'CREDIT_CARD' | 'INVESTMENT'
+  >('BANK');
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+
   const creditCards = accounts.filter((a) => a.accountType === 'CREDIT_CARD');
   const regularAccounts = accounts.filter((a) => a.accountType !== 'CREDIT_CARD');
+
+  const filteredRegular = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return regularAccounts.filter((acc) => {
+      if (typeFilter !== 'ALL' && acc.accountType !== typeFilter) return false;
+      if (!q) return true;
+      return (
+        String(acc.name || '').toLowerCase().includes(q) ||
+        String(acc.bankName || '').toLowerCase().includes(q) ||
+        String(acc.currencyCode || '').toLowerCase().includes(q)
+      );
+    });
+  }, [regularAccounts, search, typeFilter]);
+
+  const filteredCards = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return creditCards;
+    return creditCards.filter(
+      (c) =>
+        String(c.name || '').toLowerCase().includes(q) ||
+        String(c.bankName || '').toLowerCase().includes(q) ||
+        String(c.currencyCode || '').toLowerCase().includes(q)
+    );
+  }, [creditCards, search]);
+
+  const openCreateModal = (
+    type: 'CASH' | 'BANK' | 'DIGITAL' | 'CREDIT_CARD' | 'INVESTMENT' = 'BANK'
+  ) => {
+    triggerHaptic('medium');
+    setDefaultModalType(type);
+    setModalOpen(true);
+  };
 
   return (
     <View style={[styles.flex, { backgroundColor: theme.bg }]}>
@@ -52,7 +110,7 @@ export default function AccountsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 118 }}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={() => { void refetch(); }} tintColor={theme.brand} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.brand} />
         }
       >
         <CurvedHeroHeader bottomRadius={34}>
@@ -60,6 +118,15 @@ export default function AccountsScreen() {
             onHero
             title="Mis Cuentas"
             subtitle="Consolidado multimoneda"
+            rightSlot={
+              <Pressable
+                onPress={() => openCreateModal('BANK')}
+                style={[styles.addHeroBtn, { backgroundColor: theme.coral }]}
+                accessibilityLabel="Nueva cuenta o tarjeta"
+              >
+                <Plus size={18} color="#FFFFFF" strokeWidth={2.6} />
+              </Pressable>
+            }
           />
 
           <View style={styles.heroCenter}>
@@ -89,15 +156,87 @@ export default function AccountsScreen() {
         </CurvedHeroHeader>
 
         <View style={styles.content}>
-          {/* Reference Image 5: My Cards Carousel */}
+          {/* Search & Quick Add Bar when user has several accounts */}
+          {accounts.length > 3 ? (
+            <View style={{ gap: 10 }}>
+              <View
+                style={[
+                  styles.searchBox,
+                  { backgroundColor: theme.card, borderColor: theme.border },
+                ]}
+              >
+                <Search size={16} color={theme.textMuted} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Buscar cuenta, banco o moneda..."
+                  placeholderTextColor={theme.textMuted}
+                  style={[
+                    styles.searchInput,
+                    { color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(13) },
+                  ]}
+                />
+                {search ? (
+                  <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                    <X size={15} color={theme.textMuted} />
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 7 }}
+              >
+                {REGULAR_FILTERS.map((f) => {
+                  const active = typeFilter === f.id;
+                  return (
+                    <Pressable
+                      key={f.id}
+                      onPress={() => {
+                        triggerHaptic('selection');
+                        setTypeFilter(f.id);
+                      }}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: active ? theme.brand : theme.card,
+                          borderColor: active ? theme.brand : theme.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: active ? '#FFFFFF' : theme.textSecondary,
+                          fontFamily: theme.font('700'),
+                          fontSize: 12,
+                        }}
+                      >
+                        {f.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* My Cards Carousel */}
           <View style={{ gap: 10 }}>
             <View style={styles.sectionHeader}>
               <Text style={{ color: theme.text, fontFamily: theme.font('800'), fontSize: theme.sp(16) }}>
-                Mis Tarjetas ({creditCards.length})
+                Mis Tarjetas ({filteredCards.length})
               </Text>
-              <Pressable onPress={() => setModalOpen(true)}>
-                <Text style={{ color: theme.brand, fontFamily: theme.font('800'), fontSize: 12.5 }}>
-                  + Agregar
+              <Pressable
+                onPress={() => openCreateModal('CREDIT_CARD')}
+                style={[
+                  styles.sectionAddBtn,
+                  { backgroundColor: theme.brandSoft, borderColor: alphaHex(theme.brand, 0.25) },
+                ]}
+              >
+                <Plus size={14} color={theme.brand} strokeWidth={2.5} />
+                <Text style={{ color: theme.brand, fontFamily: theme.font('800'), fontSize: 12 }}>
+                  Agregar tarjeta
                 </Text>
               </Pressable>
             </View>
@@ -107,7 +246,7 @@ export default function AccountsScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 12, paddingRight: 16 }}
             >
-              {creditCards.map((card) => (
+              {filteredCards.map((card) => (
                 <CreditCardVisual
                   key={card.id}
                   account={card}
@@ -119,7 +258,7 @@ export default function AccountsScreen() {
               ))}
               {creditCards.length === 0 ? (
                 <Pressable
-                  onPress={() => setModalOpen(true)}
+                  onPress={() => openCreateModal('CREDIT_CARD')}
                   style={[
                     styles.plusTile,
                     {
@@ -143,9 +282,20 @@ export default function AccountsScreen() {
 
           {/* Regular Accounts List */}
           <View style={{ gap: 10 }}>
-            <Text style={{ color: theme.text, fontFamily: theme.font('800'), fontSize: theme.sp(16) }}>
-              Efectivo, Bancos y Billeteras ({regularAccounts.length})
-            </Text>
+            <View style={styles.sectionHeader}>
+              <Text style={{ color: theme.text, fontFamily: theme.font('800'), fontSize: theme.sp(16), flex: 1 }}>
+                Cuentas y Billeteras ({filteredRegular.length})
+              </Text>
+              <Pressable
+                onPress={() => openCreateModal('BANK')}
+                style={[styles.sectionAddBtn, { backgroundColor: theme.coral }]}
+              >
+                <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={{ color: '#FFFFFF', fontFamily: theme.font('800'), fontSize: 12 }}>
+                  Nueva cuenta
+                </Text>
+              </Pressable>
+            </View>
 
             {regularAccounts.length === 0 && creditCards.length === 0 ? (
               <EmptyStateCard
@@ -153,10 +303,16 @@ export default function AccountsScreen() {
                 title="Aún no tienes cuentas"
                 description="Crea tu primera cuenta de banco, efectivo o billetera para comenzar."
                 actionLabel="Crear cuenta"
-                onAction={() => setModalOpen(true)}
+                onAction={() => openCreateModal('BANK')}
+              />
+            ) : filteredRegular.length === 0 ? (
+              <EmptyStateCard
+                icon={<Search size={26} color={theme.brand} />}
+                title="Sin resultados en este filtro"
+                description="Prueba con otro término o limpia el filtro actual."
               />
             ) : (
-              regularAccounts.map((acc) => {
+              filteredRegular.map((acc) => {
                 const Icon = TYPE_ICONS[acc.accountType] || Wallet;
                 const accColor = acc.color || theme.brand;
                 return (
@@ -205,7 +361,11 @@ export default function AccountsScreen() {
         </View>
       </ScrollView>
 
-      <AccountFormModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <AccountFormModal
+        open={modalOpen}
+        defaultType={defaultModalType}
+        onClose={() => setModalOpen(false)}
+      />
     </View>
   );
 }
@@ -216,7 +376,6 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -233,7 +392,33 @@ const styles = StyleSheet.create({
   metricLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '600' },
   metricVal: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'], marginTop: 2 },
   content: { padding: 16, gap: 18 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  searchInput: { flex: 1, paddingVertical: 2 },
+  filterChip: {
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  sectionAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
   plusTile: {
     width: 68,
     height: 174,

@@ -6,7 +6,7 @@ export function useDashboardData() {
   return useQuery<DashboardData>({
     queryKey: ['dashboard-analytics'],
     queryFn: () => apiGet<DashboardData>('/api/analytics/dashboard'),
-    staleTime: 1000 * 10,
-    refetchOnMount: 'always',
+    staleTime: 1000 * 45,
+    refetchOnMount: true,
   });
 }

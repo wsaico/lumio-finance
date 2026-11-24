@@ -37,6 +37,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ShimmerSkeleton } from '@/components/ui/ShimmerSkeleton';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useSystemBranding } from '@/hooks/useSystemBranding';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { DEFAULT_PLANS, type PlanDefinition } from '@/lib/entitlements';
 import { apiGet, apiPost } from '@/lib/api-client';
 import { alphaHex } from '@/lib/color-math';
@@ -70,6 +71,9 @@ export default function BillingScreen() {
       return Array.isArray(res) ? res : [];
     },
   });
+  const { refreshing: manualRefreshing, onRefresh: handleManualRefresh } = useManualRefresh(() =>
+    Promise.all([ordersQuery.refetch(), subQuery.refetch()])
+  );
 
   const plans: PlanDefinition[] = (
     subQuery.data?.plans?.length
@@ -155,11 +159,8 @@ export default function BillingScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
-            refreshing={ordersQuery.isFetching || subQuery.isFetching}
-            onRefresh={() => {
-              void ordersQuery.refetch();
-              void subQuery.refetch();
-            }}
+            refreshing={manualRefreshing}
+            onRefresh={handleManualRefresh}
             tintColor={theme.brand}
           />
         }

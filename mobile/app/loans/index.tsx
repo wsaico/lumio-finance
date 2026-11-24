@@ -30,6 +30,7 @@ import { useAccountsPayable, useAccountsReceivable } from '@/hooks/useLoans';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { useFormat } from '@/hooks/useFormat';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { alphaHex } from '@/lib/color-math';
 import { computeDaysUntilDue } from '@/lib/peru-insights';
 import { triggerHaptic } from '@/lib/haptics';
@@ -104,6 +105,9 @@ export default function LoansScreen() {
   }, [tab, recList, payList, statusFilter]);
 
   const isLoading = recQuery.isLoading || payQuery.isLoading;
+  const { refreshing: manualRefreshing, onRefresh: handleManualRefresh } = useManualRefresh(() =>
+    Promise.all([recQuery.refetch(), payQuery.refetch()])
+  );
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.bg }]}>
@@ -112,11 +116,8 @@ export default function LoansScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
-            refreshing={recQuery.isFetching || payQuery.isFetching}
-            onRefresh={() => {
-              void recQuery.refetch();
-              void payQuery.refetch();
-            }}
+            refreshing={manualRefreshing}
+            onRefresh={handleManualRefresh}
             tintColor={theme.brand}
           />
         }

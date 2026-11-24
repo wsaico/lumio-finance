@@ -8,10 +8,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Check, ChevronDown, ChevronUp, Layers, Sparkles, Tag, Wallet } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronRight, ChevronUp, Layers, Sparkles, Tag, X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
+import { PremiumCategoryPicker } from '@/components/ui/PremiumCategoryPicker';
+import { PremiumCurrencyPicker } from '@/components/ui/PremiumCurrencyPicker';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
 import { useCategories } from '@/hooks/useCategories';
@@ -19,7 +22,6 @@ import { useAccounts } from '@/hooks/useAccounts';
 import { useTags } from '@/hooks/useTags';
 import { useBudget } from '@/hooks/useBudget';
 import { useSettingsStore } from '@/stores/settings-store';
-import { CURRENCIES } from '@/lib/currencies';
 import { alphaHex } from '@/lib/color-math';
 import { triggerHaptic } from '@/lib/haptics';
 import { showAppToast } from '@/stores/toast-store';
@@ -74,6 +76,7 @@ export function BudgetFormModal({
   const [excludeCategories, setExcludeCategories] = useState<string[]>([]);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
   const [transactionFilterMode, setTransactionFilterMode] =
     useState<TransactionFilterMode>('DEFAULT');
   const [includeLoaned, setIncludeLoaned] = useState(false);
@@ -174,10 +177,9 @@ export function BudgetFormModal({
     onOpenChange(false);
   };
 
-  const popularCurrencies = CURRENCIES.slice(0, 6);
-
   return (
-    <PremiumBottomSheet
+    <>
+      <PremiumBottomSheet
       open={open}
       onClose={() => onOpenChange(false)}
       title={initialBudget ? 'Editar presupuesto' : 'Nuevo presupuesto'}
@@ -262,42 +264,11 @@ export function BudgetFormModal({
           </View>
         </View>
 
-        <View>
-          <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-            Moneda
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            {popularCurrencies.map((c) => {
-              const active = currencyCode === c.code;
-              return (
-                <Pressable
-                  key={c.code}
-                  onPress={() => {
-                    triggerHaptic('selection');
-                    setCurrencyCode(c.code);
-                  }}
-                  style={[
-                    styles.pill,
-                    {
-                      backgroundColor: active ? theme.brand : theme.muted,
-                      borderColor: active ? theme.brand : theme.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: active ? '#FFFFFF' : theme.text,
-                      fontFamily: theme.font('700'),
-                      fontSize: theme.sp(12),
-                    }}
-                  >
-                    {c.symbol} {c.code}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <PremiumCurrencyPicker
+          label="Moneda"
+          value={currencyCode}
+          onChange={setCurrencyCode}
+        />
 
         <View>
           <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
@@ -342,79 +313,85 @@ export function BudgetFormModal({
             ]}
           />
           {budgetScope === 'ACCOUNT' && (
-            <View style={[styles.chipWrap, { marginTop: 10 }]}>
-              {accounts.map((acc) => {
-                const selected = accountIds.includes(acc.id);
-                return (
-                  <Pressable
-                    key={acc.id}
-                    onPress={() => toggleItem(accountIds, acc.id, setAccountIds)}
-                    style={[
-                      styles.pill,
-                      {
-                        backgroundColor: selected ? alphaHex(theme.brand, 0.14) : theme.muted,
-                        borderColor: selected ? theme.brand : theme.border,
-                      },
-                    ]}
-                  >
-                    <Wallet size={13} color={selected ? theme.brand : theme.textMuted} />
-                    <Text
-                      style={{
-                        color: selected ? theme.brand : theme.text,
-                        fontFamily: theme.font('600'),
-                        fontSize: theme.sp(12),
-                      }}
-                    >
-                      {acc.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View style={{ marginTop: 10 }}>
+              <PremiumAccountPicker
+                accounts={accounts}
+                mode="multiple"
+                selectedIds={accountIds}
+                onConfirmMulti={setAccountIds}
+                placeholder="Elegir cuentas específicas"
+              />
             </View>
           )}
         </View>
 
-        <View>
+        <View style={{ gap: 8 }}>
           <View style={styles.labelBetween}>
             <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12), marginBottom: 0 }]}>
               Categorías incluidas
             </Text>
             <Text style={{ color: theme.textMuted, fontFamily: theme.font('500'), fontSize: theme.sp(11) }}>
-              {includeCategories.length === 0 ? 'Todas' : `${includeCategories.length} selec.`}
+              {includeCategories.length === 0 ? 'Todas incluidas' : `${includeCategories.length} selec.`}
             </Text>
           </View>
-          <View style={[styles.chipWrap, { marginTop: 8 }]}>
-            {categoryPool.map((cat: any) => {
-              const selected = includeCategories.includes(cat.id);
-              const catColor = cat.color || theme.brand;
-              return (
-                <Pressable
-                  key={cat.id}
-                  onPress={() => toggleItem(includeCategories, cat.id, setIncludeCategories)}
-                  style={[
-                    styles.catChip,
-                    {
-                      backgroundColor: selected ? alphaHex(catColor, 0.16) : theme.muted,
-                      borderColor: selected ? catColor : theme.border,
-                    },
-                  ]}
-                >
-                  <View style={[styles.catIconMini, { backgroundColor: catColor }]}>
-                    <CategoryIcon name={cat.icon} size={12} color="#FFFFFF" />
-                  </View>
-                  <Text
-                    style={{
-                      color: selected ? theme.text : theme.textSecondary,
-                      fontFamily: theme.font(selected ? '700' : '600'),
-                      fontSize: theme.sp(12),
-                    }}
+
+          <Pressable
+            onPress={() => {
+              triggerHaptic('selection');
+              setCatPickerOpen(true);
+            }}
+            style={[
+              styles.advToggle,
+              { backgroundColor: theme.muted, borderColor: theme.border },
+            ]}
+          >
+            <View style={styles.advLeft}>
+              <Layers size={15} color={theme.brand} />
+              <Text style={{ color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(13) }}>
+                {includeCategories.length === 0
+                  ? 'Todas las categorías (toca para filtrar)'
+                  : `Editar selección (${includeCategories.length})`}
+              </Text>
+            </View>
+            <ChevronRight size={17} color={theme.textMuted} />
+          </Pressable>
+
+          {includeCategories.length > 0 ? (
+            <View style={styles.chipWrap}>
+              {includeCategories.map((catId) => {
+                const cat = categoryPool.find((c: any) => c.id === catId);
+                if (!cat) return null;
+                const catColor = cat.color || theme.brand;
+                return (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => toggleItem(includeCategories, cat.id, setIncludeCategories)}
+                    style={[
+                      styles.catChip,
+                      {
+                        backgroundColor: alphaHex(catColor, 0.14),
+                        borderColor: catColor,
+                      },
+                    ]}
                   >
-                    {cat.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <View style={[styles.catIconMini, { backgroundColor: catColor }]}>
+                      <CategoryIcon name={cat.icon} size={12} color="#FFFFFF" />
+                    </View>
+                    <Text
+                      style={{
+                        color: theme.text,
+                        fontFamily: theme.font('700'),
+                        fontSize: theme.sp(12),
+                      }}
+                    >
+                      {cat.name}
+                    </Text>
+                    <X size={13} color={theme.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
         {tags.length > 0 && (
@@ -542,6 +519,19 @@ export function BudgetFormModal({
         )}
       </View>
     </PremiumBottomSheet>
+
+    <PremiumCategoryPicker
+      open={catPickerOpen}
+      onClose={() => setCatPickerOpen(false)}
+      categories={categoryPool}
+      type="ALL"
+      multiSelect
+      selectedCategoryIds={includeCategories}
+      onConfirmMulti={setIncludeCategories}
+      title="Categorías del presupuesto"
+      subtitle="Deja vacío para incluir todas las categorías"
+    />
+    </>
   );
 }
 

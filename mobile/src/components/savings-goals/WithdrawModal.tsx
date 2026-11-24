@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowUpRight, Wallet } from 'lucide-react-native';
+import { ArrowUpRight } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useWithdrawSavings, type SavingsGoal } from '@/hooks/useSavingsGoals';
 import { useFormat } from '@/hooks/useFormat';
@@ -109,39 +110,12 @@ export function WithdrawModal({
           />
         </View>
 
-        <View>
-          <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-            Cuenta destino
-          </Text>
-          <View style={styles.accList}>
-            {accounts
-              .filter((a) => a.accountType !== 'CREDIT_CARD')
-              .map((acc) => {
-                const selected = toAccountId === acc.id;
-                return (
-                  <Pressable
-                    key={acc.id}
-                    onPress={() => setToAccountId(acc.id)}
-                    style={[
-                      styles.accRow,
-                      {
-                        backgroundColor: selected ? alphaHex(theme.brand, 0.12) : theme.muted,
-                        borderColor: selected ? theme.brand : theme.border,
-                      },
-                    ]}
-                  >
-                    <Wallet size={15} color={selected ? theme.brand : theme.textMuted} />
-                    <Text style={{ flex: 1, color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(13) }}>
-                      {acc.name}
-                    </Text>
-                    <Text style={{ color: theme.textSecondary, fontFamily: theme.font('600'), fontSize: theme.sp(12) }}>
-                      {formatMaskedMoney(acc.currentBalance, acc.currencyCode)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-          </View>
-        </View>
+        <PremiumAccountPicker
+          accounts={accounts.filter((a) => a.accountType !== 'CREDIT_CARD')}
+          selectedId={toAccountId}
+          onSelectSingle={setToAccountId}
+          label="Cuenta destino"
+        />
 
         <View>
           <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>

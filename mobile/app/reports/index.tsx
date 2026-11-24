@@ -18,6 +18,7 @@ import { ShimmerSkeleton } from '@/components/ui/ShimmerSkeleton';
 import { PremiumPreviewGate } from '@/components/ui/PremiumPreviewGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useFormat } from '@/hooks/useFormat';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { apiGet } from '@/lib/api-client';
 import { downloadAuthenticatedFile } from '@/lib/downloads';
 import { alphaHex } from '@/lib/color-math';
@@ -74,6 +75,10 @@ export default function ReportsScreen() {
     setDownloadingFormat(null);
   };
 
+  const { refreshing: manualRefreshing, onRefresh: handleManualRefresh } = useManualRefresh(() =>
+    previewQuery.refetch()
+  );
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.bg }]}>
       <ScrollView
@@ -81,10 +86,8 @@ export default function ReportsScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
-            refreshing={previewQuery.isFetching}
-            onRefresh={() => {
-              void previewQuery.refetch();
-            }}
+            refreshing={manualRefreshing}
+            onRefresh={handleManualRefresh}
             tintColor={theme.brand}
           />
         }

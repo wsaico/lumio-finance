@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Check, Wallet } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useUpdateAccountPayable, useUpdateAccountReceivable } from '@/hooks/useLoans';
 import { useFormat } from '@/hooks/useFormat';
@@ -145,37 +146,12 @@ export function LoanPaymentModal({
           </View>
         </View>
 
-        <View>
-          <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-            {mode === 'RECEIVABLE' ? 'Cuenta que recibe' : 'Cuenta que paga'}
-          </Text>
-          <View style={styles.accList}>
-            {accounts.map((acc) => {
-              const selected = accountId === acc.id;
-              return (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => setAccountId(acc.id)}
-                  style={[
-                    styles.accRow,
-                    {
-                      backgroundColor: selected ? alphaHex(theme.brand, 0.12) : theme.muted,
-                      borderColor: selected ? theme.brand : theme.border,
-                    },
-                  ]}
-                >
-                  <Wallet size={15} color={selected ? theme.brand : theme.textMuted} />
-                  <Text style={{ flex: 1, color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(13) }}>
-                    {acc.name}
-                  </Text>
-                  <Text style={{ color: theme.textSecondary, fontFamily: theme.font('600'), fontSize: theme.sp(12) }}>
-                    {formatMaskedMoney(acc.currentBalance, acc.currencyCode)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <PremiumAccountPicker
+          accounts={accounts}
+          selectedId={accountId}
+          onSelectSingle={setAccountId}
+          label={mode === 'RECEIVABLE' ? 'Cuenta que recibe' : 'Cuenta que paga'}
+        />
 
         <View>
           <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>

@@ -17,10 +17,12 @@ import { useAppTheme } from '@/theme/ThemeProvider';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCategories } from '@/hooks/useCategories';
 import { useFormat } from '@/hooks/useFormat';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { CurvedHeroHeader } from '@/components/ui/CurvedHeroHeader';
 import { TopAppHeader } from '@/components/navigation/TopAppHeader';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
+import { PremiumCategoryPicker } from '@/components/ui/PremiumCategoryPicker';
 import { DualSplineAreaChart } from '@/components/charts/DualSplineAreaChart';
 import { TransactionListItem } from '@/components/transactions/TransactionListItem';
 import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
@@ -40,13 +42,13 @@ export default function TransactionsScreen() {
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState<'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER'>('ALL');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
   const [granularity, setGranularity] = useState<TimeGranularity>('Month');
   const [txToDelete, setTxToDelete] = useState<any>(null);
 
   const {
     transactions,
     isLoading,
-    isFetching,
     refetch,
     fetchNextPage,
     hasNextPage,
@@ -58,6 +60,7 @@ export default function TransactionsScreen() {
     type: selectedType === 'ALL' ? undefined : selectedType,
     search: search.trim() || undefined,
   });
+  const { refreshing: manualRefreshing, onRefresh: handleManualRefresh } = useManualRefresh(refetch);
 
   const filteredTx = useMemo(() => {
     if (!selectedCategoryId) return transactions;
@@ -233,46 +236,85 @@ export default function TransactionsScreen() {
             </Text>
           </Pressable>
 
-          {categories.slice(0, 10).map((cat: any) => {
-            const active = selectedCategoryId === cat.id;
-            return (
-              <Pressable
-                key={cat.id}
-                onPress={() => {
-                  triggerHaptic('selection');
-                  setSelectedCategoryId(active ? null : cat.id);
-                }}
-                style={styles.catTileWrap}
-              >
-                <View
-                  style={[
-                    styles.catSquare,
-                    {
-                      backgroundColor: active ? theme.brand : theme.card,
-                      borderColor: active ? theme.brand : theme.border,
-                    },
-                  ]}
-                >
-                  <CategoryIcon
-                    name={cat.icon}
-                    size={20}
-                    color={active ? '#FFFFFF' : cat.color || theme.brand}
-                  />
-                </View>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: active ? theme.brand : theme.textMuted,
-                    fontFamily: theme.font(active ? '800' : '600'),
-                    fontSize: 11,
-                    maxWidth: 62,
+          <Pressable
+            onPress={() => {
+              triggerHaptic('selection');
+              setCatPickerOpen(true);
+            }}
+            style={styles.catTileWrap}
+          >
+            <View
+              style={[
+                styles.catSquare,
+                {
+                  backgroundColor: theme.brandSoft,
+                  borderColor: theme.brand,
+                  borderStyle: 'dashed',
+                },
+              ]}
+            >
+              <Search size={19} color={theme.brand} />
+            </View>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: theme.brand,
+                fontFamily: theme.font('800'),
+                fontSize: 11,
+              }}
+            >
+              Buscar
+            </Text>
+          </Pressable>
+
+          {(() => {
+            const quick = categories.slice(0, 8);
+            const selectedOutside =
+              selectedCategoryId && !quick.some((c: any) => c.id === selectedCategoryId)
+                ? categories.find((c: any) => c.id === selectedCategoryId)
+                : null;
+            const visibleTiles = selectedOutside ? [selectedOutside, ...quick] : quick;
+            return visibleTiles.map((cat: any) => {
+              const active = selectedCategoryId === cat.id;
+              return (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => {
+                    triggerHaptic('selection');
+                    setSelectedCategoryId(active ? null : cat.id);
                   }}
+                  style={styles.catTileWrap}
                 >
-                  {cat.name}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <View
+                    style={[
+                      styles.catSquare,
+                      {
+                        backgroundColor: active ? theme.brand : theme.card,
+                        borderColor: active ? theme.brand : theme.border,
+                      },
+                    ]}
+                  >
+                    <CategoryIcon
+                      name={cat.icon}
+                      size={20}
+                      color={active ? '#FFFFFF' : cat.color || theme.brand}
+                    />
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: active ? theme.brand : theme.textMuted,
+                      fontFamily: theme.font(active ? '800' : '600'),
+                      fontSize: 11,
+                      maxWidth: 62,
+                    }}
+                  >
+                    {cat.name}
+                  </Text>
+                </Pressable>
+              );
+            });
+          })()}
         </ScrollView>
 
         {/* Search + Type Filter Pills */}
@@ -347,8 +389,8 @@ export default function TransactionsScreen() {
         contentContainerStyle={{ paddingBottom: 118, gap: 10 }}
         refreshControl={
           <RefreshControl
-            refreshing={isFetching && !isFetchingNextPage}
-            onRefresh={() => { void refetch(); }}
+            refreshing={manualRefreshing}
+            onRefresh={handleManualRefresh}
             tintColor={theme.brand}
           />
         }
@@ -379,6 +421,17 @@ export default function TransactionsScreen() {
             </View>
           )
         }
+      />
+
+      <PremiumCategoryPicker
+        open={catPickerOpen}
+        onClose={() => setCatPickerOpen(false)}
+        categories={categories}
+        type="ALL"
+        includeAllOption
+        allLabel="Todas las categorías"
+        selectedCategoryId={selectedCategoryId || ''}
+        onSelect={(id) => setSelectedCategoryId(id || null)}
       />
 
       <ConfirmAlertModal

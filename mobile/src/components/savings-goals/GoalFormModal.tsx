@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Check, Flag, Plane, Shield, ShoppingBag, Sparkles, TrendingUp, Wallet } from 'lucide-react-native';
+import { Check, Flag, Plane, Shield, ShoppingBag, Sparkles, TrendingUp } from 'lucide-react-native';
 import { addMonths } from 'date-fns';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
+import { PremiumCurrencyPicker } from '@/components/ui/PremiumCurrencyPicker';
 import { PremiumDatePicker } from '@/components/ui/PremiumDatePicker';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreateSavingsGoal, useUpdateSavingsGoal, type SavingsGoal } from '@/hooks/useSavingsGoals';
 import { useSettingsStore } from '@/stores/settings-store';
-import { CURRENCIES } from '@/lib/currencies';
 import { alphaHex } from '@/lib/color-math';
 import { triggerHaptic } from '@/lib/haptics';
 import { showAppToast } from '@/stores/toast-store';
@@ -236,56 +237,19 @@ export function GoalFormModal({
           />
         </View>
 
-        <View>
-          <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-            Moneda
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            {CURRENCIES.slice(0, 6).map((c) => {
-              const active = currency === c.code;
-              return (
-                <Pressable
-                  key={c.code}
-                  onPress={() => setCurrency(c.code)}
-                  style={[
-                    styles.pill,
-                    { backgroundColor: active ? theme.brand : theme.muted, borderColor: active ? theme.brand : theme.border },
-                  ]}
-                >
-                  <Text style={{ color: active ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(12) }}>
-                    {c.symbol} {c.code}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <PremiumCurrencyPicker
+          label="Moneda"
+          value={currency}
+          onChange={setCurrency}
+        />
 
-        <View>
-          <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-            Cuenta principal vinculada
-          </Text>
-          <View style={styles.chipWrap}>
-            {accounts.map((acc) => {
-              const active = primaryAccountId === acc.id;
-              return (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => setPrimaryAccountId(acc.id)}
-                  style={[
-                    styles.pill,
-                    { backgroundColor: active ? alphaHex(theme.brand, 0.14) : theme.muted, borderColor: active ? theme.brand : theme.border },
-                  ]}
-                >
-                  <Wallet size={13} color={active ? theme.brand : theme.textMuted} />
-                  <Text style={{ color: active ? theme.brand : theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(12) }}>
-                    {acc.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <PremiumAccountPicker
+          accounts={accounts}
+          selectedId={primaryAccountId}
+          onSelectSingle={setPrimaryAccountId}
+          label="Cuenta principal vinculada"
+          showBalance={false}
+        />
 
         <PremiumDatePicker label="Fecha objetivo" value={targetDate} onChange={setTargetDate} variant="hero" />
 

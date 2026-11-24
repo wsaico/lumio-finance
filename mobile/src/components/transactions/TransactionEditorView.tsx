@@ -66,6 +66,7 @@ import { CategoryIcon } from '@/components/ui/CategoryIcon';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumCalculator } from '@/components/ui/PremiumCalculator';
 import { PremiumCategoryPicker } from '@/components/ui/PremiumCategoryPicker';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
 import { PremiumDatePicker } from '@/components/ui/PremiumDatePicker';
 import { PremiumTimePicker } from '@/components/ui/PremiumTimePicker';
 import { BudgetWarningBanner } from '@/components/alerts/BudgetWarningBanner';
@@ -1269,7 +1270,7 @@ export function TransactionEditorView({
           <PremiumTimePicker label="Hora" value={txDate} onChange={setTxDate} />
         </View>
 
-        {/* Source Account Pills + Balance Preview */}
+        {/* Source Account Picker + Balance Preview */}
         <View style={{ gap: 10 }}>
           <View style={styles.sectionLabel}>
             <Wallet size={14} color={theme.brand} />
@@ -1277,35 +1278,21 @@ export function TransactionEditorView({
               {activeTab === 'INCOME' ? 'CUENTA DE DESTINO' : 'CUENTA DE ORIGEN'}
             </Text>
           </View>
-          <View style={styles.wrapRow}>
-            {accounts.map((acc) => {
-              const selected = acc.id === accountId;
-              return (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => {
-                    triggerHaptic('selection');
-                    setAccountId(acc.id);
-                  }}
-                  style={[
-                    styles.accPill,
-                    {
-                      backgroundColor: selected ? theme.brand : theme.card,
-                      borderColor: selected ? theme.brand : theme.border,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: selected ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: 12.5 }}>
-                    {formatAccountPillName(acc.name, acc.currencyCode)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <PremiumAccountPicker
+            accounts={accounts}
+            selectedId={accountId}
+            onSelectSingle={(id) => {
+              triggerHaptic('selection');
+              setAccountId(id);
+            }}
+            inlineThreshold={3}
+            showBalance={false}
+            placeholder="Elegir cuenta"
+          />
           <BalancePreviewBanner account={currentAccount} amount={Number(amount || 0)} type={activeTab} />
         </View>
 
-        {/* Transfer Destination Pills */}
+        {/* Transfer Destination Picker */}
         {activeTab === 'TRANSFER' ? (
           <View style={{ gap: 10 }}>
             <View style={styles.sugHeader}>
@@ -1322,30 +1309,15 @@ export function TransactionEditorView({
                 </Text>
               </Pressable>
             </View>
-            <View style={styles.wrapRow}>
-              {accounts
-                .filter((a) => a.id !== accountId)
-                .map((acc) => {
-                  const selected = acc.id === transferToAccountId;
-                  return (
-                    <Pressable
-                      key={`to-${acc.id}`}
-                      onPress={() => setTransferToAccountId(acc.id)}
-                      style={[
-                        styles.accPill,
-                        {
-                          backgroundColor: selected ? theme.transfer : theme.card,
-                          borderColor: selected ? theme.transfer : theme.border,
-                        },
-                      ]}
-                    >
-                      <Text style={{ color: selected ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: 12.5 }}>
-                        {formatAccountPillName(acc.name, acc.currencyCode)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-            </View>
+            <PremiumAccountPicker
+              accounts={accounts}
+              excludeIds={accountId ? [accountId] : []}
+              selectedId={transferToAccountId}
+              onSelectSingle={setTransferToAccountId}
+              inlineThreshold={3}
+              showBalance={false}
+              placeholder="Elegir cuenta destino"
+            />
             {transferToAccount?.accountType === 'CREDIT_CARD' ? (
               <View style={[styles.ccBox, { backgroundColor: theme.brandSoft, borderColor: theme.border }]}>
                 <CreditCard size={15} color={theme.brand} />

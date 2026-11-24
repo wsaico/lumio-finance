@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Target } from 'lucide-react-native';
+import { ChevronRight, Search, Target, X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumCategoryPicker } from '@/components/ui/PremiumCategoryPicker';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
 import { useCategories } from '@/hooks/useCategories';
@@ -52,6 +53,8 @@ export function AllocationModal({
   const [priority, setPriority] = useState(1);
   const [frequency, setFrequency] = useState<'monthly' | 'biweekly' | 'weekly' | 'daily'>('monthly');
   const [justification, setJustification] = useState('');
+  const [catPickerOpen, setCatPickerOpen] = useState(false);
+  const [goalSearch, setGoalSearch] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -135,7 +138,8 @@ export function AllocationModal({
   };
 
   return (
-    <PremiumBottomSheet
+    <>
+      <PremiumBottomSheet
       open={open}
       onClose={() => onOpenChange(false)}
       title={initialAllocation ? 'Editar sobre ZBB' : 'Asignar nueva partida'}
@@ -171,34 +175,55 @@ export function AllocationModal({
             <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
               Categoría
             </Text>
-            <View style={styles.chipWrap}>
-              {expenseCategories.map((cat: any) => {
-                const active = categoryId === cat.id;
-                const cColor = cat.color || theme.brand;
-                return (
-                  <Pressable
-                    key={cat.id}
-                    onPress={() => setCategoryId(cat.id)}
-                    style={[
-                      styles.catPill,
-                      {
-                        backgroundColor: active ? alphaHex(cColor, 0.16) : theme.muted,
-                        borderColor: active ? cColor : theme.border,
-                      },
-                    ]}
+            {(() => {
+              const selectedCat = expenseCategories.find((c: any) => c.id === categoryId);
+              const cColor = selectedCat?.color || theme.brand;
+              return (
+                <Pressable
+                  onPress={() => setCatPickerOpen(true)}
+                  style={[
+                    styles.catPill,
+                    {
+                      backgroundColor: selectedCat ? alphaHex(cColor, 0.1) : theme.muted,
+                      borderColor: selectedCat ? cColor : theme.border,
+                      paddingVertical: 11,
+                      paddingHorizontal: 13,
+                      borderRadius: 16,
+                    },
+                  ]}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 11,
+                      backgroundColor: selectedCat ? cColor : theme.brandSoft,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
-                    <CategoryIcon name={cat.icon} size={13} color={active ? cColor : theme.textMuted} />
-                    <Text style={{ color: theme.text, fontFamily: theme.font(active ? '700' : '600'), fontSize: theme.sp(12) }}>
-                      {cat.name}
+                    <CategoryIcon
+                      name={selectedCat?.icon || 'tags'}
+                      size={16}
+                      color={selectedCat ? '#FFFFFF' : theme.brand}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(13.5) }}>
+                      {selectedCat?.name || 'Elegir categoría de gasto'}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                    <Text style={{ color: theme.textMuted, fontFamily: theme.font('500'), fontSize: theme.sp(11) }}>
+                      Toca para buscar entre tus categorías ({expenseCategories.length})
+                    </Text>
+                  </View>
+                  <ChevronRight size={17} color={theme.textMuted} />
+                </Pressable>
+              );
+            })()}
           </View>
         ) : (
-          <View>
-            <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
+          <View style={{ gap: 8 }}>
+            <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12), marginBottom: 0 }]}>
               Meta activa
             </Text>
             {activeGoals.length === 0 ? (
@@ -206,29 +231,50 @@ export function AllocationModal({
                 No tienes metas activas aún.
               </Text>
             ) : (
-              <View style={styles.chipWrap}>
-                {activeGoals.map((g) => {
-                  const active = goalId === g.id;
-                  return (
-                    <Pressable
-                      key={g.id}
-                      onPress={() => setGoalId(g.id)}
-                      style={[
-                        styles.catPill,
-                        {
-                          backgroundColor: active ? alphaHex(theme.income, 0.15) : theme.muted,
-                          borderColor: active ? theme.income : theme.border,
-                        },
-                      ]}
-                    >
-                      <Target size={13} color={active ? theme.income : theme.textMuted} />
-                      <Text style={{ color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(12) }}>
-                        {g.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <>
+                {activeGoals.length > 4 ? (
+                  <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, backgroundColor: theme.muted, borderColor: theme.border }]}>
+                    <Search size={15} color={theme.textMuted} />
+                    <TextInput
+                      value={goalSearch}
+                      onChangeText={setGoalSearch}
+                      placeholder="Buscar meta..."
+                      placeholderTextColor={theme.textMuted}
+                      style={{ flex: 1, color: theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(13) }}
+                    />
+                    {goalSearch ? (
+                      <Pressable onPress={() => setGoalSearch('')} hitSlop={8}>
+                        <X size={14} color={theme.textMuted} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+                <View style={styles.chipWrap}>
+                  {activeGoals
+                    .filter((g) => !goalSearch.trim() || g.name.toLowerCase().includes(goalSearch.trim().toLowerCase()))
+                    .map((g) => {
+                      const active = goalId === g.id;
+                      return (
+                        <Pressable
+                          key={g.id}
+                          onPress={() => setGoalId(g.id)}
+                          style={[
+                            styles.catPill,
+                            {
+                              backgroundColor: active ? alphaHex(theme.income, 0.15) : theme.muted,
+                              borderColor: active ? theme.income : theme.border,
+                            },
+                          ]}
+                        >
+                          <Target size={13} color={active ? theme.income : theme.textMuted} />
+                          <Text style={{ color: theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(12) }}>
+                            {g.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                </View>
+              </>
             )}
           </View>
         )}
@@ -251,7 +297,7 @@ export function AllocationModal({
             />
           </View>
           <View style={styles.currCol}>
-            {(['PEN', 'USD'] as const).map((c) => {
+            {(baseCurrency === 'USD' ? (['USD', 'PEN'] as const) : (['PEN', 'USD'] as const)).map((c) => {
               const active = currency === c;
               return (
                 <Pressable
@@ -329,6 +375,18 @@ export function AllocationModal({
         </View>
       </View>
     </PremiumBottomSheet>
+
+    <PremiumCategoryPicker
+      open={catPickerOpen}
+      onClose={() => setCatPickerOpen(false)}
+      categories={expenseCategories}
+      type="EXPENSE"
+      selectedCategoryId={categoryId}
+      onSelect={(catId) => setCategoryId(catId)}
+      title="Elegir categoría ZBB"
+      subtitle="Busca y selecciona la categoría para este sobre"
+    />
+    </>
   );
 }
 

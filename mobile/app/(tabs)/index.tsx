@@ -35,6 +35,7 @@ import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useUser } from '@/hooks/useUser';
 import { useFormat } from '@/hooks/useFormat';
+import { useManualRefresh } from '@/hooks/useManualRefresh';
 import { useSettingsStore } from '@/stores/settings-store';
 import { computeSafeToSpendToday } from '@/lib/peru-insights';
 import { alphaHex } from '@/lib/color-math';
@@ -51,6 +52,8 @@ import { TransactionListItem } from '@/components/transactions/TransactionListIt
 import { ConfirmAlertModal } from '@/components/alerts/ConfirmAlertModal';
 import { triggerHaptic } from '@/lib/haptics';
 
+let lastHomeFocusRefreshAt = 0;
+
 export default function DashboardScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -59,7 +62,7 @@ export default function DashboardScreen() {
   const homeWidgets = useSettingsStore((s) => s.homeWidgets);
 
   const now = new Date();
-  const { data, isLoading, refetch, isRefetching } = useDashboardData();
+  const { data, isLoading, refetch } = useDashboardData();
   const { totalBalanceConverted, accounts: fullAccounts, refetch: refetchAccounts } = useAccounts();
   const { transactions, deleteTransaction, refetch: refetchTx } = useTransactions({});
   const { data: goals = [] } = useSavingsGoals('ACTIVE');
@@ -166,18 +169,7 @@ export default function DashboardScreen() {
     [fullAccounts, budgets, subscriptions, payablesQuery.data, baseCurrency, convert, todayExpenses]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-      refetchAccounts();
-      refetchTx();
-      refetchBudgets();
-      refetchSubs();
-      payablesQuery.refetch();
-    }, [refetch, refetchAccounts, refetchTx, refetchBudgets, refetchSubs, payablesQuery])
-  );
-
-  const onRefresh = async () => {
+  const refreshAllHomeData = useCallback(async () => {
     await Promise.all([
       refetch(),
       refetchAccounts(),
@@ -186,7 +178,18 @@ export default function DashboardScreen() {
       refetchSubs(),
       payablesQuery.refetch(),
     ]);
-  };
+  }, [refetch, refetchAccounts, refetchTx, refetchBudgets, refetchSubs, payablesQuery]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const nowMs = Date.now();
+      if (nowMs - lastHomeFocusRefreshAt < 35_000) return;
+      lastHomeFocusRefreshAt = nowMs;
+      void refreshAllHomeData();
+    }, [refreshAllHomeData])
+  );
+
+  const { refreshing: manualRefreshing, onRefresh } = useManualRefresh(refreshAllHomeData);
 
   if (isLoading && !data) {
     return (
@@ -203,7 +206,7 @@ export default function DashboardScreen() {
         contentContainerStyle={{ paddingBottom: 118 }}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={manualRefreshing}
             onRefresh={onRefresh}
             tintColor={theme.brand}
           />

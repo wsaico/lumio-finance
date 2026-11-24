@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { addMonths } from 'date-fns';
-import { ArrowDownLeft, ArrowUpRight, Percent, User, Wallet } from 'lucide-react-native';
+import { ArrowDownLeft, ArrowUpRight, Percent, User } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { PremiumBottomSheet } from '@/components/ui/PremiumBottomSheet';
 import { PremiumButton } from '@/components/ui/PremiumButton';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
+import { PremiumCurrencyPicker } from '@/components/ui/PremiumCurrencyPicker';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PremiumDatePicker } from '@/components/ui/PremiumDatePicker';
 import { BalancePreviewBanner } from '@/components/alerts/BalancePreviewBanner';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreateAccountPayable, useCreateAccountReceivable } from '@/hooks/useLoans';
 import { useSettingsStore } from '@/stores/settings-store';
-import { useFormat } from '@/hooks/useFormat';
-import { CURRENCIES } from '@/lib/currencies';
 import { alphaHex } from '@/lib/color-math';
 import { showAppToast } from '@/stores/toast-store';
 
@@ -26,7 +26,6 @@ export function CreateLoanModal({
   defaultType?: 'RECEIVABLE' | 'PAYABLE';
 }) {
   const theme = useAppTheme();
-  const { formatMaskedMoney } = useFormat();
   const baseCurrency = useSettingsStore((s) => s.currencyCode) || 'PEN';
   const { accounts } = useAccounts();
   const createReceivable = useCreateAccountReceivable();
@@ -198,59 +197,18 @@ export function CreateLoanModal({
               />
             </View>
 
-            <View>
-              <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-                Moneda
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-                {CURRENCIES.slice(0, 6).map((c) => {
-                  const active = currencyCode === c.code;
-                  return (
-                    <Pressable
-                      key={c.code}
-                      onPress={() => setCurrencyCode(c.code)}
-                      style={[
-                        styles.pill,
-                        { backgroundColor: active ? theme.brand : theme.muted, borderColor: active ? theme.brand : theme.border },
-                      ]}
-                    >
-                      <Text style={{ color: active ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: theme.sp(12) }}>
-                        {c.symbol} {c.code}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
+            <PremiumCurrencyPicker
+              label="Moneda"
+              value={currencyCode}
+              onChange={setCurrencyCode}
+            />
 
-            <View>
-              <Text style={[styles.label, { color: theme.textSecondary, fontFamily: theme.font('700'), fontSize: theme.sp(12) }]}>
-                {loanType === 'RECEIVABLE' ? 'Cuenta desde donde entregas' : 'Cuenta que recibe el dinero'}
-              </Text>
-              <View style={styles.chipWrap}>
-                {accounts.map((acc) => {
-                  const selected = accountId === acc.id;
-                  return (
-                    <Pressable
-                      key={acc.id}
-                      onPress={() => setAccountId(acc.id)}
-                      style={[
-                        styles.pill,
-                        {
-                          backgroundColor: selected ? alphaHex(theme.brand, 0.14) : theme.muted,
-                          borderColor: selected ? theme.brand : theme.border,
-                        },
-                      ]}
-                    >
-                      <Wallet size={13} color={selected ? theme.brand : theme.textMuted} />
-                      <Text style={{ color: selected ? theme.brand : theme.text, fontFamily: theme.font('600'), fontSize: theme.sp(12) }}>
-                        {acc.name} ({formatMaskedMoney(acc.currentBalance, acc.currencyCode)})
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            <PremiumAccountPicker
+              accounts={accounts}
+              selectedId={accountId}
+              onSelectSingle={setAccountId}
+              label={loanType === 'RECEIVABLE' ? 'Cuenta desde donde entregas' : 'Cuenta que recibe el dinero'}
+            />
 
             {loanType === 'RECEIVABLE' && selectedAccount && parsedAmount > 0 && (
               <BalancePreviewBanner

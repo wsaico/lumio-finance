@@ -16,8 +16,8 @@ export function useAccounts() {
   const { data: accounts, isLoading, error, refetch } = useQuery<any[]>({
     queryKey: ['accounts'],
     queryFn: () => apiGet<any[]>('/api/accounts'),
-    staleTime: 1000 * 10,
-    refetchOnMount: 'always',
+    staleTime: 1000 * 45,
+    refetchOnMount: true,
   });
 
   const summary = useMemo(() => {

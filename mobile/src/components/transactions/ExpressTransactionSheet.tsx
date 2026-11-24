@@ -34,6 +34,7 @@ import { useAppTheme } from '@/theme/ThemeProvider';
 import { getCurrencySymbol } from '@/lib/currencies';
 import { formatAccountPillName, formatMoneyValue } from '@/lib/format';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
+import { PremiumAccountPicker } from '@/components/ui/PremiumAccountPicker';
 import { PremiumCalculator } from '@/components/ui/PremiumCalculator';
 import { BalancePreviewBanner } from '@/components/alerts/BalancePreviewBanner';
 import type { SuggestedTransaction } from '@/hooks/useTransactionSuggestions';
@@ -668,60 +669,31 @@ export function ExpressTransactionSheet(props: ExpressTransactionSheetProps) {
                     </Text>
                   </Pressable>
                 </View>
-                <View style={styles.wrapRow}>
-                  {accounts.map((acc) => {
-                    const active = acc.id === accountId;
-                    return (
-                      <Pressable
-                        key={`src-${acc.id}`}
-                        onPress={() => onAccountSelect(acc.id)}
-                        style={[
-                          styles.accPill,
-                          {
-                            backgroundColor: active ? theme.brand : theme.muted,
-                            borderColor: active ? theme.brand : theme.border,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: active ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: 12.5 }}>
-                          {formatAccountPillName(acc.name, acc.currencyCode)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <PremiumAccountPicker
+                  accounts={accounts}
+                  selectedId={accountId}
+                  onSelectSingle={onAccountSelect}
+                  showBalance={false}
+                  inlineThreshold={3}
+                  placeholder="Elegir cuenta origen"
+                />
 
                 <Text style={{ color: theme.textMuted, fontFamily: theme.font('800'), fontSize: 11, marginTop: 4 }}>
                   CUENTA DESTINO
                 </Text>
-                <View style={styles.wrapRow}>
-                  {accounts
-                    .filter((a) => a.id !== accountId)
-                    .map((acc) => {
-                      const active = acc.id === transferToAccountId;
-                      return (
-                        <Pressable
-                          key={`dst-${acc.id}`}
-                          onPress={() => {
-                            triggerHaptic('selection');
-                            onTransferToSelect(acc.id);
-                            setStep('amount');
-                          }}
-                          style={[
-                            styles.accPill,
-                            {
-                              backgroundColor: active ? theme.transfer : theme.muted,
-                              borderColor: active ? theme.transfer : theme.border,
-                            },
-                          ]}
-                        >
-                          <Text style={{ color: active ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: 12.5 }}>
-                            {formatAccountPillName(acc.name, acc.currencyCode)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                </View>
+                <PremiumAccountPicker
+                  accounts={accounts}
+                  excludeIds={accountId ? [accountId] : []}
+                  selectedId={transferToAccountId}
+                  onSelectSingle={(id) => {
+                    triggerHaptic('selection');
+                    onTransferToSelect(id);
+                    setStep('amount');
+                  }}
+                  showBalance={false}
+                  inlineThreshold={3}
+                  placeholder="Elegir cuenta destino"
+                />
               </View>
             )}
 
@@ -759,32 +731,17 @@ export function ExpressTransactionSheet(props: ExpressTransactionSheetProps) {
                     </Pressable>
                   </View>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
-                    {accounts.map((acc) => {
-                      const active = acc.id === accountId;
-                      return (
-                        <Pressable
-                          key={`amt-acc-${acc.id}`}
-                          onPress={() => {
-                            triggerHaptic('selection');
-                            onAccountSelect(acc.id);
-                          }}
-                          style={[
-                            styles.accPill,
-                            {
-                              backgroundColor: active ? theme.brand : theme.muted,
-                              borderColor: active ? theme.brand : theme.border,
-                            },
-                          ]}
-                        >
-                          <Wallet size={13} color={active ? '#FFFFFF' : theme.brand} />
-                          <Text style={{ color: active ? '#FFFFFF' : theme.text, fontFamily: theme.font('700'), fontSize: 12 }}>
-                            {formatAccountPillName(acc.name, acc.currencyCode)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                  <PremiumAccountPicker
+                    accounts={accounts}
+                    selectedId={accountId}
+                    onSelectSingle={(id) => {
+                      triggerHaptic('selection');
+                      onAccountSelect(id);
+                    }}
+                    showBalance={false}
+                    inlineThreshold={3}
+                    placeholder="Elegir cuenta"
+                  />
                 )}
 
                 <BalancePreviewBanner account={currentAccount} amount={numericAmount} type={activeTab} />
