@@ -1,11 +1,20 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 
-const clientID = process.env.GOOGLE_CLIENT_ID;
-const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-const redirectURI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback';
+export const createOAuth2Client = (redirectUriOverride?: string) => {
+    const clientID = process.env.GOOGLE_CLIENT_ID?.trim();
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+    const fallbackSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()?.replace(/\/$/, '');
+    const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+    const redirectURI =
+        redirectUriOverride ||
+        process.env.GOOGLE_REDIRECT_URI?.trim() ||
+        (fallbackSiteUrl
+            ? `${fallbackSiteUrl}/api/auth/google/callback`
+            : vercelUrl
+              ? `https://${vercelUrl}/api/auth/google/callback`
+              : 'http://localhost:3000/api/auth/google/callback');
 
-export const createOAuth2Client = () => {
     return new google.auth.OAuth2(clientID, clientSecret, redirectURI);
 };
 

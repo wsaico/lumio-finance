@@ -70,7 +70,7 @@ export function OnboardingWizardModal({ visible }: { visible: boolean }) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="fade" transparent>
       <View style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.header}>

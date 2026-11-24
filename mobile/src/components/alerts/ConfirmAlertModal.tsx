@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AlertTriangle, CheckCircle2, Info, Trash2 } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -94,7 +94,7 @@ export function ConfirmAlertModal({
         style={styles.backdrop}
       >
         <Animated.View
-          entering={theme.motion === 'none' ? undefined : ZoomIn.springify().damping(20)}
+          entering={theme.motion === 'none' ? undefined : FadeIn.duration(140)}
           style={[
             styles.card,
             {

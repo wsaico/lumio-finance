@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -52,7 +52,7 @@ export function PremiumBottomSheet({
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
           <Animated.View
-            entering={theme.motion === 'none' ? undefined : SlideInDown.springify().damping(24).stiffness(280)}
+            entering={theme.motion === 'none' ? undefined : FadeIn.duration(150)}
             style={[
               styles.sheet,
               {

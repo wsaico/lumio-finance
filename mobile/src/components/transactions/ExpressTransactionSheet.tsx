@@ -261,7 +261,7 @@ export function ExpressTransactionSheet(props: ExpressTransactionSheetProps) {
       visible={open}
       transparent
       statusBarTranslucent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={() => onOpenChange(false)}
     >
       <KeyboardAvoidingView

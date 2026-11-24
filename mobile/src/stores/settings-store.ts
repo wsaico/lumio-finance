@@ -125,6 +125,8 @@ interface SettingsState {
   // EXPERIMENTAL & PRIVACIDAD
   enableAIReceiptScanning: boolean;
   setEnableAIReceiptScanning: (enabled: boolean) => void;
+  saveScannedReceiptsToDrive: boolean;
+  setSaveScannedReceiptsToDrive: (enabled: boolean) => void;
   isBalanceVisible: boolean;
   setIsBalanceVisible: (visible: boolean) => void;
 
@@ -181,6 +183,7 @@ const USER_DEFAULT_PREFS = {
   manualPayDateMode: 'scheduled' as ManualPayDateMode,
   confirmAmountMode: 'if_zero' as ConfirmAmountMode,
   enableAIReceiptScanning: true,
+  saveScannedReceiptsToDrive: true,
   isBalanceVisible: true,
   payYourselfFirstEnabled: false,
   payYourselfFirstPct: 10,
@@ -240,6 +243,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       setEnableAIReceiptScanning: (enableAIReceiptScanning) =>
         set({ enableAIReceiptScanning }),
+      setSaveScannedReceiptsToDrive: (saveScannedReceiptsToDrive) =>
+        set({ saveScannedReceiptsToDrive }),
       setIsBalanceVisible: (isBalanceVisible) => set({ isBalanceVisible }),
 
       setPayYourselfFirstEnabled: (payYourselfFirstEnabled) => set({ payYourselfFirstEnabled }),

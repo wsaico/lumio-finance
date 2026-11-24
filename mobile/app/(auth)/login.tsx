@@ -103,30 +103,65 @@ export default function LoginScreen() {
         options: {
           redirectTo,
           skipBrowserRedirect: Platform.OS !== 'web',
+          queryParams: {
+            prompt: 'select_account',
+          },
         },
       });
       if (error) throw error;
       if (Platform.OS !== 'web' && data?.url) {
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
+          preferEphemeralSession: false,
+        });
         if (res.type === 'success' && res.url) {
           const parsed = Linking.parse(res.url);
-          const code = parsed.queryParams?.code;
-          if (typeof code === 'string') {
-            await supabase.auth.exchangeCodeForSession(code);
-          } else if (res.url.includes('#')) {
-            const hashParams = new URLSearchParams(res.url.split('#')[1] || '');
-            const access_token = hashParams.get('access_token');
-            const refresh_token = hashParams.get('refresh_token');
-            if (access_token && refresh_token) {
-              await supabase.auth.setSession({ access_token, refresh_token });
-            }
+          const hashRaw = res.url.includes('#') ? res.url.split('#')[1] || '' : '';
+          const hashMap: Record<string, string> = {};
+          for (const pair of hashRaw.split('&')) {
+            if (!pair) continue;
+            const [k, v = ''] = pair.split('=');
+            if (k) hashMap[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, ' '));
           }
+
+          const oauthErr =
+            (typeof parsed.queryParams?.error_description === 'string' &&
+              parsed.queryParams.error_description) ||
+            (typeof parsed.queryParams?.error === 'string' && parsed.queryParams.error) ||
+            hashMap.error_description ||
+            hashMap.error;
+          if (oauthErr) {
+            throw new Error(oauthErr);
+          }
+
+          const code = parsed.queryParams?.code;
+          if (typeof code === 'string' && code) {
+            const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+            if (exErr) throw exErr;
+            return;
+          }
+
+          const access_token = hashMap.access_token;
+          const refresh_token = hashMap.refresh_token;
+          if (access_token && refresh_token) {
+            const { error: setErr } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            if (setErr) throw setErr;
+            return;
+          }
+
+          throw new Error('Google no devolvió una sesión válida. Verifica la URL de redirección en Supabase.');
         }
       }
     } catch (err: any) {
+      const rawMsg = String(err?.message || '');
+      const friendlyMsg = rawMsg.toLowerCase().includes('provider is not enabled')
+        ? 'El proveedor Google aún no está activado en Supabase Authentication -> Providers.'
+        : rawMsg || 'Verifica la configuración de Google OAuth e intenta de nuevo.';
       showAppToast.error({
         title: 'No se pudo iniciar con Google',
-        description: err?.message,
+        description: friendlyMsg,
       });
     } finally {
       setGoogleLoading(false);

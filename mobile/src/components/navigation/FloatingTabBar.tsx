@@ -7,16 +7,14 @@ import Animated, {
   FadeOut,
   useAnimatedStyle,
   withSpring,
-  ZoomIn,
-  ZoomOut,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowRightLeft,
   Camera,
-  LayoutDashboard,
-  LayoutGrid,
+  Compass,
+  Home,
   Plus,
   TrendingDown,
   TrendingUp,
@@ -27,13 +25,13 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { triggerHaptic } from '@/lib/haptics';
 
 const LEFT_TABS = [
-  { key: 'index', label: 'Inicio', href: '/(tabs)', match: '/', Icon: LayoutDashboard },
+  { key: 'index', label: 'Inicio', href: '/(tabs)', match: '/', Icon: Home },
   { key: 'transactions', label: 'Movimientos', href: '/(tabs)/transactions', match: '/transactions', Icon: ArrowRightLeft },
 ] as const;
 
 const RIGHT_TABS = [
   { key: 'accounts', label: 'Cuentas', href: '/(tabs)/accounts', match: '/accounts', Icon: Wallet },
-  { key: 'explore', label: 'Explorar', href: '/(tabs)/explore', match: '/explore', Icon: LayoutGrid },
+  { key: 'explore', label: 'Explorar', href: '/(tabs)/explore', match: '/explore', Icon: Compass },
 ] as const;
 
 const SPEED_DIAL = [
@@ -87,7 +85,7 @@ export function FloatingTabBar() {
             ? quickOpen
               ? '45deg'
               : '0deg'
-            : withSpring(quickOpen ? '45deg' : '0deg', { damping: 16, stiffness: 260 }),
+            : withSpring(quickOpen ? '45deg' : '0deg', { damping: 24, stiffness: 260 }),
       },
     ],
   }), [quickOpen, theme.motion]);
@@ -263,9 +261,9 @@ export function FloatingTabBar() {
                     entering={
                       theme.motion === 'none'
                         ? undefined
-                        : ZoomIn.delay(idx * 35).springify().damping(18)
+                        : FadeIn.delay(idx * 25).duration(130)
                     }
-                    exiting={theme.motion === 'none' ? undefined : ZoomOut.duration(120)}
+                    exiting={theme.motion === 'none' ? undefined : FadeOut.duration(100)}
                   >
                     <Pressable
                       onPress={() => {

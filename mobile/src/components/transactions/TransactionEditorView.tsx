@@ -98,6 +98,10 @@ const RECURRENCES = [
 interface ScanDraft {
   amount: string;
   currency: string;
+  imageUri?: string;
+  imageMime?: string;
+  imageName?: string;
+  saveToDrive?: boolean;
   date: string | null;
   time: string | null;
   vendor: string;
@@ -247,6 +251,8 @@ export function TransactionEditorView({
   const [isAutoExecute, setIsAutoExecute] = useState<boolean>(
     initialData?.metadata?.isAutoExecute ?? defaultAutoPayRecurring
   );
+
+  const saveScannedReceiptsToDrive = useSettingsStore((s) => s.saveScannedReceiptsToDrive);
 
   // UI state
   const expressStepInitial: ExpressStep =
@@ -430,6 +436,8 @@ export function TransactionEditorView({
       const asset = result.assets[0];
       const mime = asset.mimeType || 'image/jpeg';
       const dataUrl = `data:${mime};base64,${asset.base64}`;
+      const defaultExt = mime.includes('png') ? 'png' : 'jpg';
+      const fileName = asset.fileName || `comprobante-${Date.now()}.${defaultExt}`;
 
       setIsScanning(true);
       const scanned = await apiPost<any>('/api/ai/scan-receipt', { image: dataUrl });
@@ -452,6 +460,10 @@ export function TransactionEditorView({
 
       setScanDraft({
         amount: scanned?.amount ? String(scanned.amount) : '',
+        imageUri: asset.uri,
+        imageMime: mime,
+        imageName: fileName,
+        saveToDrive: saveScannedReceiptsToDrive,
         currency: scanned?.currency || currentAccount?.currencyCode || 'PEN',
         date: scanned?.date || null,
         time: scanned?.time || null,
@@ -481,31 +493,32 @@ export function TransactionEditorView({
     }
   };
 
-  const handleConfirmScanDraft = () => {
+  const handleConfirmScanDraft = async () => {
     if (!scanDraft) return;
+    const draft = scanDraft;
     triggerHaptic('success');
 
-    setActiveTab(scanDraft.transactionType);
-    if (scanDraft.amount) setAmount(scanDraft.amount);
-    if (scanDraft.description || scanDraft.vendor) {
-      setDescription(scanDraft.description || scanDraft.vendor);
+    setActiveTab(draft.transactionType);
+    if (draft.amount) setAmount(draft.amount);
+    if (draft.description || draft.vendor) {
+      setDescription(draft.description || draft.vendor);
     }
-    if (scanDraft.date) {
-      const timePart = scanDraft.time ? `${scanDraft.time}:00` : '12:00:00';
-      const d = new Date(`${scanDraft.date}T${timePart}`);
+    if (draft.date) {
+      const timePart = draft.time ? `${draft.time}:00` : '12:00:00';
+      const d = new Date(`${draft.date}T${timePart}`);
       if (!Number.isNaN(d.getTime())) setTxDate(d);
     }
 
     const noteParts = [
-      scanDraft.walletApp && scanDraft.walletApp !== 'OTRO' ? scanDraft.walletApp : scanDraft.receiptType,
-      scanDraft.operationNumber ? `Nro. op: ${scanDraft.operationNumber}` : '',
-      scanDraft.vendor,
+      draft.walletApp && draft.walletApp !== 'OTRO' ? draft.walletApp : draft.receiptType,
+      draft.operationNumber ? `Nro. op: ${draft.operationNumber}` : '',
+      draft.vendor,
     ].filter(Boolean);
     if (noteParts.length > 0) setNotes(noteParts.join(' · '));
 
-    if (scanDraft.suggestedCategoryId) {
-      setCategoryId(scanDraft.suggestedCategoryId);
-      setSubcategoryId(scanDraft.suggestedSubcategoryId || '');
+    if (draft.suggestedCategoryId) {
+      setCategoryId(draft.suggestedCategoryId);
+      setSubcategoryId(draft.suggestedSubcategoryId || '');
       setHasManualCat(true);
     } else {
       setCategoryId('');
@@ -514,11 +527,58 @@ export function TransactionEditorView({
     }
 
     setScannedMeta({
-      operationNumber: scanDraft.operationNumber || undefined,
-      walletApp: scanDraft.walletApp || undefined,
-      receiptType: scanDraft.receiptType || undefined,
+      operationNumber: draft.operationNumber || undefined,
+      walletApp: draft.walletApp || undefined,
+      receiptType: draft.receiptType || undefined,
     });
     setScanDraft(null);
+
+    if (draft.saveToDrive && draft.imageUri) {
+      try {
+        setIsUploading(true);
+        const formData = new FormData();
+        const fileName = draft.imageName || `comprobante-${Date.now()}.jpg`;
+        if (Platform.OS === 'web') {
+          const blob = await (await fetch(draft.imageUri)).blob();
+          formData.append('file', blob, fileName);
+        } else {
+          formData.append('file', {
+            uri: draft.imageUri,
+            type: draft.imageMime || 'image/jpeg',
+            name: fileName,
+          } as any);
+        }
+        formData.append('convertToPdf', 'false');
+        const uploaded = await apiUploadFormData<{ webViewLink: string }>(
+          '/api/google-drive/upload',
+          formData
+        );
+        if (uploaded?.webViewLink) {
+          setAttachmentUrl(uploaded.webViewLink);
+          showAppToast.success({
+            title: 'Datos y comprobante guardados',
+            description: 'La imagen quedó en Google Drive. Verifica y toca Completar.',
+          });
+          return;
+        }
+      } catch (err: any) {
+        const msg = String(err?.message || '');
+        const notConnected =
+          msg.includes('DRIVE_NOT_CONNECTED') || msg.toLowerCase().includes('conectar google drive');
+        showAppToast.warning({
+          title: notConnected
+            ? 'Datos aplicados · Drive no conectado'
+            : 'Datos aplicados · error al subir a Drive',
+          description: notConnected
+            ? 'Conecta Google Drive en Ajustes -> Datos y Respaldo para guardar comprobantes.'
+            : msg || 'Puedes reintentar desde Adjuntar comprobante.',
+        });
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
     showAppToast.success({
       title: 'Datos aplicados',
       description: 'Verifica la cuenta o categoría y toca Guardar.',
@@ -1906,6 +1966,39 @@ export function TransactionEditorView({
                 </Text>
               </View>
             </View>
+
+            {scanDraft.imageUri ? (
+              <View
+                style={[
+                  styles.schedCard,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                  },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontFamily: theme.font('700'), fontSize: 12.5 }}>
+                    Respaldar comprobante en Google Drive
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontFamily: theme.font('500'), fontSize: 11 }}>
+                    Guarda automáticamente esta foto en Lumio/Transacciones
+                  </Text>
+                </View>
+                <Switch
+                  value={Boolean(scanDraft.saveToDrive)}
+                  onValueChange={(v) =>
+                    setScanDraft((prev) => (prev ? { ...prev, saveToDrive: v } : prev))
+                  }
+                  trackColor={{ false: theme.border, true: alphaHex(theme.brand, 0.45) }}
+                  thumbColor={scanDraft.saveToDrive ? theme.brand : theme.textMuted}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </PremiumBottomSheet>

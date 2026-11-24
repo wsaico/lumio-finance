@@ -7,8 +7,8 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  FadeInUp,
-  FadeOutUp,
+  FadeIn,
+  FadeOut,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
@@ -106,9 +106,9 @@ function ToastRow({ item }: { item: ToastItem }) {
   return (
     <GestureDetector gesture={pan}>
       <Animated.View
-        entering={theme.motion === 'none' ? undefined : FadeInUp.springify().damping(20).stiffness(280)}
-        exiting={theme.motion === 'none' ? undefined : FadeOutUp.duration(180)}
-        layout={theme.motion === 'none' ? undefined : LinearTransition.springify()}
+        entering={theme.motion === 'none' ? undefined : FadeIn.duration(150)}
+        exiting={theme.motion === 'none' ? undefined : FadeOut.duration(140)}
+        layout={theme.motion === 'none' ? undefined : LinearTransition.duration(150)}
         style={[
           styles.cardWrap,
           animatedStyle,

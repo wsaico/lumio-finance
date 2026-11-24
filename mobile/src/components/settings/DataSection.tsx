@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import {
+  Camera,
   Cloud,
   Download,
   FileJson,
@@ -13,7 +16,7 @@ import {
 } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
 import { ConfirmAlertModal } from '@/components/alerts/ConfirmAlertModal';
-import { SettingsGroup, SettingsRow } from './SettingsShared';
+import { SettingsGroup, SettingsRow, SettingsSwitch } from './SettingsShared';
 import { useSettingsStore } from '@/stores/settings-store';
 import { API_BASE_URL, apiDelete, apiGet, apiPost } from '@/lib/api-client';
 import { downloadAuthenticatedFile } from '@/lib/downloads';
@@ -74,6 +77,8 @@ export function DataSection() {
   const theme = useAppTheme();
   const queryClient = useQueryClient();
   const baseCurrency = useSettingsStore((s) => s.currencyCode) || 'PEN';
+  const saveScannedReceiptsToDrive = useSettingsStore((s) => s.saveScannedReceiptsToDrive);
+  const setSaveScannedReceiptsToDrive = useSettingsStore((s) => s.setSaveScannedReceiptsToDrive);
 
   const [driveStatus, setDriveStatus] = useState<{
     connected: boolean;
@@ -85,18 +90,22 @@ export function DataSection() {
   const [resetStep2, setResetStep2] = useState(false);
   const [confirmWord, setConfirmWord] = useState('');
 
+  const refreshDriveStatus = async () => {
+    try {
+      const res = await apiGet('/api/google-drive/status');
+      const next = {
+        connected: Boolean(res?.connected),
+        oauthConfigured: Boolean(res?.oauthConfigured),
+      };
+      setDriveStatus(next);
+      return next;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
-    void (async () => {
-      try {
-        const res = await apiGet('/api/google-drive/status');
-        setDriveStatus({
-          connected: Boolean(res?.connected),
-          oauthConfigured: Boolean(res?.oauthConfigured),
-        });
-      } catch {
-        // ignore if unavailable
-      }
-    })();
+    void refreshDriveStatus();
   }, []);
 
   const handleImportCsv = async () => {
@@ -145,13 +154,59 @@ export function DataSection() {
 
   const handleDriveAction = async () => {
     if (!driveStatus.connected) {
-      await Linking.openURL(`${API_BASE_URL}/api/auth/google/connect`);
+      if (!driveStatus.oauthConfigured) {
+        showAppToast.error({
+          title: 'Falta configuración de Google Drive',
+          description:
+            'El servidor necesita GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET para conectar Drive.',
+        });
+        return;
+      }
+      setBusyAction(true);
+      try {
+        if (Platform.OS === 'web') {
+          await Linking.openURL(`${API_BASE_URL}/api/auth/google/connect`);
+          return;
+        }
+        const redirectUri = Linking.createURL('google-drive-callback');
+        const { authUrl } = await apiPost<{ authUrl: string }>('/api/auth/google/connect', {
+          redirectUri,
+        });
+        if (!authUrl) {
+          throw new Error('No se recibió el enlace de autorización de Google');
+        }
+        const res = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri, {
+          preferEphemeralSession: false,
+        });
+        const nextStatus = await refreshDriveStatus();
+        if (nextStatus?.connected || (res.type === 'success' && res.url.includes('status=connected'))) {
+          setDriveStatus((s) => ({ ...s, connected: true }));
+          showAppToast.success({
+            title: 'Google Drive conectado',
+            description: 'Comprobantes y copias de seguridad listos en tu nube.',
+          });
+        } else if (res.type === 'success' && res.url.includes('error=')) {
+          const errMatch = res.url.match(/error=([^&]+)/);
+          showAppToast.error({
+            title: 'No se pudo conectar Google Drive',
+            description: errMatch ? decodeURIComponent(errMatch[1]) : 'Autorización cancelada.',
+          });
+        }
+      } catch (err: any) {
+        showAppToast.error({ title: 'No se pudo conectar Google Drive', description: err?.message });
+      } finally {
+        setBusyAction(false);
+      }
       return;
     }
+
     setBusyAction(true);
     try {
       await apiPost('/api/google-drive/status', {});
-      showAppToast.success({ title: 'Copia guardada en Google Drive' });
+      showAppToast.success({
+        title: 'Copia guardada en Google Drive',
+        description: 'Respaldo subido a Lumio/Backups.',
+      });
     } catch (err: any) {
       showAppToast.error({ title: 'Error con Google Drive', description: err?.message });
     } finally {
@@ -208,7 +263,7 @@ export function DataSection() {
         />
       </SettingsGroup>
 
-      <SettingsGroup title="Copias de seguridad">
+      <SettingsGroup title="Copias de seguridad y comprobantes">
         <SettingsRow
           Icon={FileJson}
           title="Exportar respaldo íntegro (.json)"
@@ -232,8 +287,10 @@ export function DataSection() {
           title="Google Drive"
           description={
             driveStatus.connected
-              ? 'Cuenta conectada · Respaldo en Lumio/Backups'
-              : 'Conecta tu cuenta para guardar copias en la nube'
+              ? 'Conectado · Copias en Lumio/Backups y boletas en Transacciones'
+              : !driveStatus.oauthConfigured
+                ? 'Faltan variables de Google OAuth en el servidor (Vercel)'
+                : 'Conecta tu cuenta para respaldar copias y comprobantes'
           }
           onPress={handleDriveAction}
           right={
@@ -242,6 +299,21 @@ export function DataSection() {
                 {driveStatus.connected ? 'Respaldar' : 'Conectar'}
               </Text>
             </View>
+          }
+        />
+        <SettingsRow
+          Icon={Camera}
+          title="Guardar comprobantes en Drive"
+          description={
+            driveStatus.connected
+              ? 'Respalda fotos de Yape, Plin o boletas en Lumio/Transacciones'
+              : 'Conecta Google Drive para respaldar tus boletas automáticamente'
+          }
+          right={
+            <SettingsSwitch
+              value={saveScannedReceiptsToDrive}
+              onValueChange={setSaveScannedReceiptsToDrive}
+            />
           }
           isLast={!driveStatus.connected}
         />

@@ -131,7 +131,7 @@ function RootNavigator() {
 
   useEffect(() => {
     if (!sessionChecked) return;
-    const inAuthGroup = segments[0] === '(auth)';
+    const inAuthGroup = (segments[0] as string) === '(auth)' || (segments[0] as string) === 'auth';
     if (!hasSession && !inAuthGroup) {
       router.replace('/(auth)/welcome');
     } else if (hasSession && inAuthGroup) {
@@ -158,8 +158,7 @@ function RootNavigator() {
         <Stack.Screen
           name="transactions/new"
           options={{
-            presentation: 'modal',
-            animation: theme.motion === 'none' ? 'none' : 'slide_from_bottom',
+            animation: theme.motion === 'none' ? 'none' : 'fade',
           }}
         />
         <Stack.Screen name="transactions/[id]" />

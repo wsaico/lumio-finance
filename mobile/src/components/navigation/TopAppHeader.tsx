@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Bell, Eye, EyeOff, Settings } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/ThemeProvider';
@@ -34,8 +35,19 @@ export function TopAppHeader({
   const iconColor = onHero ? '#FFFFFF' : theme.text;
   const btnBg = onHero ? 'rgba(255,255,255,0.16)' : theme.muted;
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.row}>
+    <View
+      style={[
+        styles.row,
+        !onHero && {
+          paddingTop: Math.max(insets.top, 12) + 8,
+          paddingBottom: 10,
+          paddingHorizontal: 16,
+        },
+      ]}
+    >
       <View style={styles.left}>
         {showBack ? (
           <Pressable
